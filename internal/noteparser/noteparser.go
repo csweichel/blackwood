@@ -44,7 +44,7 @@ func Parse(path string) (*Note, error) {
 	if err != nil {
 		return nil, fmt.Errorf("opening note file: %w", err)
 	}
-	defer r.Close()
+	defer r.Close() //nolint:errcheck
 
 	// Index ZIP entries by name for fast lookup.
 	files := make(map[string]*zip.File, len(r.File))
@@ -131,6 +131,6 @@ func readZipFile(f *zip.File) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rc.Close()
+	defer rc.Close() //nolint:errcheck
 	return io.ReadAll(rc)
 }

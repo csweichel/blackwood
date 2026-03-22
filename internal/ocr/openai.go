@@ -142,7 +142,7 @@ func (r *OpenAIRecognizer) doRequest(ctx context.Context, body []byte) (string, 
 	if err != nil {
 		return "", 0, fmt.Errorf("sending request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

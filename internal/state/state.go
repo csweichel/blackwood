@@ -82,7 +82,7 @@ func ComputeHash(filePath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("opening file for hashing: %w", err)
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck
 
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {

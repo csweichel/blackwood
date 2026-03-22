@@ -33,7 +33,7 @@ func TestRecognize_Success(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(chatResponse{
+		_ = json.NewEncoder(w).Encode(chatResponse{
 			Choices: []struct {
 				Message struct {
 					Content string `json:"content"`
@@ -66,11 +66,11 @@ func TestRecognize_RetryOn500(t *testing.T) {
 		n := attempts.Add(1)
 		if n < 3 {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(`{"error": {"message": "server error", "type": "server_error"}}`))
+			_, _ = w.Write([]byte(`{"error": {"message": "server error", "type": "server_error"}}`))
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(chatResponse{
+		_ = json.NewEncoder(w).Encode(chatResponse{
 			Choices: []struct {
 				Message struct {
 					Content string `json:"content"`
@@ -105,7 +105,7 @@ func TestRecognize_Non429_4xxNotRetried(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`{"error": {"message": "bad request", "type": "invalid_request_error"}}`))
+		_, _ = w.Write([]byte(`{"error": {"message": "bad request", "type": "invalid_request_error"}}`))
 	}))
 	defer srv.Close()
 
@@ -151,11 +151,11 @@ func TestRecognize_AuthorizationHeader(t *testing.T) {
 		auth := r.Header.Get("Authorization")
 		if auth != "Bearer my-secret-key" {
 			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte(`{"error": {"message": "invalid key", "type": "auth_error"}}`))
+			_, _ = w.Write([]byte(`{"error": {"message": "invalid key", "type": "auth_error"}}`))
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(chatResponse{
+		_ = json.NewEncoder(w).Encode(chatResponse{
 			Choices: []struct {
 				Message struct {
 					Content string `json:"content"`

@@ -28,10 +28,10 @@ func buildNoteZIP(t *testing.T, dir string, pages []noteListEntry) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck
 
 	w := zip.NewWriter(f)
-	defer w.Close()
+	defer w.Close() //nolint:errcheck
 
 	// Write NotesBean.json
 	bean := notesBean{

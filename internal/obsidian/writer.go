@@ -72,7 +72,7 @@ func (w *Writer) Write(entry NoteEntry) error {
 	if err != nil {
 		return fmt.Errorf("opening daily note: %w", err)
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck
 
 	var b strings.Builder
 
@@ -92,7 +92,7 @@ func (w *Writer) Write(entry NoteEntry) error {
 	b.WriteString("\n### ")
 	b.WriteString(entry.NoteName)
 	b.WriteString("\n")
-	b.WriteString(fmt.Sprintf("*Captured at %s*\n", entry.CreateTime.Format("15:04")))
+	fmt.Fprintf(&b, "*Captured at %s*\n", entry.CreateTime.Format("15:04"))
 
 	for i, p := range entry.Pages {
 		imgName := fmt.Sprintf("blackwood-%s-p%d.png", entry.NoteID, i+1)

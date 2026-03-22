@@ -149,7 +149,7 @@ func TestValidate_ObsidianVaultPathMustBeDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.Close()
+	_ = f.Close()
 
 	cfg := &Config{
 		WatchDir:  "/tmp",
@@ -224,7 +224,7 @@ func TestValidate_LLMDefaultPrompt(t *testing.T) {
 func TestValidate_LLMAPIKeyEnvMissing(t *testing.T) {
 	// Use a unique env var name that is guaranteed to be unset.
 	envVar := "BLACKWOOD_TEST_MISSING_KEY_12345"
-	os.Unsetenv(envVar)
+	_ = os.Unsetenv(envVar)
 
 	cfg := &Config{
 		WatchDir:  "/tmp",
