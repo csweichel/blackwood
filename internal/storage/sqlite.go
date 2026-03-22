@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -108,6 +109,42 @@ func (s *Store) DB() *sql.DB {
 	return s.db
 }
 
+// notePath returns the filesystem path for a daily note's markdown file.
+// Date format is "YYYY-MM-DD", stored as notes/YYYY/MM/DD.md.
+func (s *Store) notePath(date string) string {
+	parts := strings.Split(date, "-")
+	if len(parts) != 3 {
+		return filepath.Join(s.dataDir, "notes", date+".md")
+	}
+	return filepath.Join(s.dataDir, "notes", parts[0], parts[1], parts[2]+".md")
+}
+
+func (s *Store) readNoteContent(date string) string {
+	data, err := os.ReadFile(s.notePath(date))
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+func (s *Store) writeNoteContent(date, content string) error {
+	path := s.notePath(date)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(content), 0o644)
+}
+
+// getNoteDate looks up the date for a daily note by its ID.
+func (s *Store) getNoteDate(ctx context.Context, id string) (string, error) {
+	var date string
+	err := s.db.QueryRowContext(ctx, `SELECT date FROM daily_notes WHERE id = ?`, id).Scan(&date)
+	if err != nil {
+		return "", fmt.Errorf("get note date: %w", err)
+	}
+	return date, nil
+}
+
 // --- Daily notes ---
 
 // CreateDailyNote inserts a new daily note for the given date (YYYY-MM-DD).
@@ -128,11 +165,12 @@ func (s *Store) CreateDailyNote(ctx context.Context, date string) (*DailyNote, e
 func (s *Store) GetDailyNote(ctx context.Context, id string) (*DailyNote, error) {
 	var n DailyNote
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, date, content, created_at, updated_at FROM daily_notes WHERE id = ?`, id,
-	).Scan(&n.ID, &n.Date, &n.Content, &n.CreatedAt, &n.UpdatedAt)
+		`SELECT id, date, created_at, updated_at FROM daily_notes WHERE id = ?`, id,
+	).Scan(&n.ID, &n.Date, &n.CreatedAt, &n.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("get daily note: %w", err)
 	}
+	n.Content = s.readNoteContent(n.Date)
 	return &n, nil
 }
 
@@ -140,11 +178,12 @@ func (s *Store) GetDailyNote(ctx context.Context, id string) (*DailyNote, error)
 func (s *Store) GetDailyNoteByDate(ctx context.Context, date string) (*DailyNote, error) {
 	var n DailyNote
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, date, content, created_at, updated_at FROM daily_notes WHERE date = ?`, date,
-	).Scan(&n.ID, &n.Date, &n.Content, &n.CreatedAt, &n.UpdatedAt)
+		`SELECT id, date, created_at, updated_at FROM daily_notes WHERE date = ?`, date,
+	).Scan(&n.ID, &n.Date, &n.CreatedAt, &n.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("get daily note by date: %w", err)
 	}
+	n.Content = s.readNoteContent(n.Date)
 	return &n, nil
 }
 
@@ -161,7 +200,7 @@ func (s *Store) GetOrCreateDailyNote(ctx context.Context, date string) (*DailyNo
 // ListDailyNotes returns daily notes ordered by date descending.
 func (s *Store) ListDailyNotes(ctx context.Context, limit, offset int) ([]DailyNote, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, date, content, created_at, updated_at FROM daily_notes ORDER BY date DESC LIMIT ? OFFSET ?`,
+		`SELECT id, date, created_at, updated_at FROM daily_notes ORDER BY date DESC LIMIT ? OFFSET ?`,
 		limit, offset,
 	)
 	if err != nil {
@@ -172,9 +211,10 @@ func (s *Store) ListDailyNotes(ctx context.Context, limit, offset int) ([]DailyN
 	var notes []DailyNote
 	for rows.Next() {
 		var n DailyNote
-		if err := rows.Scan(&n.ID, &n.Date, &n.Content, &n.CreatedAt, &n.UpdatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.Date, &n.CreatedAt, &n.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan daily note: %w", err)
 		}
+		n.Content = s.readNoteContent(n.Date)
 		notes = append(notes, n)
 	}
 	return notes, rows.Err()
@@ -182,18 +222,33 @@ func (s *Store) ListDailyNotes(ctx context.Context, limit, offset int) ([]DailyN
 
 // UpdateDailyNoteContent replaces the content of a daily note.
 func (s *Store) UpdateDailyNoteContent(ctx context.Context, id string, content string) error {
-	_, err := s.db.ExecContext(ctx,
-		`UPDATE daily_notes SET content = ?, updated_at = ? WHERE id = ?`,
-		content, time.Now().UTC(), id,
+	date, err := s.getNoteDate(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := s.writeNoteContent(date, content); err != nil {
+		return fmt.Errorf("write note file: %w", err)
+	}
+	_, err = s.db.ExecContext(ctx,
+		`UPDATE daily_notes SET updated_at = ? WHERE id = ?`,
+		time.Now().UTC(), id,
 	)
 	return err
 }
 
 // AppendDailyNoteContent appends text to the content of a daily note.
 func (s *Store) AppendDailyNoteContent(ctx context.Context, id string, text string) error {
-	_, err := s.db.ExecContext(ctx,
-		`UPDATE daily_notes SET content = content || ?, updated_at = ? WHERE id = ?`,
-		text, time.Now().UTC(), id,
+	date, err := s.getNoteDate(ctx, id)
+	if err != nil {
+		return err
+	}
+	existing := s.readNoteContent(date)
+	if err := s.writeNoteContent(date, existing+text); err != nil {
+		return fmt.Errorf("write note file: %w", err)
+	}
+	_, err = s.db.ExecContext(ctx,
+		`UPDATE daily_notes SET updated_at = ? WHERE id = ?`,
+		time.Now().UTC(), id,
 	)
 	return err
 }
@@ -201,7 +256,7 @@ func (s *Store) AppendDailyNoteContent(ctx context.Context, id string, text stri
 // ListDatesWithContent returns dates that have non-empty content within the given range.
 func (s *Store) ListDatesWithContent(ctx context.Context, startDate, endDate string) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT date FROM daily_notes WHERE date >= ? AND date <= ? AND content != '' ORDER BY date`,
+		`SELECT date FROM daily_notes WHERE date >= ? AND date <= ? ORDER BY date`,
 		startDate, endDate,
 	)
 	if err != nil {
@@ -215,7 +270,10 @@ func (s *Store) ListDatesWithContent(ctx context.Context, startDate, endDate str
 		if err := rows.Scan(&d); err != nil {
 			return nil, fmt.Errorf("scan date: %w", err)
 		}
-		dates = append(dates, d)
+		// Only include dates whose note file exists and is non-empty.
+		if content := s.readNoteContent(d); content != "" {
+			dates = append(dates, d)
+		}
 	}
 	return dates, rows.Err()
 }
