@@ -1,6 +1,21 @@
 watch_dir: /path/to/notes
 state_path: /var/lib/blackwood/state.json
 poll_interval: 30s
+
+obsidian:
+  vault_path: /path/to/obsidian/vault
+  daily_notes_dir: Daily Notes
+  daily_format: "2006-01-02"
+  attachments_dir: attachments
+
+llm:
+  provider: openai
+  model: gpt-4o
+  api_key_env: OPENAI_API_KEY
+
+# dropbox:
+#   local_path: ~/Dropbox/Apps/Viwoods
+
 hooks:
   - command: echo
-    args: ["processing", "{{.File}}"]
+    args: ["processing"]
