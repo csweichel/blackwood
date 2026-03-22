@@ -1,0 +1,6 @@
+watch_dir: /path/to/notes
+state_path: /var/lib/blackwood/state.json
+poll_interval: 30s
+hooks:
+  - command: echo
+    args: ["processing", "{{.File}}"]
