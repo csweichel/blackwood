@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blackwood — Your daily notes, from everywhere.</title>
+  <meta name="description" content="A local-first daily notes app that captures text, voice memos, photos, and handwritten notes — then makes all of it searchable through AI.">
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #ffffff;
+      --bg-secondary: #f8fafc;
+      --text: #0f172a;
+      --text-secondary: #475569;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --border: #e2e8f0;
+      --card-bg: #ffffff;
+      --code-bg: #1e293b;
+      --code-text: #e2e8f0;
+      --hero-gradient: linear-gradient(135deg, #eff6ff 0%, #f8fafc 50%, #faf5ff 100%);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f172a;
+        --bg-secondary: #1e293b;
+        --text: #f1f5f9;
+        --text-secondary: #94a3b8;
+        --accent: #3b82f6;
+        --accent-hover: #60a5fa;
+        --border: #334155;
+        --card-bg: #1e293b;
+        --code-bg: #0f172a;
+        --code-text: #e2e8f0;
+        --hero-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #1a1a2e 100%);
+      }
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Nav */
+    nav {
+      padding: 20px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    nav .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    nav .logo {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    nav .nav-links {
+      display: flex;
+      gap: 24px;
+      list-style: none;
+    }
+
+    nav .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    nav .nav-links a:hover {
+      color: var(--accent);
+    }
+
+    /* Hero */
+    .hero {
+      background: var(--hero-gradient);
+      padding: 96px 0 80px;
+      text-align: center;
+    }
+
+    .hero h1 {
+      font-size: 3.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 12px;
+    }
+
+    .hero .tagline {
+      font-size: 1.35rem;
+      color: var(--accent);
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .hero .description {
+      font-size: 1.1rem;
+      color: var(--text-secondary);
+      max-width: 640px;
+      margin: 0 auto 36px;
+      line-height: 1.7;
+    }
+
+    .hero .cta-group {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 12px 28px;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Sections */
+    section {
+      padding: 80px 0;
+    }
+
+    section:nth-child(even) {
+      background: var(--bg-secondary);
+    }
+
+    .section-title {
+      font-size: 2rem;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 12px;
+      letter-spacing: -0.02em;
+    }
+
+    .section-subtitle {
+      text-align: center;
+      color: var(--text-secondary);
+      margin-bottom: 48px;
+      font-size: 1.05rem;
+    }
+
+    /* Features Grid */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .feature-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+      transition: border-color 0.2s;
+    }
+
+    .feature-card:hover {
+      border-color: var(--accent);
+    }
+
+    .feature-card .icon {
+      font-size: 1.75rem;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .feature-card h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .feature-card p {
+      color: var(--text-secondary);
+      font-size: 0.92rem;
+      line-height: 1.6;
+    }
+
+    /* How It Works */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+      margin-bottom: 48px;
+    }
+
+    .step {
+      text-align: center;
+    }
+
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 700;
+      font-size: 1.1rem;
+      margin-bottom: 16px;
+    }
+
+    .step h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .step p {
+      color: var(--text-secondary);
+      font-size: 0.92rem;
+    }
+
+    /* Code Blocks */
+    .code-block {
+      background: var(--code-bg);
+      color: var(--code-text);
+      border-radius: 12px;
+      padding: 24px 28px;
+      overflow-x: auto;
+      font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+      font-size: 0.88rem;
+      line-height: 1.7;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .code-block .comment {
+      color: #64748b;
+    }
+
+    .code-block .command {
+      color: #7dd3fc;
+    }
+
+    /* Architecture */
+    .architecture-diagram {
+      background: var(--code-bg);
+      color: var(--code-text);
+      border-radius: 12px;
+      padding: 28px 32px;
+      overflow-x: auto;
+      font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+      font-size: 0.82rem;
+      line-height: 1.5;
+      max-width: 800px;
+      margin: 0 auto;
+      white-space: pre;
+    }
+
+    /* Installation */
+    .install-tabs {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .install-tab {
+      padding: 8px 20px;
+      border-radius: 6px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 0.88rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .install-tab.active,
+    .install-tab:hover {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    .install-panel {
+      display: none;
+    }
+
+    .install-panel.active {
+      display: block;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 0;
+      text-align: center;
+    }
+
+    footer p {
+      color: var(--text-secondary);
+      font-size: 0.88rem;
+      margin-bottom: 8px;
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hero h1 {
+        font-size: 2.5rem;
+      }
+
+      .hero .description {
+        font-size: 1rem;
+      }
+
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .steps {
+        grid-template-columns: 1fr;
+        gap: 24px;
+      }
+
+      nav .nav-links {
+        gap: 16px;
+      }
+
+      .architecture-diagram {
+        font-size: 0.7rem;
+        padding: 16px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .hero {
+        padding: 64px 0 56px;
+      }
+
+      .hero h1 {
+        font-size: 2rem;
+      }
+
+      section {
+        padding: 56px 0;
+      }
+
+      nav .nav-links {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="container">
+      <a href="#" class="logo">Blackwood</a>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#how-it-works">How It Works</a></li>
+        <li><a href="#architecture">Architecture</a></li>
+        <li><a href="#install">Install</a></li>
+        <li><a href="https://github.com/csweichel/blackwood">GitHub</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="container">
+      <h1>Blackwood</h1>
+      <p class="tagline">Your daily notes, from everywhere.</p>
+      <p class="description">
+        A local-first daily notes app that captures text, voice memos, photos, and handwritten notes &mdash; then makes all of it searchable through AI.
+      </p>
+      <div class="cta-group">
+        <a href="https://github.com/csweichel/blackwood/releases" class="btn btn-primary">Download</a>
+        <a href="https://github.com/csweichel/blackwood" class="btn btn-secondary">View on GitHub</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="container">
+      <h2 class="section-title">Features</h2>
+      <p class="section-subtitle">Everything you need to capture and find your thoughts.</p>
+      <div class="features-grid">
+        <div class="feature-card">
+          <span class="icon" aria-hidden="true">&#x1F4DD;</span>
+          <h3>Markdown Daily Notes</h3>
+          <p>One document per day. Write, edit, auto-save.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" aria-hidden="true">&#x1F3A4;</span>
+          <h3>Voice &amp; Photos</h3>
+          <p>Record audio or snap photos. Automatically transcribed and described by AI.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" aria-hidden="true">&#x270D;&#xFE0F;</span>
+          <h3>Viwoods Handwriting</h3>
+          <p>Import handwritten notes from Viwoods AIPaper. OCR'd automatically.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" aria-hidden="true">&#x1F4AC;</span>
+          <h3>WhatsApp Integration</h3>
+          <p>Send text, voice, or photos via WhatsApp. They appear in today's note.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" aria-hidden="true">&#x1F50D;</span>
+          <h3>RAG Chat</h3>
+          <p>Ask questions about your notes. Get answers with source citations.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" aria-hidden="true">&#x1F512;</span>
+          <h3>Local-First</h3>
+          <p>SQLite database. Runs on your machine. Your data stays yours.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how-it-works">
+    <div class="container">
+      <h2 class="section-title">How It Works</h2>
+      <p class="section-subtitle">Up and running in under a minute.</p>
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <h3>Download the binary</h3>
+          <p>Grab the latest release for your platform from GitHub.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <h3>Set your OpenAI API key</h3>
+          <p>Export your key so Blackwood can transcribe, describe, and search.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <h3>Run and open</h3>
+          <p>Start <code>blackwood-server</code> and open localhost:8080.</p>
+        </div>
+      </div>
+      <div class="code-block">
+<span class="comment"># Download the latest release</span>
+<span class="command">curl -L https://github.com/csweichel/blackwood/releases/latest/download/blackwood-server_darwin_arm64.tar.gz | tar xz</span>
+
+<span class="comment"># Set your API key</span>
+<span class="command">export OPENAI_API_KEY=sk-...</span>
+
+<span class="comment"># Start the server</span>
+<span class="command">./blackwood-server --data-dir ~/.blackwood</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="architecture">
+    <div class="container">
+      <h2 class="section-title">Architecture</h2>
+      <p class="section-subtitle">A Go backend serving a React frontend over a single port.</p>
+      <div class="architecture-diagram">&#x250C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2510;
+&#x2502;                  Web UI (React)                 &#x2502;
+&#x2502;  Calendar &#xB7; Markdown Editor &#xB7; Audio &#xB7; Chat      &#x2502;
+&#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x252C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2518;
+                       &#x2502; Connect-RPC
+&#x250C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2534;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2510;
+&#x2502;               Go API Server                     &#x2502;
+&#x2502;                                                 &#x2502;
+&#x2502;  DailyNotesService &#xB7; ChatService &#xB7; ImportService&#x2502;
+&#x2502;  WhatsApp Webhook &#xB7; Attachment Serving          &#x2502;
+&#x251C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2524;
+&#x2502;  AI Pipelines                                   &#x2502;
+&#x2502;  Whisper (audio) &#xB7; GPT-4o (vision/chat/OCR)     &#x2502;
+&#x2502;  text-embedding-3-small (semantic index)        &#x2502;
+&#x251C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2524;
+&#x2502;  Storage                                        &#x2502;
+&#x2502;  SQLite (notes, entries, conversations)         &#x2502;
+&#x2502;  Embeddings (cosine similarity in Go)           &#x2502;
+&#x2502;  File system (attachments)                      &#x2502;
+&#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2518;</div>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="container">
+      <h2 class="section-title">Installation</h2>
+      <p class="section-subtitle">Download the pre-built binary for your platform.</p>
+      <div class="install-tabs">
+        <button class="install-tab active" onclick="showTab('macos-arm')">macOS (Apple Silicon)</button>
+        <button class="install-tab" onclick="showTab('macos-intel')">macOS (Intel)</button>
+        <button class="install-tab" onclick="showTab('linux')">Linux (x86_64)</button>
+      </div>
+      <div id="tab-macos-arm" class="install-panel active">
+        <div class="code-block">
+<span class="comment"># macOS (Apple Silicon)</span>
+<span class="command">curl -L https://github.com/csweichel/blackwood/releases/latest/download/blackwood-server_darwin_arm64.tar.gz | tar xz</span>
+
+<span class="comment"># Run the server</span>
+<span class="command">./blackwood-server --data-dir ~/.blackwood</span>
+        </div>
+      </div>
+      <div id="tab-macos-intel" class="install-panel">
+        <div class="code-block">
+<span class="comment"># macOS (Intel)</span>
+<span class="command">curl -L https://github.com/csweichel/blackwood/releases/latest/download/blackwood-server_darwin_amd64.tar.gz | tar xz</span>
+
+<span class="comment"># Run the server</span>
+<span class="command">./blackwood-server --data-dir ~/.blackwood</span>
+        </div>
+      </div>
+      <div id="tab-linux" class="install-panel">
+        <div class="code-block">
+<span class="comment"># Linux (x86_64)</span>
+<span class="command">curl -L https://github.com/csweichel/blackwood/releases/latest/download/blackwood-server_linux_amd64.tar.gz | tar xz</span>
+
+<span class="comment"># Run the server</span>
+<span class="command">./blackwood-server --data-dir ~/.blackwood</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <p>
+        <a href="https://github.com/csweichel/blackwood">GitHub</a> &middot;
+        <a href="https://github.com/csweichel/blackwood/releases">Releases</a> &middot;
+        <a href="https://github.com/csweichel/blackwood/blob/main/LICENSE">MIT License</a>
+      </p>
+      <p>Built with Go, React, and OpenAI.</p>
+    </div>
+  </footer>
+
+  <script>
+    function showTab(id) {
+      document.querySelectorAll('.install-panel').forEach(function(el) {
+        el.classList.remove('active');
+      });
+      document.querySelectorAll('.install-tab').forEach(function(el) {
+        el.classList.remove('active');
+      });
+      document.getElementById('tab-' + id).classList.add('active');
+      event.currentTarget.classList.add('active');
+    }
+  </script>
+
+</body>
+</html>
