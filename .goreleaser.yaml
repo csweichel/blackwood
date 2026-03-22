@@ -45,7 +45,7 @@ archives:
       - LICENSE
       - README.md
       - blackwood.example.yaml
-      - dist/blackwood.service
+      - extras/blackwood.service
 
   - id: blackwood-server
     builds:
