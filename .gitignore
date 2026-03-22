@@ -37,3 +37,7 @@ go.work.sum
 # Web UI
 web/node_modules/
 web/dist/
+
+# Embedded static files (populated during build)
+cmd/blackwood-server/static/
+!cmd/blackwood-server/static/.gitkeep

@@ -19,8 +19,21 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - name: Build
         run: make build
+
+      - name: Build web UI
+        run: cd web && npm ci && npm run build
+
+      - name: Prepare embedded static files
+        run: rm -rf cmd/blackwood-server/static && cp -r web/dist cmd/blackwood-server/static
+
+      - name: Build server
+        run: go build -o bin/blackwood-server ./cmd/blackwood-server
 
       - name: Test
         run: make test

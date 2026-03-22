@@ -137,9 +137,13 @@ func main() {
 	// Serve attachment files.
 	srv.Handle("GET /api/attachments/{id}", api.ServeAttachment(store))
 
-	// Serve static files from web/dist/ if the directory exists (for future web UI).
+	// Serve web UI: filesystem first (development), then embedded (release binary).
 	if info, err := os.Stat("web/dist"); err == nil && info.IsDir() {
 		srv.Handle("/", http.FileServer(http.Dir("web/dist")))
+		slog.Info("serving web UI from filesystem", "path", "web/dist")
+	} else if sfs, err := staticFS(); err == nil {
+		srv.Handle("/", http.FileServer(http.FS(sfs)))
+		slog.Info("serving embedded web UI")
 	}
 
 	httpServer := &http.Server{

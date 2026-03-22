@@ -1,0 +1,74 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - sh -c "cd web && npm ci && npm run build"
+    - sh -c "rm -rf cmd/blackwood-server/static && cp -r web/dist cmd/blackwood-server/static"
+
+builds:
+  - id: blackwood
+    main: ./cmd/blackwood
+    binary: blackwood
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+
+  - id: blackwood-server
+    main: ./cmd/blackwood-server
+    binary: blackwood-server
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.Version={{.Version}}
+
+archives:
+  - id: blackwood
+    builds:
+      - blackwood
+    name_template: "blackwood_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format: tar.gz
+    files:
+      - LICENSE
+      - README.md
+      - blackwood.example.yaml
+      - dist/blackwood.service
+
+  - id: blackwood-server
+    builds:
+      - blackwood-server
+    name_template: "blackwood-server_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format: tar.gz
+    files:
+      - LICENSE
+      - README.md
+      - blackwood.example.yaml
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+
+release:
+  github:
+    owner: csweichel
+    name: blackwood
