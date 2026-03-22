@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import Markdown from "react-markdown";
+import rehypeRaw from "rehype-raw";
 import { getDailyNote, updateDailyNoteContent } from "../api/client";
 import EntryForm from "./EntryForm";
 
@@ -190,7 +191,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
             className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-hr:border-gray-200 prose-strong:text-gray-900 cursor-text rounded-lg p-4 bg-white border border-gray-100 min-h-[300px]"
             onClick={startEditing}
           >
-            <Markdown>{content}</Markdown>
+            <Markdown rehypePlugins={[rehypeRaw]}>{content}</Markdown>
           </div>
         ) : (
           <div

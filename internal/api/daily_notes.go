@@ -129,6 +129,7 @@ func (h *DailyNotesHandler) CreateEntry(ctx context.Context, req *connect.Reques
 	}
 
 	// Handle attachments.
+	var createdAttachments []*storage.Attachment
 	for i, data := range req.Msg.AttachmentData {
 		att := &storage.Attachment{
 			EntryID: entry.ID,
@@ -142,6 +143,7 @@ func (h *DailyNotesHandler) CreateEntry(ctx context.Context, req *connect.Reques
 		if err := h.store.CreateAttachment(ctx, att, data, date); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create attachment: %w", err))
 		}
+		createdAttachments = append(createdAttachments, att)
 	}
 
 	// Transcribe audio entries via Whisper if available.
@@ -163,13 +165,25 @@ func (h *DailyNotesHandler) CreateEntry(ctx context.Context, req *connect.Reques
 	var snippet string
 	switch entry.Type {
 	case "audio":
+		var audioRef string
+		if len(createdAttachments) > 0 {
+			audioRef = fmt.Sprintf(`<audio controls src="/api/attachments/%s"></audio>`, createdAttachments[0].ID)
+		}
 		if entry.Content != "" {
-			snippet = fmt.Sprintf("\n\n---\n*%s — Audio recording*\n\n%s\n", ts, entry.Content)
+			snippet = fmt.Sprintf("\n\n---\n*%s — Voice memo*\n\n%s\n\n%s\n", ts, audioRef, entry.Content)
 		} else {
-			snippet = fmt.Sprintf("\n\n---\n*%s — Audio recording (transcription unavailable)*\n", ts)
+			snippet = fmt.Sprintf("\n\n---\n*%s — Voice memo*\n\n%s\n", ts, audioRef)
 		}
 	case "photo":
-		snippet = fmt.Sprintf("\n\n---\n*%s — Photo*\n\n%s\n", ts, entry.Content)
+		var imgRef string
+		if len(createdAttachments) > 0 {
+			imgRef = fmt.Sprintf("![photo](/api/attachments/%s)", createdAttachments[0].ID)
+		}
+		if entry.Content != "" {
+			snippet = fmt.Sprintf("\n\n---\n*%s — Photo*\n\n%s\n\n%s\n", ts, imgRef, entry.Content)
+		} else {
+			snippet = fmt.Sprintf("\n\n---\n*%s — Photo*\n\n%s\n", ts, imgRef)
+		}
 	case "viwoods":
 		snippet = fmt.Sprintf("\n\n---\n*%s — Viwoods note*\n\n%s\n", ts, entry.Content)
 	default:
