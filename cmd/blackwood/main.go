@@ -12,6 +12,9 @@ import (
 
 	"github.com/csweichel/blackwood/internal/config"
 	"github.com/csweichel/blackwood/internal/hooks"
+	"github.com/csweichel/blackwood/internal/noteparser"
+	"github.com/csweichel/blackwood/internal/obsidian"
+	"github.com/csweichel/blackwood/internal/ocr"
 	"github.com/csweichel/blackwood/internal/state"
 	"github.com/csweichel/blackwood/internal/watcher"
 )
@@ -59,6 +62,27 @@ func main() {
 		)
 	}
 
+	// Conditionally set up the OCR + Obsidian pipeline.
+	var recognizer ocr.Recognizer
+	var obsWriter *obsidian.Writer
+
+	if cfg.Obsidian.VaultPath != "" {
+		apiKey := os.Getenv(cfg.LLM.APIKeyEnv)
+		recognizer = ocr.NewOpenAI(apiKey, cfg.LLM.Model, cfg.LLM.Prompt)
+		slog.Info("OCR pipeline enabled", slog.String("model", cfg.LLM.Model))
+
+		obsWriter = obsidian.New(cfg.Obsidian)
+		slog.Info("Obsidian output enabled", slog.String("vault", cfg.Obsidian.VaultPath))
+	}
+
+	// Log startup summary of active processing modes.
+	pipelineEnabled := obsWriter != nil
+	hooksEnabled := len(cfg.Hooks) > 0
+	slog.Info("processing modes",
+		slog.Bool("pipeline", pipelineEnabled),
+		slog.Bool("hooks", hooksEnabled),
+	)
+
 	st, err := state.Load(cfg.StatePath)
 	if err != nil {
 		slog.Error("error loading state", slog.String("error", err.Error()))
@@ -89,8 +113,25 @@ func main() {
 		}
 		slog.Info("detected new file", slog.String("file", path))
 
-		if err := runner.Run(ctx, path); err != nil {
-			slog.Error("hooks failed", slog.String("file", path), slog.String("error", err.Error()))
+		processingFailed := false
+
+		// Run the built-in pipeline if configured.
+		if obsWriter != nil {
+			if err := runPipeline(ctx, path, recognizer, obsWriter); err != nil {
+				slog.Error("pipeline failed", slog.String("file", path), slog.String("error", err.Error()))
+				processingFailed = true
+			}
+		}
+
+		// Run hooks independently (after the pipeline, not instead of).
+		if len(cfg.Hooks) > 0 {
+			if err := runner.Run(ctx, path); err != nil {
+				slog.Error("hooks failed", slog.String("file", path), slog.String("error", err.Error()))
+				processingFailed = true
+			}
+		}
+
+		if processingFailed {
 			continue
 		}
 
@@ -107,4 +148,54 @@ func main() {
 	}
 
 	slog.Info("shutting down")
+}
+
+// runPipeline parses a .note file, runs OCR on each page, and writes the result to Obsidian.
+func runPipeline(ctx context.Context, path string, recognizer ocr.Recognizer, writer *obsidian.Writer) error {
+	note, err := noteparser.Parse(path)
+	if err != nil {
+		return fmt.Errorf("parsing note: %w", err)
+	}
+	slog.Info("parsed note",
+		slog.String("note_id", note.ID),
+		slog.String("name", note.Name),
+		slog.Int("pages", len(note.Pages)),
+	)
+
+	pages := make([]obsidian.PageResult, 0, len(note.Pages))
+	for _, p := range note.Pages {
+		text, err := recognizer.Recognize(ctx, p.Image)
+		if err != nil {
+			// Log OCR failure but continue with empty text.
+			slog.Error("OCR failed for page",
+				slog.String("note_id", note.ID),
+				slog.String("page_id", p.ID),
+				slog.String("error", err.Error()),
+			)
+			text = ""
+		}
+		slog.Info("OCR complete",
+			slog.String("page_id", p.ID),
+			slog.Int("text_len", len(text)),
+		)
+		pages = append(pages, obsidian.PageResult{
+			PageID: p.ID,
+			Image:  p.Image,
+			Text:   text,
+		})
+	}
+
+	entry := obsidian.NoteEntry{
+		NoteID:     note.ID,
+		NoteName:   note.Name,
+		CreateTime: note.CreateTime,
+		Pages:      pages,
+	}
+
+	if err := writer.Write(entry); err != nil {
+		return fmt.Errorf("writing to obsidian: %w", err)
+	}
+	slog.Info("written to Obsidian", slog.String("note_id", note.ID))
+
+	return nil
 }
