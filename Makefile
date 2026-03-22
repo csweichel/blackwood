@@ -29,3 +29,11 @@ install-service: build
 	install -dm755 /var/lib/blackwood
 	@echo "Installed. Copy your config to /etc/blackwood/config.yaml"
 	@echo "Then: systemctl daemon-reload && systemctl enable --now blackwood"
+
+.PHONY: web-install
+web-install:
+	cd web && npm install
+
+.PHONY: web-build
+web-build:
+	cd web && npm run build

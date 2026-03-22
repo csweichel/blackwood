@@ -33,3 +33,7 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Web UI
+web/node_modules/
+web/dist/
