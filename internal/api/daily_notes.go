@@ -12,6 +12,7 @@ import (
 
 	blackwoodv1 "github.com/csweichel/blackwood/gen/blackwood/v1"
 	"github.com/csweichel/blackwood/internal/storage"
+	"github.com/csweichel/blackwood/internal/transcribe"
 )
 
 var entryTypeToProto = map[string]blackwoodv1.EntryType{
@@ -48,12 +49,13 @@ var protoToEntrySource = map[blackwoodv1.EntrySource]string{
 
 // DailyNotesHandler implements the DailyNotesService Connect handler.
 type DailyNotesHandler struct {
-	store *storage.Store
+	store       *storage.Store
+	transcriber transcribe.Transcriber // may be nil if not configured
 }
 
 // NewDailyNotesHandler creates a new DailyNotesHandler backed by the given store.
-func NewDailyNotesHandler(store *storage.Store) *DailyNotesHandler {
-	return &DailyNotesHandler{store: store}
+func NewDailyNotesHandler(store *storage.Store, transcriber transcribe.Transcriber) *DailyNotesHandler {
+	return &DailyNotesHandler{store: store, transcriber: transcriber}
 }
 
 // GetDailyNote returns the daily note for the given date, including entries and attachments.
@@ -142,13 +144,30 @@ func (h *DailyNotesHandler) CreateEntry(ctx context.Context, req *connect.Reques
 		}
 	}
 
+	// Transcribe audio entries via Whisper if available.
+	if entry.Type == "audio" && h.transcriber != nil && len(req.Msg.AttachmentData) > 0 {
+		text, err := h.transcriber.Transcribe(ctx, req.Msg.AttachmentData[0], "webm")
+		if err != nil {
+			slog.Warn("audio transcription failed", "error", err)
+		} else if text != "" {
+			entry.Content = text
+			if err := h.store.UpdateEntryContent(ctx, entry.ID, text); err != nil {
+				slog.Warn("failed to update entry with transcription", "error", err)
+			}
+		}
+	}
+
 	// Append to the daily note's markdown content.
 	now := time.Now().UTC()
 	ts := now.Format("15:04")
 	var snippet string
 	switch entry.Type {
 	case "audio":
-		snippet = fmt.Sprintf("\n\n---\n*%s — Audio recording*\n\n%s\n", ts, entry.Content)
+		if entry.Content != "" {
+			snippet = fmt.Sprintf("\n\n---\n*%s — Audio recording*\n\n%s\n", ts, entry.Content)
+		} else {
+			snippet = fmt.Sprintf("\n\n---\n*%s — Audio recording (transcription unavailable)*\n", ts)
+		}
 	case "photo":
 		snippet = fmt.Sprintf("\n\n---\n*%s — Photo*\n\n%s\n", ts, entry.Content)
 	case "viwoods":

@@ -89,16 +89,19 @@ func main() {
 	path, handler := blackwoodv1connect.NewHealthServiceHandler(&api.HealthHandler{})
 	srv.Handle(path, handler)
 
-	// Register the daily notes service.
-	dnPath, dnHandler := blackwoodv1connect.NewDailyNotesServiceHandler(api.NewDailyNotesHandler(store))
-	srv.Handle(dnPath, dnHandler)
-
-	// Set up OCR recognizer if OpenAI API key is configured.
+	// Set up OCR recognizer and audio transcriber if OpenAI API key is configured.
 	var recognizer ocr.Recognizer
+	var audioTranscriber transcribe.Transcriber
 	if apiKey := cfg.APIKey(); apiKey != "" {
 		recognizer = ocr.NewOpenAI(apiKey, cfg.OpenAI.Model, cfg.OpenAI.OCRPrompt)
 		slog.Info("OCR recognizer enabled", "model", cfg.OpenAI.Model)
+		audioTranscriber = transcribe.NewWhisper(apiKey)
+		slog.Info("audio transcriber enabled")
 	}
+
+	// Register the daily notes service.
+	dnPath, dnHandler := blackwoodv1connect.NewDailyNotesServiceHandler(api.NewDailyNotesHandler(store, audioTranscriber))
+	srv.Handle(dnPath, dnHandler)
 
 	// Register the import service.
 	importPath, importHandler := blackwoodv1connect.NewImportServiceHandler(api.NewImportHandler(store, recognizer))
