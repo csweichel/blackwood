@@ -345,6 +345,7 @@ type DailyNote struct {
 	Entries       []*Entry               `protobuf:"bytes,3,rep,name=entries,proto3" json:"entries,omitempty"`
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Content       string                 `protobuf:"bytes,6,opt,name=content,proto3" json:"content,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -412,6 +413,13 @@ func (x *DailyNote) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *DailyNote) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
 }
 
 type GetDailyNoteRequest struct {
@@ -898,6 +906,154 @@ func (x *ListEntriesResponse) GetEntries() []*Entry {
 	return nil
 }
 
+type UpdateDailyNoteContentRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Date          string                 `protobuf:"bytes,1,opt,name=date,proto3" json:"date,omitempty"`
+	Content       string                 `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateDailyNoteContentRequest) Reset() {
+	*x = UpdateDailyNoteContentRequest{}
+	mi := &file_blackwood_v1_daily_notes_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateDailyNoteContentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateDailyNoteContentRequest) ProtoMessage() {}
+
+func (x *UpdateDailyNoteContentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blackwood_v1_daily_notes_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateDailyNoteContentRequest.ProtoReflect.Descriptor instead.
+func (*UpdateDailyNoteContentRequest) Descriptor() ([]byte, []int) {
+	return file_blackwood_v1_daily_notes_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *UpdateDailyNoteContentRequest) GetDate() string {
+	if x != nil {
+		return x.Date
+	}
+	return ""
+}
+
+func (x *UpdateDailyNoteContentRequest) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+type ListDatesWithContentRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	StartDate     string                 `protobuf:"bytes,1,opt,name=start_date,json=startDate,proto3" json:"start_date,omitempty"`
+	EndDate       string                 `protobuf:"bytes,2,opt,name=end_date,json=endDate,proto3" json:"end_date,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDatesWithContentRequest) Reset() {
+	*x = ListDatesWithContentRequest{}
+	mi := &file_blackwood_v1_daily_notes_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDatesWithContentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDatesWithContentRequest) ProtoMessage() {}
+
+func (x *ListDatesWithContentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blackwood_v1_daily_notes_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDatesWithContentRequest.ProtoReflect.Descriptor instead.
+func (*ListDatesWithContentRequest) Descriptor() ([]byte, []int) {
+	return file_blackwood_v1_daily_notes_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ListDatesWithContentRequest) GetStartDate() string {
+	if x != nil {
+		return x.StartDate
+	}
+	return ""
+}
+
+func (x *ListDatesWithContentRequest) GetEndDate() string {
+	if x != nil {
+		return x.EndDate
+	}
+	return ""
+}
+
+type ListDatesWithContentResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Dates         []string               `protobuf:"bytes,1,rep,name=dates,proto3" json:"dates,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDatesWithContentResponse) Reset() {
+	*x = ListDatesWithContentResponse{}
+	mi := &file_blackwood_v1_daily_notes_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDatesWithContentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDatesWithContentResponse) ProtoMessage() {}
+
+func (x *ListDatesWithContentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blackwood_v1_daily_notes_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDatesWithContentResponse.ProtoReflect.Descriptor instead.
+func (*ListDatesWithContentResponse) Descriptor() ([]byte, []int) {
+	return file_blackwood_v1_daily_notes_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ListDatesWithContentResponse) GetDates() []string {
+	if x != nil {
+		return x.Dates
+	}
+	return nil
+}
+
 var File_blackwood_v1_daily_notes_proto protoreflect.FileDescriptor
 
 const file_blackwood_v1_daily_notes_proto_rawDesc = "" +
@@ -925,7 +1081,7 @@ const file_blackwood_v1_daily_notes_proto_rawDesc = "" +
 	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
 	"updated_at\x18\n" +
-	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xd4\x01\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xee\x01\n" +
 	"\tDailyNote\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04date\x18\x02 \x01(\tR\x04date\x12-\n" +
@@ -933,7 +1089,8 @@ const file_blackwood_v1_daily_notes_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\")\n" +
+	"updated_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x18\n" +
+	"\acontent\x18\x06 \x01(\tR\acontent\")\n" +
 	"\x13GetDailyNoteRequest\x12\x12\n" +
 	"\x04date\x18\x01 \x01(\tR\x04date\"\x7f\n" +
 	"\x15ListDailyNotesRequest\x12\x14\n" +
@@ -964,7 +1121,16 @@ const file_blackwood_v1_daily_notes_proto_rawDesc = "" +
 	"\x12ListEntriesRequest\x12\"\n" +
 	"\rdaily_note_id\x18\x01 \x01(\tR\vdailyNoteId\"D\n" +
 	"\x13ListEntriesResponse\x12-\n" +
-	"\aentries\x18\x01 \x03(\v2\x13.blackwood.v1.EntryR\aentries*\x98\x01\n" +
+	"\aentries\x18\x01 \x03(\v2\x13.blackwood.v1.EntryR\aentries\"M\n" +
+	"\x1dUpdateDailyNoteContentRequest\x12\x12\n" +
+	"\x04date\x18\x01 \x01(\tR\x04date\x12\x18\n" +
+	"\acontent\x18\x02 \x01(\tR\acontent\"W\n" +
+	"\x1bListDatesWithContentRequest\x12\x1d\n" +
+	"\n" +
+	"start_date\x18\x01 \x01(\tR\tstartDate\x12\x19\n" +
+	"\bend_date\x18\x02 \x01(\tR\aendDate\"4\n" +
+	"\x1cListDatesWithContentResponse\x12\x14\n" +
+	"\x05dates\x18\x01 \x03(\tR\x05dates*\x98\x01\n" +
 	"\tEntryType\x12\x1a\n" +
 	"\x16ENTRY_TYPE_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fENTRY_TYPE_TEXT\x10\x01\x12\x14\n" +
@@ -978,14 +1144,16 @@ const file_blackwood_v1_daily_notes_proto_rawDesc = "" +
 	"\x15ENTRY_SOURCE_TELEGRAM\x10\x02\x12\x19\n" +
 	"\x15ENTRY_SOURCE_WHATSAPP\x10\x03\x12\x14\n" +
 	"\x10ENTRY_SOURCE_API\x10\x04\x12\x17\n" +
-	"\x13ENTRY_SOURCE_IMPORT\x10\x052\xf0\x03\n" +
+	"\x13ENTRY_SOURCE_IMPORT\x10\x052\xbf\x05\n" +
 	"\x11DailyNotesService\x12J\n" +
 	"\fGetDailyNote\x12!.blackwood.v1.GetDailyNoteRequest\x1a\x17.blackwood.v1.DailyNote\x12[\n" +
 	"\x0eListDailyNotes\x12#.blackwood.v1.ListDailyNotesRequest\x1a$.blackwood.v1.ListDailyNotesResponse\x12D\n" +
 	"\vCreateEntry\x12 .blackwood.v1.CreateEntryRequest\x1a\x13.blackwood.v1.Entry\x12D\n" +
 	"\vUpdateEntry\x12 .blackwood.v1.UpdateEntryRequest\x1a\x13.blackwood.v1.Entry\x12R\n" +
 	"\vDeleteEntry\x12 .blackwood.v1.DeleteEntryRequest\x1a!.blackwood.v1.DeleteEntryResponse\x12R\n" +
-	"\vListEntries\x12 .blackwood.v1.ListEntriesRequest\x1a!.blackwood.v1.ListEntriesResponseB=Z;github.com/csweichel/blackwood/gen/blackwood/v1;blackwoodv1b\x06proto3"
+	"\vListEntries\x12 .blackwood.v1.ListEntriesRequest\x1a!.blackwood.v1.ListEntriesResponse\x12^\n" +
+	"\x16UpdateDailyNoteContent\x12+.blackwood.v1.UpdateDailyNoteContentRequest\x1a\x17.blackwood.v1.DailyNote\x12m\n" +
+	"\x14ListDatesWithContent\x12).blackwood.v1.ListDatesWithContentRequest\x1a*.blackwood.v1.ListDatesWithContentResponseB=Z;github.com/csweichel/blackwood/gen/blackwood/v1;blackwoodv1b\x06proto3"
 
 var (
 	file_blackwood_v1_daily_notes_proto_rawDescOnce sync.Once
@@ -1000,33 +1168,36 @@ func file_blackwood_v1_daily_notes_proto_rawDescGZIP() []byte {
 }
 
 var file_blackwood_v1_daily_notes_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_blackwood_v1_daily_notes_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_blackwood_v1_daily_notes_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_blackwood_v1_daily_notes_proto_goTypes = []any{
-	(EntryType)(0),                 // 0: blackwood.v1.EntryType
-	(EntrySource)(0),               // 1: blackwood.v1.EntrySource
-	(*Attachment)(nil),             // 2: blackwood.v1.Attachment
-	(*Entry)(nil),                  // 3: blackwood.v1.Entry
-	(*DailyNote)(nil),              // 4: blackwood.v1.DailyNote
-	(*GetDailyNoteRequest)(nil),    // 5: blackwood.v1.GetDailyNoteRequest
-	(*ListDailyNotesRequest)(nil),  // 6: blackwood.v1.ListDailyNotesRequest
-	(*ListDailyNotesResponse)(nil), // 7: blackwood.v1.ListDailyNotesResponse
-	(*CreateEntryRequest)(nil),     // 8: blackwood.v1.CreateEntryRequest
-	(*UpdateEntryRequest)(nil),     // 9: blackwood.v1.UpdateEntryRequest
-	(*DeleteEntryRequest)(nil),     // 10: blackwood.v1.DeleteEntryRequest
-	(*DeleteEntryResponse)(nil),    // 11: blackwood.v1.DeleteEntryResponse
-	(*ListEntriesRequest)(nil),     // 12: blackwood.v1.ListEntriesRequest
-	(*ListEntriesResponse)(nil),    // 13: blackwood.v1.ListEntriesResponse
-	(*timestamppb.Timestamp)(nil),  // 14: google.protobuf.Timestamp
+	(EntryType)(0),                        // 0: blackwood.v1.EntryType
+	(EntrySource)(0),                      // 1: blackwood.v1.EntrySource
+	(*Attachment)(nil),                    // 2: blackwood.v1.Attachment
+	(*Entry)(nil),                         // 3: blackwood.v1.Entry
+	(*DailyNote)(nil),                     // 4: blackwood.v1.DailyNote
+	(*GetDailyNoteRequest)(nil),           // 5: blackwood.v1.GetDailyNoteRequest
+	(*ListDailyNotesRequest)(nil),         // 6: blackwood.v1.ListDailyNotesRequest
+	(*ListDailyNotesResponse)(nil),        // 7: blackwood.v1.ListDailyNotesResponse
+	(*CreateEntryRequest)(nil),            // 8: blackwood.v1.CreateEntryRequest
+	(*UpdateEntryRequest)(nil),            // 9: blackwood.v1.UpdateEntryRequest
+	(*DeleteEntryRequest)(nil),            // 10: blackwood.v1.DeleteEntryRequest
+	(*DeleteEntryResponse)(nil),           // 11: blackwood.v1.DeleteEntryResponse
+	(*ListEntriesRequest)(nil),            // 12: blackwood.v1.ListEntriesRequest
+	(*ListEntriesResponse)(nil),           // 13: blackwood.v1.ListEntriesResponse
+	(*UpdateDailyNoteContentRequest)(nil), // 14: blackwood.v1.UpdateDailyNoteContentRequest
+	(*ListDatesWithContentRequest)(nil),   // 15: blackwood.v1.ListDatesWithContentRequest
+	(*ListDatesWithContentResponse)(nil),  // 16: blackwood.v1.ListDatesWithContentResponse
+	(*timestamppb.Timestamp)(nil),         // 17: google.protobuf.Timestamp
 }
 var file_blackwood_v1_daily_notes_proto_depIdxs = []int32{
 	0,  // 0: blackwood.v1.Entry.type:type_name -> blackwood.v1.EntryType
 	1,  // 1: blackwood.v1.Entry.source:type_name -> blackwood.v1.EntrySource
 	2,  // 2: blackwood.v1.Entry.attachments:type_name -> blackwood.v1.Attachment
-	14, // 3: blackwood.v1.Entry.created_at:type_name -> google.protobuf.Timestamp
-	14, // 4: blackwood.v1.Entry.updated_at:type_name -> google.protobuf.Timestamp
+	17, // 3: blackwood.v1.Entry.created_at:type_name -> google.protobuf.Timestamp
+	17, // 4: blackwood.v1.Entry.updated_at:type_name -> google.protobuf.Timestamp
 	3,  // 5: blackwood.v1.DailyNote.entries:type_name -> blackwood.v1.Entry
-	14, // 6: blackwood.v1.DailyNote.created_at:type_name -> google.protobuf.Timestamp
-	14, // 7: blackwood.v1.DailyNote.updated_at:type_name -> google.protobuf.Timestamp
+	17, // 6: blackwood.v1.DailyNote.created_at:type_name -> google.protobuf.Timestamp
+	17, // 7: blackwood.v1.DailyNote.updated_at:type_name -> google.protobuf.Timestamp
 	4,  // 8: blackwood.v1.ListDailyNotesResponse.daily_notes:type_name -> blackwood.v1.DailyNote
 	0,  // 9: blackwood.v1.CreateEntryRequest.type:type_name -> blackwood.v1.EntryType
 	1,  // 10: blackwood.v1.CreateEntryRequest.source:type_name -> blackwood.v1.EntrySource
@@ -1037,14 +1208,18 @@ var file_blackwood_v1_daily_notes_proto_depIdxs = []int32{
 	9,  // 15: blackwood.v1.DailyNotesService.UpdateEntry:input_type -> blackwood.v1.UpdateEntryRequest
 	10, // 16: blackwood.v1.DailyNotesService.DeleteEntry:input_type -> blackwood.v1.DeleteEntryRequest
 	12, // 17: blackwood.v1.DailyNotesService.ListEntries:input_type -> blackwood.v1.ListEntriesRequest
-	4,  // 18: blackwood.v1.DailyNotesService.GetDailyNote:output_type -> blackwood.v1.DailyNote
-	7,  // 19: blackwood.v1.DailyNotesService.ListDailyNotes:output_type -> blackwood.v1.ListDailyNotesResponse
-	3,  // 20: blackwood.v1.DailyNotesService.CreateEntry:output_type -> blackwood.v1.Entry
-	3,  // 21: blackwood.v1.DailyNotesService.UpdateEntry:output_type -> blackwood.v1.Entry
-	11, // 22: blackwood.v1.DailyNotesService.DeleteEntry:output_type -> blackwood.v1.DeleteEntryResponse
-	13, // 23: blackwood.v1.DailyNotesService.ListEntries:output_type -> blackwood.v1.ListEntriesResponse
-	18, // [18:24] is the sub-list for method output_type
-	12, // [12:18] is the sub-list for method input_type
+	14, // 18: blackwood.v1.DailyNotesService.UpdateDailyNoteContent:input_type -> blackwood.v1.UpdateDailyNoteContentRequest
+	15, // 19: blackwood.v1.DailyNotesService.ListDatesWithContent:input_type -> blackwood.v1.ListDatesWithContentRequest
+	4,  // 20: blackwood.v1.DailyNotesService.GetDailyNote:output_type -> blackwood.v1.DailyNote
+	7,  // 21: blackwood.v1.DailyNotesService.ListDailyNotes:output_type -> blackwood.v1.ListDailyNotesResponse
+	3,  // 22: blackwood.v1.DailyNotesService.CreateEntry:output_type -> blackwood.v1.Entry
+	3,  // 23: blackwood.v1.DailyNotesService.UpdateEntry:output_type -> blackwood.v1.Entry
+	11, // 24: blackwood.v1.DailyNotesService.DeleteEntry:output_type -> blackwood.v1.DeleteEntryResponse
+	13, // 25: blackwood.v1.DailyNotesService.ListEntries:output_type -> blackwood.v1.ListEntriesResponse
+	4,  // 26: blackwood.v1.DailyNotesService.UpdateDailyNoteContent:output_type -> blackwood.v1.DailyNote
+	16, // 27: blackwood.v1.DailyNotesService.ListDatesWithContent:output_type -> blackwood.v1.ListDatesWithContentResponse
+	20, // [20:28] is the sub-list for method output_type
+	12, // [12:20] is the sub-list for method input_type
 	12, // [12:12] is the sub-list for extension type_name
 	12, // [12:12] is the sub-list for extension extendee
 	0,  // [0:12] is the sub-list for field type_name
@@ -1061,7 +1236,7 @@ func file_blackwood_v1_daily_notes_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_blackwood_v1_daily_notes_proto_rawDesc), len(file_blackwood_v1_daily_notes_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   12,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -141,6 +141,24 @@ func (h *DailyNotesHandler) CreateEntry(ctx context.Context, req *connect.Reques
 		}
 	}
 
+	// Append to the daily note's markdown content.
+	now := time.Now().UTC()
+	ts := now.Format("15:04")
+	var snippet string
+	switch entry.Type {
+	case "audio":
+		snippet = fmt.Sprintf("\n\n---\n*%s — Audio recording*\n\n%s\n", ts, entry.Content)
+	case "photo":
+		snippet = fmt.Sprintf("\n\n---\n*%s — Photo*\n\n%s\n", ts, entry.Content)
+	case "viwoods":
+		snippet = fmt.Sprintf("\n\n---\n*%s — Viwoods note*\n\n%s\n", ts, entry.Content)
+	default:
+		snippet = fmt.Sprintf("\n\n---\n*%s*\n\n%s\n", ts, entry.Content)
+	}
+	if err := h.store.AppendDailyNoteContent(ctx, note.ID, snippet); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("append daily note content: %w", err))
+	}
+
 	protoEntry, err := h.entryToProto(ctx, entry)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -211,6 +229,46 @@ func (h *DailyNotesHandler) ListEntries(ctx context.Context, req *connect.Reques
 	}), nil
 }
 
+// UpdateDailyNoteContent replaces the markdown content of a daily note.
+func (h *DailyNotesHandler) UpdateDailyNoteContent(ctx context.Context, req *connect.Request[blackwoodv1.UpdateDailyNoteContentRequest]) (*connect.Response[blackwoodv1.DailyNote], error) {
+	date := req.Msg.Date
+	if date == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("date is required"))
+	}
+
+	note, err := h.store.GetOrCreateDailyNote(ctx, date)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get or create daily note: %w", err))
+	}
+
+	if err := h.store.UpdateDailyNoteContent(ctx, note.ID, req.Msg.Content); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update daily note content: %w", err))
+	}
+
+	// Re-fetch to get updated timestamps.
+	note, err = h.store.GetDailyNote(ctx, note.ID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get daily note: %w", err))
+	}
+
+	protoNote, err := h.dailyNoteToProto(ctx, note, true)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(protoNote), nil
+}
+
+// ListDatesWithContent returns dates that have non-empty markdown content within a date range.
+func (h *DailyNotesHandler) ListDatesWithContent(ctx context.Context, req *connect.Request[blackwoodv1.ListDatesWithContentRequest]) (*connect.Response[blackwoodv1.ListDatesWithContentResponse], error) {
+	dates, err := h.store.ListDatesWithContent(ctx, req.Msg.StartDate, req.Msg.EndDate)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list dates with content: %w", err))
+	}
+	return connect.NewResponse(&blackwoodv1.ListDatesWithContentResponse{
+		Dates: dates,
+	}), nil
+}
+
 // ServeAttachment serves attachment file data over HTTP.
 func ServeAttachment(store *storage.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -244,6 +302,7 @@ func (h *DailyNotesHandler) dailyNoteToProto(ctx context.Context, n *storage.Dai
 	pn := &blackwoodv1.DailyNote{
 		Id:        n.ID,
 		Date:      n.Date,
+		Content:   n.Content,
 		CreatedAt: timestamppb.New(n.CreatedAt),
 		UpdatedAt: timestamppb.New(n.UpdatedAt),
 	}

@@ -290,3 +290,4 @@ func TestDeleteEntryCascadesToAttachments(t *testing.T) {
 		t.Errorf("expected attachment file to be removed, got err: %v", err)
 	}
 }
+

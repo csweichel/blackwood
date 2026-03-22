@@ -52,6 +52,7 @@ message DailyNote {
   repeated Entry entries = 3;
   google.protobuf.Timestamp created_at = 4;
   google.protobuf.Timestamp updated_at = 5;
+  string content = 6;
 }
 
 message GetDailyNoteRequest {
@@ -100,6 +101,20 @@ message ListEntriesResponse {
   repeated Entry entries = 1;
 }
 
+message UpdateDailyNoteContentRequest {
+  string date = 1;
+  string content = 2;
+}
+
+message ListDatesWithContentRequest {
+  string start_date = 1;
+  string end_date = 2;
+}
+
+message ListDatesWithContentResponse {
+  repeated string dates = 1;
+}
+
 service DailyNotesService {
   rpc GetDailyNote(GetDailyNoteRequest) returns (DailyNote);
   rpc ListDailyNotes(ListDailyNotesRequest) returns (ListDailyNotesResponse);
@@ -107,4 +122,6 @@ service DailyNotesService {
   rpc UpdateEntry(UpdateEntryRequest) returns (Entry);
   rpc DeleteEntry(DeleteEntryRequest) returns (DeleteEntryResponse);
   rpc ListEntries(ListEntriesRequest) returns (ListEntriesResponse);
+  rpc UpdateDailyNoteContent(UpdateDailyNoteContentRequest) returns (DailyNote);
+  rpc ListDatesWithContent(ListDatesWithContentRequest) returns (ListDatesWithContentResponse);
 }

@@ -51,6 +51,12 @@ const (
 	// DailyNotesServiceListEntriesProcedure is the fully-qualified name of the DailyNotesService's
 	// ListEntries RPC.
 	DailyNotesServiceListEntriesProcedure = "/blackwood.v1.DailyNotesService/ListEntries"
+	// DailyNotesServiceUpdateDailyNoteContentProcedure is the fully-qualified name of the
+	// DailyNotesService's UpdateDailyNoteContent RPC.
+	DailyNotesServiceUpdateDailyNoteContentProcedure = "/blackwood.v1.DailyNotesService/UpdateDailyNoteContent"
+	// DailyNotesServiceListDatesWithContentProcedure is the fully-qualified name of the
+	// DailyNotesService's ListDatesWithContent RPC.
+	DailyNotesServiceListDatesWithContentProcedure = "/blackwood.v1.DailyNotesService/ListDatesWithContent"
 )
 
 // DailyNotesServiceClient is a client for the blackwood.v1.DailyNotesService service.
@@ -61,6 +67,8 @@ type DailyNotesServiceClient interface {
 	UpdateEntry(context.Context, *connect.Request[v1.UpdateEntryRequest]) (*connect.Response[v1.Entry], error)
 	DeleteEntry(context.Context, *connect.Request[v1.DeleteEntryRequest]) (*connect.Response[v1.DeleteEntryResponse], error)
 	ListEntries(context.Context, *connect.Request[v1.ListEntriesRequest]) (*connect.Response[v1.ListEntriesResponse], error)
+	UpdateDailyNoteContent(context.Context, *connect.Request[v1.UpdateDailyNoteContentRequest]) (*connect.Response[v1.DailyNote], error)
+	ListDatesWithContent(context.Context, *connect.Request[v1.ListDatesWithContentRequest]) (*connect.Response[v1.ListDatesWithContentResponse], error)
 }
 
 // NewDailyNotesServiceClient constructs a client for the blackwood.v1.DailyNotesService service. By
@@ -110,17 +118,31 @@ func NewDailyNotesServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(dailyNotesServiceMethods.ByName("ListEntries")),
 			connect.WithClientOptions(opts...),
 		),
+		updateDailyNoteContent: connect.NewClient[v1.UpdateDailyNoteContentRequest, v1.DailyNote](
+			httpClient,
+			baseURL+DailyNotesServiceUpdateDailyNoteContentProcedure,
+			connect.WithSchema(dailyNotesServiceMethods.ByName("UpdateDailyNoteContent")),
+			connect.WithClientOptions(opts...),
+		),
+		listDatesWithContent: connect.NewClient[v1.ListDatesWithContentRequest, v1.ListDatesWithContentResponse](
+			httpClient,
+			baseURL+DailyNotesServiceListDatesWithContentProcedure,
+			connect.WithSchema(dailyNotesServiceMethods.ByName("ListDatesWithContent")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // dailyNotesServiceClient implements DailyNotesServiceClient.
 type dailyNotesServiceClient struct {
-	getDailyNote   *connect.Client[v1.GetDailyNoteRequest, v1.DailyNote]
-	listDailyNotes *connect.Client[v1.ListDailyNotesRequest, v1.ListDailyNotesResponse]
-	createEntry    *connect.Client[v1.CreateEntryRequest, v1.Entry]
-	updateEntry    *connect.Client[v1.UpdateEntryRequest, v1.Entry]
-	deleteEntry    *connect.Client[v1.DeleteEntryRequest, v1.DeleteEntryResponse]
-	listEntries    *connect.Client[v1.ListEntriesRequest, v1.ListEntriesResponse]
+	getDailyNote           *connect.Client[v1.GetDailyNoteRequest, v1.DailyNote]
+	listDailyNotes         *connect.Client[v1.ListDailyNotesRequest, v1.ListDailyNotesResponse]
+	createEntry            *connect.Client[v1.CreateEntryRequest, v1.Entry]
+	updateEntry            *connect.Client[v1.UpdateEntryRequest, v1.Entry]
+	deleteEntry            *connect.Client[v1.DeleteEntryRequest, v1.DeleteEntryResponse]
+	listEntries            *connect.Client[v1.ListEntriesRequest, v1.ListEntriesResponse]
+	updateDailyNoteContent *connect.Client[v1.UpdateDailyNoteContentRequest, v1.DailyNote]
+	listDatesWithContent   *connect.Client[v1.ListDatesWithContentRequest, v1.ListDatesWithContentResponse]
 }
 
 // GetDailyNote calls blackwood.v1.DailyNotesService.GetDailyNote.
@@ -153,6 +175,16 @@ func (c *dailyNotesServiceClient) ListEntries(ctx context.Context, req *connect.
 	return c.listEntries.CallUnary(ctx, req)
 }
 
+// UpdateDailyNoteContent calls blackwood.v1.DailyNotesService.UpdateDailyNoteContent.
+func (c *dailyNotesServiceClient) UpdateDailyNoteContent(ctx context.Context, req *connect.Request[v1.UpdateDailyNoteContentRequest]) (*connect.Response[v1.DailyNote], error) {
+	return c.updateDailyNoteContent.CallUnary(ctx, req)
+}
+
+// ListDatesWithContent calls blackwood.v1.DailyNotesService.ListDatesWithContent.
+func (c *dailyNotesServiceClient) ListDatesWithContent(ctx context.Context, req *connect.Request[v1.ListDatesWithContentRequest]) (*connect.Response[v1.ListDatesWithContentResponse], error) {
+	return c.listDatesWithContent.CallUnary(ctx, req)
+}
+
 // DailyNotesServiceHandler is an implementation of the blackwood.v1.DailyNotesService service.
 type DailyNotesServiceHandler interface {
 	GetDailyNote(context.Context, *connect.Request[v1.GetDailyNoteRequest]) (*connect.Response[v1.DailyNote], error)
@@ -161,6 +193,8 @@ type DailyNotesServiceHandler interface {
 	UpdateEntry(context.Context, *connect.Request[v1.UpdateEntryRequest]) (*connect.Response[v1.Entry], error)
 	DeleteEntry(context.Context, *connect.Request[v1.DeleteEntryRequest]) (*connect.Response[v1.DeleteEntryResponse], error)
 	ListEntries(context.Context, *connect.Request[v1.ListEntriesRequest]) (*connect.Response[v1.ListEntriesResponse], error)
+	UpdateDailyNoteContent(context.Context, *connect.Request[v1.UpdateDailyNoteContentRequest]) (*connect.Response[v1.DailyNote], error)
+	ListDatesWithContent(context.Context, *connect.Request[v1.ListDatesWithContentRequest]) (*connect.Response[v1.ListDatesWithContentResponse], error)
 }
 
 // NewDailyNotesServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -206,6 +240,18 @@ func NewDailyNotesServiceHandler(svc DailyNotesServiceHandler, opts ...connect.H
 		connect.WithSchema(dailyNotesServiceMethods.ByName("ListEntries")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dailyNotesServiceUpdateDailyNoteContentHandler := connect.NewUnaryHandler(
+		DailyNotesServiceUpdateDailyNoteContentProcedure,
+		svc.UpdateDailyNoteContent,
+		connect.WithSchema(dailyNotesServiceMethods.ByName("UpdateDailyNoteContent")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dailyNotesServiceListDatesWithContentHandler := connect.NewUnaryHandler(
+		DailyNotesServiceListDatesWithContentProcedure,
+		svc.ListDatesWithContent,
+		connect.WithSchema(dailyNotesServiceMethods.ByName("ListDatesWithContent")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/blackwood.v1.DailyNotesService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DailyNotesServiceGetDailyNoteProcedure:
@@ -220,6 +266,10 @@ func NewDailyNotesServiceHandler(svc DailyNotesServiceHandler, opts ...connect.H
 			dailyNotesServiceDeleteEntryHandler.ServeHTTP(w, r)
 		case DailyNotesServiceListEntriesProcedure:
 			dailyNotesServiceListEntriesHandler.ServeHTTP(w, r)
+		case DailyNotesServiceUpdateDailyNoteContentProcedure:
+			dailyNotesServiceUpdateDailyNoteContentHandler.ServeHTTP(w, r)
+		case DailyNotesServiceListDatesWithContentProcedure:
+			dailyNotesServiceListDatesWithContentHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -251,4 +301,12 @@ func (UnimplementedDailyNotesServiceHandler) DeleteEntry(context.Context, *conne
 
 func (UnimplementedDailyNotesServiceHandler) ListEntries(context.Context, *connect.Request[v1.ListEntriesRequest]) (*connect.Response[v1.ListEntriesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blackwood.v1.DailyNotesService.ListEntries is not implemented"))
+}
+
+func (UnimplementedDailyNotesServiceHandler) UpdateDailyNoteContent(context.Context, *connect.Request[v1.UpdateDailyNoteContentRequest]) (*connect.Response[v1.DailyNote], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blackwood.v1.DailyNotesService.UpdateDailyNoteContent is not implemented"))
+}
+
+func (UnimplementedDailyNotesServiceHandler) ListDatesWithContent(context.Context, *connect.Request[v1.ListDatesWithContentRequest]) (*connect.Response[v1.ListDatesWithContentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blackwood.v1.DailyNotesService.ListDatesWithContent is not implemented"))
 }
