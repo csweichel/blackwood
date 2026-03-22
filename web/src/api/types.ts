@@ -92,3 +92,32 @@ export const entrySourceLabel: Record<EntrySource, string> = {
   [EntrySource.API]: "API",
   [EntrySource.IMPORT]: "Import",
 };
+
+// Chat types
+
+export interface SourceReference {
+  entryId: string;
+  dailyNoteDate: string;
+  snippet: string;
+  score: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: string;
+  content: string;
+  sources: SourceReference[];
+  createdAt: string;
+}
+
+export interface Conversation {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListConversationsResponse {
+  conversations: Conversation[];
+}
