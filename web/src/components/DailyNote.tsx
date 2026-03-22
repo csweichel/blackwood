@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import Markdown from "react-markdown";
 import { getDailyNote, updateDailyNoteContent } from "../api/client";
 import EntryForm from "./EntryForm";
 
@@ -20,8 +21,10 @@ type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 export default function DailyNoteView({ date }: DailyNoteViewProps) {
   const [content, setContent] = useState("");
+  const [editContent, setEditContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -50,6 +53,11 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     };
   }, [load]);
 
+  // Reset editing state when date changes
+  useEffect(() => {
+    setEditing(false);
+  }, [date]);
+
   const doSave = useCallback(
     async (text: string) => {
       setSaveStatus("saving");
@@ -64,9 +72,9 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     [date]
   );
 
-  function handleContentChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+  function handleEditChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const text = e.target.value;
-    setContent(text);
+    setEditContent(text);
     setSaveStatus("idle");
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -75,7 +83,24 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     }, 1000);
   }
 
-  // After an entry is created via EntryForm, reload to pick up appended content
+  function startEditing() {
+    setEditContent(content);
+    setEditing(true);
+  }
+
+  function handleSave() {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    setContent(editContent);
+    setEditing(false);
+    doSave(editContent);
+  }
+
+  function handleCancel() {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    setEditing(false);
+    setSaveStatus("idle");
+  }
+
   async function handleEntryCreated() {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     await load();
@@ -98,40 +123,84 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold text-gray-900">
           {formatDateHeading(date)}
         </h2>
-        <span
-          className={`text-xs transition-opacity ${
-            saveStatus === "idle" ? "opacity-0" : "opacity-100"
-          } ${
-            saveStatus === "saving"
-              ? "text-gray-400"
+        <div className="flex items-center gap-3">
+          <span
+            className={`text-xs transition-opacity ${
+              saveStatus === "idle" ? "opacity-0" : "opacity-100"
+            } ${
+              saveStatus === "saving"
+                ? "text-gray-400"
+                : saveStatus === "saved"
+                ? "text-green-500"
+                : saveStatus === "error"
+                ? "text-red-500"
+                : ""
+            }`}
+          >
+            {saveStatus === "saving"
+              ? "Saving..."
               : saveStatus === "saved"
-              ? "text-green-500"
+              ? "Saved"
               : saveStatus === "error"
-              ? "text-red-500"
-              : ""
-          }`}
-        >
-          {saveStatus === "saving"
-            ? "Saving..."
-            : saveStatus === "saved"
-            ? "Saved"
-            : saveStatus === "error"
-            ? "Save failed"
-            : ""}
-        </span>
+              ? "Save failed"
+              : ""}
+          </span>
+          {!editing ? (
+            <button
+              onClick={startEditing}
+              className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+            >
+              Edit
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCancel}
+                className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
-      <textarea
-        value={content}
-        onChange={handleContentChange}
-        placeholder="Start writing..."
-        className="w-full min-h-[300px] border border-gray-200 rounded-lg p-4 text-sm font-mono leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-      />
+      <div className="flex-1 min-h-0 overflow-y-auto mb-4">
+        {editing ? (
+          <textarea
+            value={editContent}
+            onChange={handleEditChange}
+            placeholder="Start writing..."
+            className="w-full h-full min-h-[300px] border border-gray-200 rounded-lg p-4 text-sm font-mono leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+            autoFocus
+          />
+        ) : content.trim() ? (
+          <div
+            className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-hr:border-gray-200 prose-strong:text-gray-900 cursor-text rounded-lg p-4 bg-white border border-gray-100 min-h-[300px]"
+            onClick={startEditing}
+          >
+            <Markdown>{content}</Markdown>
+          </div>
+        ) : (
+          <div
+            className="rounded-lg p-4 bg-white border border-gray-100 min-h-[300px] flex items-center justify-center cursor-text"
+            onClick={startEditing}
+          >
+            <p className="text-gray-400 text-sm">No entries yet. Click to start writing, or add an entry below.</p>
+          </div>
+        )}
+      </div>
 
       <EntryForm date={date} onCreated={handleEntryCreated} />
     </div>
