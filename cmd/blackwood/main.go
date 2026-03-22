@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/csweichel/blackwood/internal/config"
+	"github.com/csweichel/blackwood/internal/hooks"
 	"github.com/csweichel/blackwood/internal/state"
 	"github.com/csweichel/blackwood/internal/watcher"
 )
@@ -69,12 +70,30 @@ func main() {
 
 	log.Printf("watching %s for .note files", cfg.WatchDir)
 
+	runner := hooks.New(cfg.Hooks)
+
 	for path := range ch {
 		if st.IsProcessed(path) {
 			log.Printf("skipping already-processed file: %s", path)
 			continue
 		}
 		log.Printf("detected new file: %s", path)
+
+		if err := runner.Run(ctx, path); err != nil {
+			log.Printf("hooks failed for %s: %v", path, err)
+			continue
+		}
+
+		hash, err := state.ComputeHash(path)
+		if err != nil {
+			log.Printf("error hashing %s: %v", path, err)
+			continue
+		}
+		st.MarkProcessed(path, hash)
+		if err := st.Save(); err != nil {
+			log.Printf("error saving state: %v", err)
+		}
+		log.Printf("processed %s successfully", path)
 	}
 
 	log.Println("shutting down")
