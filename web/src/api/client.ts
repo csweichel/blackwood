@@ -7,6 +7,7 @@ import type {
   GetDailyNoteRequest,
   ListDailyNotesRequest,
 } from "./types";
+import { type EntryType, type EntrySource } from "./types";
 
 const SERVICE = "/blackwood.v1.DailyNotesService";
 
@@ -40,4 +41,30 @@ export async function createEntry(req: CreateEntryRequest): Promise<Entry> {
 
 export async function deleteEntry(req: DeleteEntryRequest): Promise<void> {
   await rpc<DeleteEntryRequest, Record<string, never>>("DeleteEntry", req);
+}
+
+export async function createEntryWithAttachment(
+  date: string,
+  type: EntryType,
+  content: string,
+  source: EntrySource,
+  file: File
+): Promise<Entry> {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const base64 = btoa(binary);
+
+  return rpc<Record<string, unknown>, Entry>("CreateEntry", {
+    date,
+    type,
+    content,
+    source,
+    attachmentData: [base64],
+    attachmentFilenames: [file.name],
+    attachmentContentTypes: [file.type],
+  });
 }
