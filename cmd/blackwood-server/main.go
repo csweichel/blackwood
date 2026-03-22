@@ -13,10 +13,13 @@ import (
 
 	"github.com/csweichel/blackwood/gen/blackwood/v1/blackwoodv1connect"
 	"github.com/csweichel/blackwood/internal/api"
+	"github.com/csweichel/blackwood/internal/describe"
 	"github.com/csweichel/blackwood/internal/index"
 	"github.com/csweichel/blackwood/internal/ocr"
 	"github.com/csweichel/blackwood/internal/rag"
 	"github.com/csweichel/blackwood/internal/storage"
+	"github.com/csweichel/blackwood/internal/transcribe"
+	"github.com/csweichel/blackwood/internal/whatsapp"
 )
 
 func main() {
@@ -93,6 +96,31 @@ func main() {
 		chatPath, chatHandler := blackwoodv1connect.NewChatServiceHandler(api.NewChatHandler(ragEngine, store))
 		srv.Handle(chatPath, chatHandler)
 		slog.Info("chat service enabled", "model", chatModel)
+	}
+
+	// WhatsApp webhook (configured via env vars).
+	if waToken := os.Getenv("WHATSAPP_VERIFY_TOKEN"); waToken != "" {
+		waCfg := whatsapp.WebhookConfig{
+			VerifyToken:   waToken,
+			AppSecret:     os.Getenv("WHATSAPP_APP_SECRET"),
+			AccessToken:   os.Getenv("WHATSAPP_ACCESS_TOKEN"),
+			PhoneNumberID: os.Getenv("WHATSAPP_PHONE_NUMBER_ID"),
+		}
+
+		var t transcribe.Transcriber
+		var d describe.Describer
+		if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
+			t = transcribe.NewWhisper(apiKey)
+			model := os.Getenv("OPENAI_MODEL")
+			if model == "" {
+				model = "gpt-4o"
+			}
+			d = describe.NewVision(apiKey, model)
+		}
+
+		waHandler := whatsapp.NewWebhookHandler(waCfg, store, t, d)
+		srv.Handle("/api/webhooks/whatsapp", waHandler)
+		slog.Info("WhatsApp webhook enabled")
 	}
 
 	// Serve attachment files.
