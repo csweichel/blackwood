@@ -1,68 +1,155 @@
 # Blackwood
 
-A daemon that watches a directory for new [viwoods](https://viwoods.com) notes files and runs configurable hooks on them. Intended to run under systemd.
+**Your daily notes, from everywhere.** Blackwood is a local-first daily notes app that captures text, voice memos, photos, and handwritten notes — then makes all of it searchable through AI.
 
-## Build
+Write from the web, send a WhatsApp message, import from Obsidian, or drop in a Viwoods handwritten note. Everything lands in a single markdown document per day. A semantic index built on top lets you chat with your notes using RAG.
 
-```sh
-make build      # produces bin/blackwood
-make test
-make install    # go install
-```
+Blackwood runs entirely on your machine. Your data stays local.
 
-## Usage
+## Features
 
-```sh
-blackwood --config path/to/config.yaml --watch-dir /path/to/notes
-```
+- **Markdown daily notes** — one document per day, editable in the browser with auto-save
+- **Voice memos** — record audio in the web UI or send via WhatsApp; automatically transcribed via Whisper
+- **Photo capture** — upload or snap photos; automatically described via GPT-4o vision
+- **Viwoods handwriting** — import `.note` files from Viwoods AIPaper; pages are OCR'd and added to your daily note
+- **Obsidian import** — bulk import your existing daily notes from Obsidian
+- **WhatsApp integration** — text, voice messages, and photos sent to your bot appear in today's note
+- **Semantic search & RAG chat** — ask questions about your notes in natural language; get answers with source citations
+- **Calendar view** — monthly grid showing which days have content; click to navigate
+- **Local-first** — SQLite database, runs on your machine, no cloud dependency
 
-| Flag | Description |
-|------|-------------|
-| `--config` | Path to the configuration file |
-| `--watch-dir` | Directory to watch for new notes files |
+## Quick Start
 
-## Systemd Setup
+### Prerequisites
 
-Install the binary, unit file, and directories:
+- Go 1.25+
+- Node.js 18+ (for the web UI)
+- An [OpenAI API key](https://platform.openai.com/api-keys) (for transcription, vision, embeddings, and chat)
 
-```sh
-sudo make install-service
-```
-
-Copy your configuration file:
+### Build
 
 ```sh
-sudo cp blackwood.example.yaml /etc/blackwood/config.yaml
-# Edit as needed
-sudo $EDITOR /etc/blackwood/config.yaml
+# Build the server
+go build -o bin/blackwood-server ./cmd/blackwood-server
+
+# Build the web UI
+cd web && npm ci && npm run build && cd ..
 ```
 
-Enable and start the service:
+### Run
 
 ```sh
-sudo systemctl daemon-reload
-sudo systemctl enable --now blackwood
+export OPENAI_API_KEY=sk-...
+./bin/blackwood-server --addr :8080 --data-dir ~/.blackwood
 ```
 
-View logs:
+Open [http://localhost:8080](http://localhost:8080) in your browser.
+
+### Makefile targets
 
 ```sh
-journalctl -u blackwood -f
+make build          # Build the file watcher daemon
+make build-server   # Build the API server (requires buf)
+make test           # Run all tests
+make web-build      # Build the web UI
+make generate       # Regenerate protobuf/Connect code
 ```
 
-## Dropbox Integration
+## Architecture
 
-Blackwood can monitor a Dropbox-synced folder for new notes. This requires the [Dropbox desktop client](https://www.dropbox.com/install) to be installed and syncing on the same machine.
+Blackwood is a Go backend serving a React frontend over a single port.
 
-Instead of setting `watch_dir`, use `dropbox.local_path` to point at your locally-synced Dropbox folder:
-
-```yaml
-dropbox:
-  local_path: ~/Dropbox/Apps/Viwoods
+```
+┌─────────────────────────────────────────────────┐
+│                  Web UI (React)                 │
+│  Calendar · Markdown Editor · Audio · Chat      │
+└──────────────────────┬──────────────────────────┘
+                       │ Connect-RPC
+┌──────────────────────┴──────────────────────────┐
+│               Go API Server                     │
+│                                                 │
+│  DailyNotesService · ChatService · ImportService│
+│  WhatsApp Webhook · Attachment Serving          │
+├─────────────────────────────────────────────────┤
+│  AI Pipelines                                   │
+│  Whisper (audio) · GPT-4o (vision/chat/OCR)     │
+│  text-embedding-3-small (semantic index)        │
+├─────────────────────────────────────────────────┤
+│  Storage                                        │
+│  SQLite (notes, entries, conversations)         │
+│  Embeddings (cosine similarity in Go)           │
+│  File system (attachments)                      │
+└─────────────────────────────────────────────────┘
 ```
 
-Blackwood will use this path as the watch directory automatically. Note that `watch_dir` and `dropbox.local_path` are mutually exclusive — setting both is an error.
+### Key packages
+
+| Package | Purpose |
+|---------|---------|
+| `cmd/blackwood-server` | API server entry point |
+| `cmd/blackwood` | Legacy file watcher daemon |
+| `internal/storage` | SQLite storage layer |
+| `internal/api` | Connect-RPC service handlers |
+| `internal/rag` | RAG engine (search + LLM) |
+| `internal/index` | Semantic index (embeddings + vector search) |
+| `internal/transcribe` | Whisper audio transcription |
+| `internal/describe` | GPT-4o photo description |
+| `internal/ocr` | GPT-4o handwriting OCR |
+| `internal/noteparser` | Viwoods `.note` file parser |
+| `internal/whatsapp` | WhatsApp Business API webhook |
+| `web/` | React + TypeScript + Vite frontend |
+
+### API
+
+The API uses [Connect-RPC](https://connectrpc.com/) (gRPC-compatible over HTTP/JSON). Proto definitions are in `proto/blackwood/v1/`.
+
+| Service | RPCs |
+|---------|------|
+| `DailyNotesService` | `GetDailyNote`, `ListDailyNotes`, `CreateEntry`, `UpdateEntry`, `DeleteEntry`, `UpdateDailyNoteContent`, `ListDatesWithContent` |
+| `ChatService` | `Chat` (streaming), `ListConversations`, `GetConversation` |
+| `ImportService` | `ImportViwoods`, `ImportObsidian` |
+| `HealthService` | `Check` |
+
+## Configuration
+
+The server is configured via environment variables:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OPENAI_API_KEY` | Yes | OpenAI API key for all AI features |
+| `OPENAI_MODEL` | No | Model for OCR (default: `gpt-4o`) |
+| `OPENAI_CHAT_MODEL` | No | Model for RAG chat (default: `gpt-4o`) |
+
+### WhatsApp (optional)
+
+To receive messages via WhatsApp, set up a [WhatsApp Business App](https://developers.facebook.com/docs/whatsapp/cloud-api/get-started) and configure:
+
+| Variable | Description |
+|----------|-------------|
+| `WHATSAPP_VERIFY_TOKEN` | Webhook verification token (you choose this) |
+| `WHATSAPP_APP_SECRET` | App secret for signature verification |
+| `WHATSAPP_ACCESS_TOKEN` | Permanent access token |
+| `WHATSAPP_PHONE_NUMBER_ID` | Phone number ID for sending replies |
+
+Set your webhook URL to `https://your-domain/api/webhooks/whatsapp`.
+
+## Legacy: File Watcher Daemon
+
+The original `blackwood` binary watches a directory for Viwoods `.note` files and processes them via configurable hooks. See `blackwood.example.yaml` for configuration. This mode is independent of the API server.
+
+```sh
+make build
+./bin/blackwood --config blackwood.example.yaml
+```
+
+## Roadmap
+
+- [ ] Telegram bot integration
+- [ ] Chrome extension (web clipper)
+- [ ] iOS app
+- [ ] Mac app (menu bar quick capture)
+- [ ] Offline sync (service worker + IndexedDB)
 
 ## License
 
-See [LICENSE](LICENSE).
+[MIT](LICENSE)
