@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -54,6 +55,25 @@ type Attachment struct {
 	CreatedAt   time.Time
 }
 
+// Conversation represents a chat conversation.
+type Conversation struct {
+	ID        string
+	Title     string
+	Messages  []Message
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// Message represents a single message in a conversation.
+type Message struct {
+	ID             string
+	ConversationID string
+	Role           string
+	Content        string
+	Sources        string // JSON array of source references
+	CreatedAt      time.Time
+}
+
 func newUUID() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
@@ -79,6 +99,12 @@ func New(dbPath string, dataDir string) (*Store, error) {
 // Close closes the underlying database connection.
 func (s *Store) Close() error {
 	return s.db.Close()
+}
+
+// DB returns the underlying database connection for use by other packages
+// that need to share the same database (e.g., the embeddings index).
+func (s *Store) DB() *sql.DB {
+	return s.db
 }
 
 // --- Daily notes ---
@@ -322,4 +348,131 @@ func (s *Store) ListAttachments(ctx context.Context, entryID string) ([]Attachme
 		attachments = append(attachments, a)
 	}
 	return attachments, rows.Err()
+}
+
+// --- Conversations ---
+
+// CreateConversation inserts a new conversation.
+func (s *Store) CreateConversation(ctx context.Context, title string) (*Conversation, error) {
+	now := time.Now().UTC()
+	id := newUUID()
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO conversations (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)`,
+		id, title, now, now,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create conversation: %w", err)
+	}
+	return &Conversation{ID: id, Title: title, CreatedAt: now, UpdatedAt: now}, nil
+}
+
+// GetConversation retrieves a conversation by ID, including its messages.
+func (s *Store) GetConversation(ctx context.Context, id string) (*Conversation, error) {
+	var c Conversation
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, title, created_at, updated_at FROM conversations WHERE id = ?`, id,
+	).Scan(&c.ID, &c.Title, &c.CreatedAt, &c.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("get conversation: %w", err)
+	}
+
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, conversation_id, role, content, sources, created_at
+		 FROM messages WHERE conversation_id = ? ORDER BY created_at`, id,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get conversation messages: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var m Message
+		if err := rows.Scan(&m.ID, &m.ConversationID, &m.Role, &m.Content, &m.Sources, &m.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan message: %w", err)
+		}
+		c.Messages = append(c.Messages, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate messages: %w", err)
+	}
+	return &c, nil
+}
+
+// ListConversations returns conversations ordered by updated_at descending, without messages.
+func (s *Store) ListConversations(ctx context.Context, limit, offset int) ([]Conversation, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, title, created_at, updated_at FROM conversations ORDER BY updated_at DESC LIMIT ? OFFSET ?`,
+		limit, offset,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list conversations: %w", err)
+	}
+	defer rows.Close()
+
+	var convos []Conversation
+	for rows.Next() {
+		var c Conversation
+		if err := rows.Scan(&c.ID, &c.Title, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan conversation: %w", err)
+		}
+		convos = append(convos, c)
+	}
+	return convos, rows.Err()
+}
+
+// AddMessage inserts a message into a conversation and updates the conversation's updated_at.
+func (s *Store) AddMessage(ctx context.Context, conversationID, role, content, sourcesJSON string) (*Message, error) {
+	now := time.Now().UTC()
+	id := newUUID()
+
+	if sourcesJSON == "" {
+		sourcesJSON = "[]"
+	}
+	// Validate JSON
+	if !json.Valid([]byte(sourcesJSON)) {
+		sourcesJSON = "[]"
+	}
+
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO messages (id, conversation_id, role, content, sources, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		id, conversationID, role, content, sourcesJSON, now,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("add message: %w", err)
+	}
+
+	_, err = s.db.ExecContext(ctx,
+		`UPDATE conversations SET updated_at = ? WHERE id = ?`, now, conversationID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("update conversation timestamp: %w", err)
+	}
+
+	return &Message{
+		ID:             id,
+		ConversationID: conversationID,
+		Role:           role,
+		Content:        content,
+		Sources:        sourcesJSON,
+		CreatedAt:      now,
+	}, nil
+}
+
+// UpdateConversationTitle updates the title of a conversation.
+func (s *Store) UpdateConversationTitle(ctx context.Context, id, title string) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE conversations SET title = ?, updated_at = ? WHERE id = ?`,
+		title, time.Now().UTC(), id,
+	)
+	if err != nil {
+		return fmt.Errorf("update conversation title: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("update conversation title: not found")
+	}
+	return nil
 }

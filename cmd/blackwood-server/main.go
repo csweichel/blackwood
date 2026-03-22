@@ -13,7 +13,9 @@ import (
 
 	"github.com/csweichel/blackwood/gen/blackwood/v1/blackwoodv1connect"
 	"github.com/csweichel/blackwood/internal/api"
+	"github.com/csweichel/blackwood/internal/index"
 	"github.com/csweichel/blackwood/internal/ocr"
+	"github.com/csweichel/blackwood/internal/rag"
 	"github.com/csweichel/blackwood/internal/storage"
 )
 
@@ -71,6 +73,27 @@ func main() {
 	// Register the import service.
 	importPath, importHandler := blackwoodv1connect.NewImportServiceHandler(api.NewImportHandler(store, recognizer))
 	srv.Handle(importPath, importHandler)
+
+	// Set up the RAG chat service if OPENAI_API_KEY is configured.
+	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
+		embClient := index.NewOpenAIEmbeddingClient(apiKey)
+
+		idx, err := index.New(store.DB(), embClient)
+		if err != nil {
+			slog.Error("create index", "error", err)
+			os.Exit(1)
+		}
+
+		chatModel := os.Getenv("OPENAI_CHAT_MODEL")
+		if chatModel == "" {
+			chatModel = "gpt-4o"
+		}
+		ragEngine := rag.New(idx, store, apiKey, chatModel)
+
+		chatPath, chatHandler := blackwoodv1connect.NewChatServiceHandler(api.NewChatHandler(ragEngine, store))
+		srv.Handle(chatPath, chatHandler)
+		slog.Info("chat service enabled", "model", chatModel)
+	}
 
 	// Serve attachment files.
 	srv.Handle("GET /api/attachments/{id}", api.ServeAttachment(store))
