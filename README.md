@@ -50,6 +50,19 @@ View logs:
 journalctl -u blackwood -f
 ```
 
+## Dropbox Integration
+
+Blackwood can monitor a Dropbox-synced folder for new notes. This requires the [Dropbox desktop client](https://www.dropbox.com/install) to be installed and syncing on the same machine.
+
+Instead of setting `watch_dir`, use `dropbox.local_path` to point at your locally-synced Dropbox folder:
+
+```yaml
+dropbox:
+  local_path: ~/Dropbox/Apps/Viwoods
+```
+
+Blackwood will use this path as the watch directory automatically. Note that `watch_dir` and `dropbox.local_path` are mutually exclusive — setting both is an error.
+
 ## License
 
 See [LICENSE](LICENSE).

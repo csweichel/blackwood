@@ -13,6 +13,9 @@ llm:
   model: gpt-4o
   api_key_env: OPENAI_API_KEY
 
+# Dropbox integration: set local_path to your Dropbox-synced notes folder.
+# This is mutually exclusive with watch_dir — use one or the other.
+# Requires the Dropbox desktop client to be installed and syncing.
 # dropbox:
 #   local_path: ~/Dropbox/Apps/Viwoods
 
