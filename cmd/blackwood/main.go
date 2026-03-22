@@ -104,7 +104,9 @@ func main() {
 	importPath, importHandler := blackwoodv1connect.NewImportServiceHandler(api.NewImportHandler(store, recognizer))
 	srv.Handle(importPath, importHandler)
 
-	// Set up the RAG chat service if OpenAI API key is configured.
+	// Set up the RAG chat service. When the OpenAI API key is missing the
+	// route still exists but returns a proper error instead of a 404.
+	var ragEngine *rag.Engine
 	if apiKey := cfg.APIKey(); apiKey != "" {
 		embClient := index.NewOpenAIEmbeddingClient(apiKey)
 
@@ -114,12 +116,13 @@ func main() {
 			os.Exit(1)
 		}
 
-		ragEngine := rag.New(idx, store, apiKey, cfg.OpenAI.ChatModel)
-
-		chatPath, chatHandler := blackwoodv1connect.NewChatServiceHandler(api.NewChatHandler(ragEngine, store))
-		srv.Handle(chatPath, chatHandler)
+		ragEngine = rag.New(idx, store, apiKey, cfg.OpenAI.ChatModel)
 		slog.Info("chat service enabled", "model", cfg.OpenAI.ChatModel)
+	} else {
+		slog.Warn("chat service registered but disabled: no OpenAI API key configured")
 	}
+	chatPath, chatHandler := blackwoodv1connect.NewChatServiceHandler(api.NewChatHandler(ragEngine, store))
+	srv.Handle(chatPath, chatHandler)
 
 	// WhatsApp webhook.
 	if cfg.WhatsApp.Enabled {

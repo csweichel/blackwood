@@ -29,6 +29,9 @@ func NewChatHandler(engine *rag.Engine, store *storage.Store) *ChatHandler {
 // Chat handles a streaming chat request. It creates or continues a conversation,
 // queries the RAG engine, and streams response chunks.
 func (h *ChatHandler) Chat(ctx context.Context, req *connect.Request[blackwoodv1.ChatRequest], stream *connect.ServerStream[blackwoodv1.ChatResponse]) error {
+	if h.engine == nil {
+		return connect.NewError(connect.CodeUnavailable, fmt.Errorf("chat is not available: OpenAI API key not configured"))
+	}
 	if req.Msg.Message == "" {
 		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("message is required"))
 	}
@@ -133,6 +136,9 @@ func (h *ChatHandler) Chat(ctx context.Context, req *connect.Request[blackwoodv1
 
 // ListConversations returns a paginated list of conversations.
 func (h *ChatHandler) ListConversations(ctx context.Context, req *connect.Request[blackwoodv1.ListConversationsRequest]) (*connect.Response[blackwoodv1.ListConversationsResponse], error) {
+	if h.engine == nil {
+		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("chat is not available: OpenAI API key not configured"))
+	}
 	limit := int(req.Msg.Limit)
 	if limit <= 0 {
 		limit = 50
@@ -161,6 +167,9 @@ func (h *ChatHandler) ListConversations(ctx context.Context, req *connect.Reques
 
 // GetConversation returns a conversation with all its messages.
 func (h *ChatHandler) GetConversation(ctx context.Context, req *connect.Request[blackwoodv1.GetConversationRequest]) (*connect.Response[blackwoodv1.Conversation], error) {
+	if h.engine == nil {
+		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("chat is not available: OpenAI API key not configured"))
+	}
 	if req.Msg.Id == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("id is required"))
 	}

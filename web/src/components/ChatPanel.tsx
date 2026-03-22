@@ -138,7 +138,12 @@ export default function ChatPanel({ conversationId, messages, onMessagesUpdate, 
       };
       onMessagesUpdate([...updatedMessages, finalMessage], currentConvId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send message");
+      const msg = err instanceof Error ? err.message : "Failed to send message";
+      if (msg.includes("not available") || msg.includes("not configured")) {
+        setError("Chat is not available. Configure an OpenAI API key to enable it.");
+      } else {
+        setError(msg);
+      }
     } finally {
       setIsStreaming(false);
     }
