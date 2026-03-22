@@ -1,12 +1,18 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/csweichel/blackwood/internal/config"
+	"github.com/csweichel/blackwood/internal/state"
+	"github.com/csweichel/blackwood/internal/watcher"
 )
 
 func main() {
@@ -43,4 +49,33 @@ func main() {
 	for i, h := range cfg.Hooks {
 		fmt.Printf("  [%d] %s %s\n", i, h.Command, strings.Join(h.Args, " "))
 	}
+
+	st, err := state.Load(cfg.StatePath)
+	if err != nil {
+		log.Fatalf("error loading state: %v", err)
+	}
+
+	ctx, stop := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGINT, syscall.SIGTERM,
+	)
+	defer stop()
+
+	w := watcher.New(cfg.WatchDir, cfg.PollInterval)
+	ch, err := w.Start(ctx)
+	if err != nil {
+		log.Fatalf("error starting watcher: %v", err)
+	}
+
+	log.Printf("watching %s for .note files", cfg.WatchDir)
+
+	for path := range ch {
+		if st.IsProcessed(path) {
+			log.Printf("skipping already-processed file: %s", path)
+			continue
+		}
+		log.Printf("detected new file: %s", path)
+	}
+
+	log.Println("shutting down")
 }
