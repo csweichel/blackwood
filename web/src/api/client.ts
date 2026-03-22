@@ -120,7 +120,7 @@ export async function* streamChat(
 ): AsyncGenerator<{ content: string; done: boolean; conversationId: string; sources: SourceReference[] }> {
   const resp = await fetch(`${CHAT_SERVICE}/Chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/connect+json" },
     body: JSON.stringify({ conversationId, message }),
   });
   if (!resp.ok) {
