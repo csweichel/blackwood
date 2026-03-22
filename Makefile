@@ -11,7 +11,7 @@ build:
 	go build $(GOFLAGS) -o $(OUTDIR)/$(BINARY) ./cmd/blackwood
 
 build-server: generate
-	go build $(GOFLAGS) -o $(OUTDIR)/blackwood-server ./cmd/blackwood-server
+	go build $(GOFLAGS) -o $(OUTDIR)/blackwood ./cmd/blackwood
 
 clean:
 	rm -rf $(OUTDIR)

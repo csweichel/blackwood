@@ -5,197 +5,263 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
+	"github.com/csweichel/blackwood/gen/blackwood/v1/blackwoodv1connect"
+	"github.com/csweichel/blackwood/internal/api"
 	"github.com/csweichel/blackwood/internal/config"
-	"github.com/csweichel/blackwood/internal/hooks"
+	"github.com/csweichel/blackwood/internal/describe"
+	"github.com/csweichel/blackwood/internal/index"
 	"github.com/csweichel/blackwood/internal/noteparser"
-	"github.com/csweichel/blackwood/internal/obsidian"
 	"github.com/csweichel/blackwood/internal/ocr"
+	"github.com/csweichel/blackwood/internal/rag"
 	"github.com/csweichel/blackwood/internal/state"
+	"github.com/csweichel/blackwood/internal/storage"
+	"github.com/csweichel/blackwood/internal/transcribe"
 	"github.com/csweichel/blackwood/internal/watcher"
+	"github.com/csweichel/blackwood/internal/whatsapp"
 )
 
-func main() {
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
+// Version is set by goreleaser via ldflags.
+var Version = "dev"
 
-	configPath := flag.String("config", "", "path to the configuration file")
-	watchDir := flag.String("watch-dir", "", "directory to watch for new notes files (overrides config)")
+func main() {
+	configFile := flag.String("config", "", "path to config file")
+	addrFlag := flag.String("addr", "", "listen address (overrides config)")
+	dataDirFlag := flag.String("data-dir", "", "data directory (overrides config)")
 	flag.Parse()
 
-	if *configPath == "" {
-		fmt.Fprintln(os.Stderr, "--config is required")
-		flag.Usage()
-		os.Exit(1)
-	}
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
-	cfg, err := config.Load(*configPath)
+	cfg, err := config.LoadServerConfig(*configFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
+		slog.Error("load config", "error", err)
+		os.Exit(1)
+	}
+	if err := cfg.Resolve(); err != nil {
+		slog.Error("resolve config", "error", err)
 		os.Exit(1)
 	}
 
-	// CLI flag overrides config file value
-	if *watchDir != "" {
-		cfg.WatchDir = *watchDir
+	// CLI flags override config file values.
+	if *addrFlag != "" {
+		cfg.Server.Addr = *addrFlag
+	}
+	if *dataDirFlag != "" {
+		cfg.Server.DataDir = *dataDirFlag
 	}
 
-	if err := cfg.Validate(); err != nil {
-		fmt.Fprintf(os.Stderr, "invalid config: %v\n", err)
+	if *configFile != "" {
+		slog.Info("loaded config", "file", *configFile)
+	} else {
+		slog.Info("no config file, using env vars and defaults")
+	}
+
+	addr := cfg.Server.Addr
+	dataDir := cfg.Server.DataDir
+
+	slog.Info("starting blackwood", "addr", addr, "data-dir", dataDir)
+
+	// Ensure data directory exists.
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		slog.Error("create data dir", "error", err)
 		os.Exit(1)
 	}
 
-	slog.Info("configuration loaded",
-		slog.String("watch_dir", cfg.WatchDir),
-		slog.String("state_path", cfg.StatePath),
-		slog.String("poll_interval", cfg.PollInterval.String()),
-		slog.Int("hooks", len(cfg.Hooks)),
-	)
-	for i, h := range cfg.Hooks {
-		slog.Info("hook registered",
-			slog.Int("index", i),
-			slog.String("command", h.Command),
-			slog.String("args", strings.Join(h.Args, " ")),
-		)
+	// Open the storage layer.
+	dbPath := filepath.Join(dataDir, "blackwood.db")
+	store, err := storage.New(dbPath, dataDir)
+	if err != nil {
+		slog.Error("open storage", "error", err)
+		os.Exit(1)
 	}
+	defer func() { _ = store.Close() }()
 
-	// Conditionally set up the OCR + Obsidian pipeline.
+	srv := api.NewServer(addr)
+
+	// Register the health service.
+	path, handler := blackwoodv1connect.NewHealthServiceHandler(&api.HealthHandler{})
+	srv.Handle(path, handler)
+
+	// Register the daily notes service.
+	dnPath, dnHandler := blackwoodv1connect.NewDailyNotesServiceHandler(api.NewDailyNotesHandler(store))
+	srv.Handle(dnPath, dnHandler)
+
+	// Set up OCR recognizer if OpenAI API key is configured.
 	var recognizer ocr.Recognizer
-	var obsWriter *obsidian.Writer
-
-	if cfg.Obsidian.VaultPath != "" {
-		apiKey := os.Getenv(cfg.LLM.APIKeyEnv)
-		recognizer = ocr.NewOpenAI(apiKey, cfg.LLM.Model, cfg.LLM.Prompt)
-		slog.Info("OCR pipeline enabled", slog.String("model", cfg.LLM.Model))
-
-		obsWriter = obsidian.New(cfg.Obsidian)
-		slog.Info("Obsidian output enabled", slog.String("vault", cfg.Obsidian.VaultPath))
+	if apiKey := cfg.APIKey(); apiKey != "" {
+		recognizer = ocr.NewOpenAI(apiKey, cfg.OpenAI.Model, cfg.OpenAI.OCRPrompt)
+		slog.Info("OCR recognizer enabled", "model", cfg.OpenAI.Model)
 	}
 
-	// Log startup summary of active processing modes.
-	pipelineEnabled := obsWriter != nil
-	hooksEnabled := len(cfg.Hooks) > 0
-	slog.Info("processing modes",
-		slog.Bool("pipeline", pipelineEnabled),
-		slog.Bool("hooks", hooksEnabled),
-	)
+	// Register the import service.
+	importPath, importHandler := blackwoodv1connect.NewImportServiceHandler(api.NewImportHandler(store, recognizer))
+	srv.Handle(importPath, importHandler)
 
-	st, err := state.Load(cfg.StatePath)
-	if err != nil {
-		slog.Error("error loading state", slog.String("error", err.Error()))
-		os.Exit(1)
+	// Set up the RAG chat service if OpenAI API key is configured.
+	if apiKey := cfg.APIKey(); apiKey != "" {
+		embClient := index.NewOpenAIEmbeddingClient(apiKey)
+
+		idx, err := index.New(store.DB(), embClient)
+		if err != nil {
+			slog.Error("create index", "error", err)
+			os.Exit(1)
+		}
+
+		ragEngine := rag.New(idx, store, apiKey, cfg.OpenAI.ChatModel)
+
+		chatPath, chatHandler := blackwoodv1connect.NewChatServiceHandler(api.NewChatHandler(ragEngine, store))
+		srv.Handle(chatPath, chatHandler)
+		slog.Info("chat service enabled", "model", cfg.OpenAI.ChatModel)
 	}
 
-	ctx, stop := signal.NotifyContext(
-		context.Background(),
-		syscall.SIGINT, syscall.SIGTERM,
-	)
+	// WhatsApp webhook.
+	if cfg.WhatsApp.Enabled {
+		waCfg := whatsapp.WebhookConfig{
+			VerifyToken:   cfg.WhatsApp.VerifyToken,
+			AppSecret:     cfg.WhatsAppAppSecret(),
+			AccessToken:   cfg.WhatsAppAccessToken(),
+			PhoneNumberID: cfg.WhatsApp.PhoneNumberID,
+		}
+
+		var t transcribe.Transcriber
+		var d describe.Describer
+		if apiKey := cfg.APIKey(); apiKey != "" {
+			t = transcribe.NewWhisper(apiKey)
+			d = describe.NewVision(apiKey, cfg.OpenAI.Model)
+		}
+
+		waHandler := whatsapp.NewWebhookHandler(waCfg, store, t, d)
+		srv.Handle("/api/webhooks/whatsapp", waHandler)
+		slog.Info("WhatsApp webhook enabled")
+	}
+
+	// Serve attachment files.
+	srv.Handle("GET /api/attachments/{id}", api.ServeAttachment(store))
+
+	// Serve web UI: filesystem first (development), then embedded (release binary).
+	if info, err := os.Stat("web/dist"); err == nil && info.IsDir() {
+		srv.Handle("/", http.FileServer(http.Dir("web/dist")))
+		slog.Info("serving web UI from filesystem", "path", "web/dist")
+	} else if sfs, err := staticFS(); err == nil {
+		srv.Handle("/", http.FileServer(http.FS(sfs)))
+		slog.Info("serving embedded web UI")
+	}
+
+	// Graceful shutdown on SIGINT/SIGTERM.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	w := watcher.New(cfg.WatchDir, cfg.PollInterval)
-	ch, err := w.Start(ctx)
-	if err != nil {
-		slog.Error("error starting watcher", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
-
-	slog.Info("watching for .note files", slog.String("dir", cfg.WatchDir))
-
-	runner := hooks.New(cfg.Hooks)
-
-	for path := range ch {
-		if st.IsProcessed(path) {
-			slog.Info("skipping already-processed file", slog.String("file", path))
-			continue
-		}
-		slog.Info("detected new file", slog.String("file", path))
-
-		processingFailed := false
-
-		// Run the built-in pipeline if configured.
-		if obsWriter != nil {
-			if err := runPipeline(ctx, path, recognizer, obsWriter); err != nil {
-				slog.Error("pipeline failed", slog.String("file", path), slog.String("error", err.Error()))
-				processingFailed = true
-			}
-		}
-
-		// Run hooks independently (after the pipeline, not instead of).
-		if len(cfg.Hooks) > 0 {
-			if err := runner.Run(ctx, path); err != nil {
-				slog.Error("hooks failed", slog.String("file", path), slog.String("error", err.Error()))
-				processingFailed = true
-			}
-		}
-
-		if processingFailed {
-			continue
-		}
-
-		hash, err := state.ComputeHash(path)
+	// Start the Viwoods file watcher if configured.
+	if cfg.Watcher.WatchDir != "" {
+		pollInterval, err := time.ParseDuration(cfg.Watcher.PollInterval)
 		if err != nil {
-			slog.Error("error hashing file", slog.String("file", path), slog.String("error", err.Error()))
-			continue
+			pollInterval = 30 * time.Second
 		}
-		st.MarkProcessed(path, hash)
-		if err := st.Save(); err != nil {
-			slog.Error("error saving state", slog.String("error", err.Error()))
-		}
-		slog.Info("processed file", slog.String("file", path))
-	}
 
-	slog.Info("shutting down")
-}
-
-// runPipeline parses a .note file, runs OCR on each page, and writes the result to Obsidian.
-func runPipeline(ctx context.Context, path string, recognizer ocr.Recognizer, writer *obsidian.Writer) error {
-	note, err := noteparser.Parse(path)
-	if err != nil {
-		return fmt.Errorf("parsing note: %w", err)
-	}
-	slog.Info("parsed note",
-		slog.String("note_id", note.ID),
-		slog.String("name", note.Name),
-		slog.Int("pages", len(note.Pages)),
-	)
-
-	pages := make([]obsidian.PageResult, 0, len(note.Pages))
-	for _, p := range note.Pages {
-		text, err := recognizer.Recognize(ctx, p.Image)
+		stateTracker, err := state.Load(filepath.Join(dataDir, "watcher-state.json"))
 		if err != nil {
-			// Log OCR failure but continue with empty text.
-			slog.Error("OCR failed for page",
-				slog.String("note_id", note.ID),
-				slog.String("page_id", p.ID),
-				slog.String("error", err.Error()),
-			)
-			text = ""
+			slog.Error("create watcher state", "error", err)
+			os.Exit(1)
 		}
-		slog.Info("OCR complete",
-			slog.String("page_id", p.ID),
-			slog.Int("text_len", len(text)),
-		)
-		pages = append(pages, obsidian.PageResult{
-			PageID: p.ID,
-			Image:  p.Image,
-			Text:   text,
-		})
+
+		w := watcher.New(cfg.Watcher.WatchDir, pollInterval)
+		watchCh, err := w.Start(ctx)
+		if err != nil {
+			slog.Error("start watcher", "error", err)
+			os.Exit(1)
+		}
+
+		go func() {
+			slog.Info("starting file watcher", "dir", cfg.Watcher.WatchDir, "interval", pollInterval)
+			for f := range watchCh {
+				if stateTracker.IsProcessed(f) {
+					continue
+				}
+
+				note, err := noteparser.Parse(f)
+				if err != nil {
+					slog.Error("parse note", "file", f, "error", err)
+					continue
+				}
+
+				// Build markdown from OCR.
+				var md strings.Builder
+				md.WriteString("## " + note.Name + "\n")
+				for i, page := range note.Pages {
+					fmt.Fprintf(&md, "\n### Page %d\n", i+1)
+					if recognizer != nil {
+						text, err := recognizer.Recognize(context.Background(), page.Image)
+						if err != nil {
+							slog.Warn("OCR failed", "page", i+1, "error", err)
+						} else {
+							md.WriteString(text + "\n")
+						}
+					}
+				}
+
+				// Get or create today's daily note and append.
+				today := time.Now().Format("2006-01-02")
+				dn, err := store.GetOrCreateDailyNote(context.Background(), today)
+				if err != nil {
+					slog.Error("get daily note", "error", err)
+					continue
+				}
+
+				entry := &storage.Entry{
+					DailyNoteID: dn.ID,
+					Type:        "viwoods",
+					Content:     md.String(),
+					Source:      "watcher",
+				}
+				if err := store.CreateEntry(context.Background(), entry); err != nil {
+					slog.Error("create entry", "error", err)
+					continue
+				}
+
+				hash, err := state.ComputeHash(f)
+				if err != nil {
+					slog.Warn("hash file", "file", f, "error", err)
+				}
+				stateTracker.MarkProcessed(f, hash)
+				if err := stateTracker.Save(); err != nil {
+					slog.Error("save watcher state", "error", err)
+				}
+				slog.Info("processed note", "file", f, "note", note.Name)
+			}
+		}()
 	}
 
-	entry := obsidian.NoteEntry{
-		NoteID:     note.ID,
-		NoteName:   note.Name,
-		CreateTime: note.CreateTime,
-		Pages:      pages,
+	httpServer := &http.Server{
+		Addr:              addr,
+		Handler:           srv.Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	if err := writer.Write(entry); err != nil {
-		return fmt.Errorf("writing to obsidian: %w", err)
-	}
-	slog.Info("written to Obsidian", slog.String("note_id", note.ID))
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- httpServer.ListenAndServe()
+	}()
 
-	return nil
+	select {
+	case err := <-errCh:
+		if err != nil && err != http.ErrServerClosed {
+			slog.Error("server error", "error", err)
+			os.Exit(1)
+		}
+	case <-ctx.Done():
+		slog.Info("shutting down")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := httpServer.Shutdown(shutdownCtx); err != nil {
+			slog.Error("shutdown error", "error", err)
+			os.Exit(1)
+		}
+	}
 }

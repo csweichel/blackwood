@@ -1,5 +1,5 @@
 [Unit]
-Description=Blackwood - viwoods notes file watcher
+Description=Blackwood - daily notes server
 After=network.target
 
 [Service]

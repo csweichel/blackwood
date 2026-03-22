@@ -30,7 +30,7 @@ Blackwood runs entirely on your machine. Your data stays local.
 
 ```sh
 # Build the server
-go build -o bin/blackwood-server ./cmd/blackwood-server
+go build -o bin/blackwood ./cmd/blackwood
 
 # Build the web UI
 cd web && npm ci && npm run build && cd ..
@@ -40,7 +40,7 @@ cd web && npm ci && npm run build && cd ..
 
 ```sh
 export OPENAI_API_KEY=sk-...
-./bin/blackwood-server --addr :8080 --data-dir ~/.blackwood
+./bin/blackwood --addr :8080 --data-dir ~/.blackwood
 ```
 
 Open [http://localhost:8080](http://localhost:8080) in your browser.
@@ -48,8 +48,8 @@ Open [http://localhost:8080](http://localhost:8080) in your browser.
 ### Makefile targets
 
 ```sh
-make build          # Build the file watcher daemon
-make build-server   # Build the API server (requires buf)
+make build          # Build the blackwood binary
+make build-server   # Build with protobuf regeneration (requires buf)
 make test           # Run all tests
 make web-build      # Build the web UI
 make generate       # Regenerate protobuf/Connect code
@@ -86,8 +86,7 @@ Blackwood is a Go backend serving a React frontend over a single port.
 
 | Package | Purpose |
 |---------|---------|
-| `cmd/blackwood-server` | API server entry point |
-| `cmd/blackwood` | Legacy file watcher daemon |
+| `cmd/blackwood` | Server entry point (API + file watcher) |
 | `internal/storage` | SQLite storage layer |
 | `internal/api` | Connect-RPC service handlers |
 | `internal/rag` | RAG engine (search + LLM) |
@@ -132,15 +131,6 @@ To receive messages via WhatsApp, set up a [WhatsApp Business App](https://devel
 | `WHATSAPP_PHONE_NUMBER_ID` | Phone number ID for sending replies |
 
 Set your webhook URL to `https://your-domain/api/webhooks/whatsapp`.
-
-## Legacy: File Watcher Daemon
-
-The original `blackwood` binary watches a directory for Viwoods `.note` files and processes them via configurable hooks. See `blackwood.example.yaml` for configuration. This mode is independent of the API server.
-
-```sh
-make build
-./bin/blackwood --config blackwood.example.yaml
-```
 
 ## Roadmap
 

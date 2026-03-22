@@ -30,10 +30,10 @@ jobs:
         run: cd web && npm ci && npm run build
 
       - name: Prepare embedded static files
-        run: rm -rf cmd/blackwood-server/static && cp -r web/dist cmd/blackwood-server/static
+        run: rm -rf cmd/blackwood/static && cp -r web/dist cmd/blackwood/static
 
       - name: Build server
-        run: go build -o bin/blackwood-server ./cmd/blackwood-server
+        run: go build -o bin/blackwood ./cmd/blackwood
 
       - name: Test
         run: make test

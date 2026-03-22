@@ -331,18 +331,18 @@
       <h3>Option A: Download a release</h3>
       <p>Grab the latest binary from <a href="https://github.com/csweichel/blackwood/releases">GitHub Releases</a>:</p>
 <pre><code><span class="comment"># macOS (Apple Silicon)</span>
-<span class="command">curl -L https://github.com/csweichel/blackwood/releases/latest/download/blackwood-server_darwin_arm64.tar.gz | tar xz</span>
+<span class="command">curl -L https://github.com/csweichel/blackwood/releases/latest/download/blackwood_darwin_arm64.tar.gz | tar xz</span>
 
 <span class="comment"># macOS (Intel)</span>
-<span class="command">curl -L https://github.com/csweichel/blackwood/releases/latest/download/blackwood-server_darwin_amd64.tar.gz | tar xz</span>
+<span class="command">curl -L https://github.com/csweichel/blackwood/releases/latest/download/blackwood_darwin_amd64.tar.gz | tar xz</span>
 
 <span class="comment"># Linux (x86_64)</span>
-<span class="command">curl -L https://github.com/csweichel/blackwood/releases/latest/download/blackwood-server_linux_amd64.tar.gz | tar xz</span>
+<span class="command">curl -L https://github.com/csweichel/blackwood/releases/latest/download/blackwood_linux_amd64.tar.gz | tar xz</span>
 
 <span class="comment"># Linux (arm64)</span>
-<span class="command">curl -L https://github.com/csweichel/blackwood/releases/latest/download/blackwood-server_linux_arm64.tar.gz | tar xz</span></code></pre>
+<span class="command">curl -L https://github.com/csweichel/blackwood/releases/latest/download/blackwood_linux_arm64.tar.gz | tar xz</span></code></pre>
       <p>Move the binary somewhere on your <code>PATH</code>:</p>
-<pre><code><span class="command">sudo mv blackwood-server /usr/local/bin/</span></code></pre>
+<pre><code><span class="command">sudo mv blackwood /usr/local/bin/</span></code></pre>
 
       <h3>Option B: Build from source</h3>
 <pre><code><span class="command">git clone https://github.com/csweichel/blackwood.git</span>
@@ -352,10 +352,10 @@
 <span class="command">cd web && npm ci && npm run build && cd ..</span>
 
 <span class="comment"># Copy built UI into the embed directory</span>
-<span class="command">rm -rf cmd/blackwood-server/static && cp -r web/dist cmd/blackwood-server/static</span>
+<span class="command">rm -rf cmd/blackwood/static && cp -r web/dist cmd/blackwood/static</span>
 
 <span class="comment"># Build the server</span>
-<span class="command">go build -o blackwood-server ./cmd/blackwood-server</span></code></pre>
+<span class="command">go build -o blackwood ./cmd/blackwood</span></code></pre>
 
       <!-- Configure -->
       <h2 id="configure">3. Configure</h2>
@@ -457,20 +457,20 @@
 
       <!-- Run -->
       <h2 id="run">4. Run the Server</h2>
-<pre><code><span class="command">blackwood-server --config ~/.blackwood/config.yaml</span></code></pre>
+<pre><code><span class="command">blackwood --config ~/.blackwood/config.yaml</span></code></pre>
       <p>Open <code>http://localhost:8080</code> in your browser. You should see the calendar view with today's date.</p>
 
       <p>CLI flags override config values:</p>
 <pre><code><span class="comment"># Listen on a different port</span>
-<span class="command">blackwood-server --config ~/.blackwood/config.yaml --addr :3000</span>
+<span class="command">blackwood --config ~/.blackwood/config.yaml --addr :3000</span>
 
 <span class="comment"># Use a different data directory</span>
-<span class="command">blackwood-server --config ~/.blackwood/config.yaml --data-dir /var/lib/blackwood</span></code></pre>
+<span class="command">blackwood --config ~/.blackwood/config.yaml --data-dir /var/lib/blackwood</span></code></pre>
 
       <div class="callout">
         <p><strong>Quick start without a config file:</strong></p>
 <pre style="margin:8px 0 0;"><code><span class="command">export OPENAI_API_KEY=sk-...</span>
-<span class="command">blackwood-server</span></code></pre>
+<span class="command">blackwood</span></code></pre>
         <p style="margin-top:8px;">This uses all defaults: listens on <code>:8080</code>, stores data in <code>~/.blackwood</code>.</p>
       </div>
 
@@ -505,41 +505,28 @@
         <p><strong>Security:</strong> The webhook validates request signatures using your app secret. Do not expose the server without HTTPS in production.</p>
       </div>
 
-      <!-- Daemon -->
+      <!-- Watcher -->
       <h2 id="daemon">6. Viwoods File Watcher (Optional)</h2>
-      <p>The <code>blackwood</code> binary (separate from <code>blackwood-server</code>) watches a directory for Viwoods <code>.note</code> files, runs OCR, and writes the results to Obsidian daily notes.</p>
+      <p>Blackwood can watch a directory for Viwoods <code>.note</code> files, run OCR on each page, and append the results to your daily notes. Add the <code>watcher</code> section to your config:</p>
 
-      <p>Create <code>~/.blackwood/blackwood.yaml</code>:</p>
-<pre><code><span class="key">watch_dir</span>: <span class="string">/path/to/viwoods/notes</span>
-<span class="key">state_path</span>: <span class="string">~/.blackwood/state.json</span>
-<span class="key">poll_interval</span>: <span class="string">30s</span>
+<pre><code><span class="key">watcher</span>:
+  <span class="key">watch_dir</span>: <span class="string">/path/to/viwoods/notes</span>
+  <span class="key">poll_interval</span>: <span class="string">30s</span></code></pre>
 
-<span class="key">obsidian</span>:
-  <span class="key">vault_path</span>: <span class="string">/path/to/obsidian/vault</span>
-  <span class="key">daily_notes_dir</span>: <span class="string">Daily Notes</span>
-  <span class="key">daily_format</span>: <span class="string">"2006-01-02"</span>
-  <span class="key">attachments_dir</span>: <span class="string">attachments</span>
-
-<span class="key">llm</span>:
-  <span class="key">provider</span>: <span class="string">openai</span>
-  <span class="key">model</span>: <span class="string">gpt-5.2</span>
-  <span class="key">api_key_env</span>: <span class="string">OPENAI_API_KEY</span></code></pre>
-
-<pre><code><span class="command">export OPENAI_API_KEY=sk-...</span>
-<span class="command">blackwood --config ~/.blackwood/blackwood.yaml</span></code></pre>
+      <p>The watcher runs inside the main <code>blackwood</code> process. No separate binary is needed.</p>
 
       <!-- Systemd -->
       <h2 id="systemd">7. Running as a Service</h2>
       <p>To run Blackwood on startup, create a systemd user service:</p>
 <pre><code><span class="command">mkdir -p ~/.config/systemd/user</span></code></pre>
 
-      <p>Save as <code>~/.config/systemd/user/blackwood-server.service</code>:</p>
+      <p>Save as <code>~/.config/systemd/user/blackwood.service</code>:</p>
 <pre><code><span class="key">[Unit]</span>
 Description=Blackwood Server
 After=network.target
 
 <span class="key">[Service]</span>
-ExecStart=/usr/local/bin/blackwood-server --config %h/.blackwood/config.yaml
+ExecStart=/usr/local/bin/blackwood --config %h/.blackwood/config.yaml
 Restart=on-failure
 RestartSec=5
 
@@ -548,13 +535,13 @@ WantedBy=default.target</code></pre>
 
       <p>Enable and start:</p>
 <pre><code><span class="command">systemctl --user daemon-reload</span>
-<span class="command">systemctl --user enable --now blackwood-server</span>
+<span class="command">systemctl --user enable --now blackwood</span>
 
 <span class="comment"># Check status</span>
-<span class="command">systemctl --user status blackwood-server</span>
+<span class="command">systemctl --user status blackwood</span>
 
 <span class="comment"># View logs</span>
-<span class="command">journalctl --user -u blackwood-server -f</span></code></pre>
+<span class="command">journalctl --user -u blackwood -f</span></code></pre>
 
       <div class="callout">
         <p><strong>macOS:</strong> Use a launchd plist instead. Place it in <code>~/Library/LaunchAgents/</code> and load with <code>launchctl load</code>.</p>

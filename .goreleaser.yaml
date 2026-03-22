@@ -4,26 +4,12 @@ before:
   hooks:
     - go mod tidy
     - sh -c "cd web && npm ci && npm run build"
-    - sh -c "rm -rf cmd/blackwood-server/static && cp -r web/dist cmd/blackwood-server/static"
+    - sh -c "rm -rf cmd/blackwood/static && cp -r web/dist cmd/blackwood/static"
 
 builds:
   - id: blackwood
     main: ./cmd/blackwood
     binary: blackwood
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - darwin
-    goarch:
-      - amd64
-      - arm64
-    ldflags:
-      - -s -w
-
-  - id: blackwood-server
-    main: ./cmd/blackwood-server
-    binary: blackwood-server
     env:
       - CGO_ENABLED=0
     goos:
@@ -46,16 +32,6 @@ archives:
       - README.md
       - blackwood.example.yaml
       - extras/blackwood.service
-
-  - id: blackwood-server
-    builds:
-      - blackwood-server
-    name_template: "blackwood-server_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    format: tar.gz
-    files:
-      - LICENSE
-      - README.md
-      - blackwood.example.yaml
 
 checksum:
   name_template: "checksums.txt"

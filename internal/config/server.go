@@ -9,16 +9,23 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ServerConfig holds configuration for the blackwood-server.
+// ServerConfig holds configuration for the blackwood server.
 type ServerConfig struct {
 	Server   ServerSettings   `yaml:"server"`
 	OpenAI   OpenAISettings   `yaml:"openai"`
 	WhatsApp WhatsAppSettings `yaml:"whatsapp"`
+	Watcher  WatcherSettings  `yaml:"watcher"`
 
 	// Resolved secrets (not serialized).
 	openaiAPIKey       string
 	whatsappAppSecret  string
 	whatsappAccessToken string
+}
+
+// WatcherSettings holds configuration for the Viwoods file watcher.
+type WatcherSettings struct {
+	WatchDir     string `yaml:"watch_dir"`
+	PollInterval string `yaml:"poll_interval"` // e.g. "30s"
 }
 
 // ServerSettings holds general server settings.
@@ -78,6 +85,17 @@ func (c *ServerConfig) Resolve() error {
 		home, err := os.UserHomeDir()
 		if err == nil {
 			c.Server.DataDir = filepath.Join(home, c.Server.DataDir[2:])
+		}
+	}
+
+	// Watcher defaults.
+	if c.Watcher.PollInterval == "" {
+		c.Watcher.PollInterval = "30s"
+	}
+	if strings.HasPrefix(c.Watcher.WatchDir, "~/") {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			c.Watcher.WatchDir = filepath.Join(home, c.Watcher.WatchDir[2:])
 		}
 	}
 

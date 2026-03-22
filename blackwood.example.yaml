@@ -1,24 +1,26 @@
-watch_dir: /path/to/notes
-state_path: /var/lib/blackwood/state.json
-poll_interval: 30s
+# Blackwood Configuration
+# Usage: blackwood --config blackwood.yaml
 
-obsidian:
-  vault_path: /path/to/obsidian/vault
-  daily_notes_dir: Daily Notes
-  daily_format: "2006-01-02"
-  attachments_dir: attachments
+server:
+  addr: ":8080"
+  data_dir: ~/.blackwood
 
-llm:
-  provider: openai
+openai:
+  # Path to a file containing your OpenAI API key
+  api_key_file: ~/.blackwood/secrets/openai-api-key
   model: gpt-5.2
-  api_key_env: OPENAI_API_KEY
+  chat_model: gpt-5.2
+  embedding_model: text-embedding-3-small
+  # ocr_prompt: "Custom OCR prompt here"
 
-# Dropbox integration: set local_path to your Dropbox-synced notes folder.
-# This is mutually exclusive with watch_dir — use one or the other.
-# Requires the Dropbox desktop client to be installed and syncing.
-# dropbox:
-#   local_path: ~/Dropbox/Apps/Viwoods
+# WhatsApp integration (optional)
+# whatsapp:
+#   verify_token: your-verify-token
+#   app_secret_file: ~/.blackwood/secrets/whatsapp-app-secret
+#   access_token_file: ~/.blackwood/secrets/whatsapp-access-token
+#   phone_number_id: "123456789"
 
-hooks:
-  - command: echo
-    args: ["processing"]
+# Viwoods file watcher (optional)
+# watcher:
+#   watch_dir: /path/to/viwoods/notes
+#   poll_interval: 30s
