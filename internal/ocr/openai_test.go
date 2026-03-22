@@ -28,8 +28,8 @@ func TestRecognize_Success(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("decoding request body: %v", err)
 		}
-		if req.Model != "gpt-4o" {
-			t.Errorf("expected model 'gpt-4o', got %q", req.Model)
+		if req.Model != "gpt-5.2" {
+			t.Errorf("expected model 'gpt-5.2', got %q", req.Model)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -47,7 +47,7 @@ func TestRecognize_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	rec := NewOpenAI("test-key", "gpt-4o", "Extract text")
+	rec := NewOpenAI("test-key", "gpt-5.2", "Extract text")
 	rec.endpoint = srv.URL
 
 	result, err := rec.Recognize(context.Background(), []byte("fake-png-data"))
@@ -84,7 +84,7 @@ func TestRecognize_RetryOn500(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	rec := NewOpenAI("test-key", "gpt-4o", "Extract text")
+	rec := NewOpenAI("test-key", "gpt-5.2", "Extract text")
 	rec.endpoint = srv.URL
 
 	result, err := rec.Recognize(context.Background(), []byte("fake-png-data"))
@@ -109,7 +109,7 @@ func TestRecognize_Non429_4xxNotRetried(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	rec := NewOpenAI("test-key", "gpt-4o", "Extract text")
+	rec := NewOpenAI("test-key", "gpt-5.2", "Extract text")
 	rec.endpoint = srv.URL
 
 	_, err := rec.Recognize(context.Background(), []byte("fake-png-data"))
@@ -131,7 +131,7 @@ func TestRecognize_ContextCancellation(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	rec := NewOpenAI("test-key", "gpt-4o", "Extract text")
+	rec := NewOpenAI("test-key", "gpt-5.2", "Extract text")
 	rec.endpoint = srv.URL
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -169,7 +169,7 @@ func TestRecognize_AuthorizationHeader(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	rec := NewOpenAI("my-secret-key", "gpt-4o", "Extract text")
+	rec := NewOpenAI("my-secret-key", "gpt-5.2", "Extract text")
 	rec.endpoint = srv.URL
 
 	result, err := rec.Recognize(context.Background(), []byte("fake-png-data"))

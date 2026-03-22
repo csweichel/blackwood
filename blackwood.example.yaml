@@ -10,7 +10,7 @@ obsidian:
 
 llm:
   provider: openai
-  model: gpt-4o
+  model: gpt-5.2
   api_key_env: OPENAI_API_KEY
 
 # Dropbox integration: set local_path to your Dropbox-synced notes folder.

@@ -46,7 +46,7 @@ type Engine struct {
 // New creates a new RAG engine.
 func New(idx *index.Index, store *storage.Store, apiKey, model string) *Engine {
 	if model == "" {
-		model = "gpt-4o"
+		model = "gpt-5.2"
 	}
 	return &Engine{
 		index:  idx,

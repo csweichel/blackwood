@@ -117,8 +117,8 @@ The server is configured via environment variables:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `OPENAI_API_KEY` | Yes | OpenAI API key for all AI features |
-| `OPENAI_MODEL` | No | Model for OCR (default: `gpt-4o`) |
-| `OPENAI_CHAT_MODEL` | No | Model for RAG chat (default: `gpt-4o`) |
+| `OPENAI_MODEL` | No | Model for OCR (default: `gpt-5.2`) |
+| `OPENAI_CHAT_MODEL` | No | Model for RAG chat (default: `gpt-5.2`) |
 
 ### WhatsApp (optional)
 

@@ -63,7 +63,7 @@ func main() {
 	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
 		model := os.Getenv("OPENAI_MODEL")
 		if model == "" {
-			model = "gpt-4o"
+			model = "gpt-5.2"
 		}
 		prompt := os.Getenv("OPENAI_OCR_PROMPT")
 		if prompt == "" {
@@ -89,7 +89,7 @@ func main() {
 
 		chatModel := os.Getenv("OPENAI_CHAT_MODEL")
 		if chatModel == "" {
-			chatModel = "gpt-4o"
+			chatModel = "gpt-5.2"
 		}
 		ragEngine := rag.New(idx, store, apiKey, chatModel)
 
@@ -113,7 +113,7 @@ func main() {
 			t = transcribe.NewWhisper(apiKey)
 			model := os.Getenv("OPENAI_MODEL")
 			if model == "" {
-				model = "gpt-4o"
+				model = "gpt-5.2"
 			}
 			d = describe.NewVision(apiKey, model)
 		}

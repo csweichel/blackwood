@@ -28,8 +28,8 @@ func TestDescribe_Success(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("decoding request body: %v", err)
 		}
-		if req.Model != "gpt-4o" {
-			t.Errorf("expected model 'gpt-4o', got %q", req.Model)
+		if req.Model != "gpt-5.2" {
+			t.Errorf("expected model 'gpt-5.2', got %q", req.Model)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -47,7 +47,7 @@ func TestDescribe_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	d := NewVision("test-key", "gpt-4o")
+	d := NewVision("test-key", "gpt-5.2")
 	d.endpoint = srv.URL
 
 	result, err := d.Describe(context.Background(), []byte("fake-png-data"))
@@ -82,7 +82,7 @@ func TestDescribe_AuthorizationHeader(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	d := NewVision("my-secret-key", "gpt-4o")
+	d := NewVision("my-secret-key", "gpt-5.2")
 	d.endpoint = srv.URL
 
 	result, err := d.Describe(context.Background(), []byte("fake-png-data"))
@@ -104,7 +104,7 @@ func TestDescribe_Non429_4xxNotRetried(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	d := NewVision("test-key", "gpt-4o")
+	d := NewVision("test-key", "gpt-5.2")
 	d.endpoint = srv.URL
 
 	_, err := d.Describe(context.Background(), []byte("fake-png-data"))
@@ -126,7 +126,7 @@ func TestDescribe_ContextCancellation(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	d := NewVision("test-key", "gpt-4o")
+	d := NewVision("test-key", "gpt-5.2")
 	d.endpoint = srv.URL
 
 	ctx, cancel := context.WithCancel(context.Background())
