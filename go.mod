@@ -3,6 +3,8 @@ module github.com/csweichel/blackwood
 go 1.25.0
 
 require (
+	connectrpc.com/connect v1.19.1
+	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.47.0
 )

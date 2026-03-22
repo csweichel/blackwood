@@ -2,10 +2,16 @@ BINARY  := blackwood
 OUTDIR  := bin
 GOFLAGS ?=
 
-.PHONY: build clean test install install-service
+.PHONY: build build-server generate clean test install install-service
+
+generate:
+	buf generate
 
 build:
 	go build $(GOFLAGS) -o $(OUTDIR)/$(BINARY) ./cmd/blackwood
+
+build-server: generate
+	go build $(GOFLAGS) -o $(OUTDIR)/blackwood-server ./cmd/blackwood-server
 
 clean:
 	rm -rf $(OUTDIR)
