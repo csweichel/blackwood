@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
@@ -17,6 +17,8 @@ import (
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
+
 	configPath := flag.String("config", "", "path to the configuration file")
 	watchDir := flag.String("watch-dir", "", "directory to watch for new notes files (overrides config)")
 	flag.Parse()
@@ -43,17 +45,24 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("watch_dir: %s\n", cfg.WatchDir)
-	fmt.Printf("state_path: %s\n", cfg.StatePath)
-	fmt.Printf("poll_interval: %s\n", cfg.PollInterval)
-	fmt.Printf("hooks: %d configured\n", len(cfg.Hooks))
+	slog.Info("configuration loaded",
+		slog.String("watch_dir", cfg.WatchDir),
+		slog.String("state_path", cfg.StatePath),
+		slog.String("poll_interval", cfg.PollInterval.String()),
+		slog.Int("hooks", len(cfg.Hooks)),
+	)
 	for i, h := range cfg.Hooks {
-		fmt.Printf("  [%d] %s %s\n", i, h.Command, strings.Join(h.Args, " "))
+		slog.Info("hook registered",
+			slog.Int("index", i),
+			slog.String("command", h.Command),
+			slog.String("args", strings.Join(h.Args, " ")),
+		)
 	}
 
 	st, err := state.Load(cfg.StatePath)
 	if err != nil {
-		log.Fatalf("error loading state: %v", err)
+		slog.Error("error loading state", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 
 	ctx, stop := signal.NotifyContext(
@@ -65,36 +74,37 @@ func main() {
 	w := watcher.New(cfg.WatchDir, cfg.PollInterval)
 	ch, err := w.Start(ctx)
 	if err != nil {
-		log.Fatalf("error starting watcher: %v", err)
+		slog.Error("error starting watcher", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 
-	log.Printf("watching %s for .note files", cfg.WatchDir)
+	slog.Info("watching for .note files", slog.String("dir", cfg.WatchDir))
 
 	runner := hooks.New(cfg.Hooks)
 
 	for path := range ch {
 		if st.IsProcessed(path) {
-			log.Printf("skipping already-processed file: %s", path)
+			slog.Info("skipping already-processed file", slog.String("file", path))
 			continue
 		}
-		log.Printf("detected new file: %s", path)
+		slog.Info("detected new file", slog.String("file", path))
 
 		if err := runner.Run(ctx, path); err != nil {
-			log.Printf("hooks failed for %s: %v", path, err)
+			slog.Error("hooks failed", slog.String("file", path), slog.String("error", err.Error()))
 			continue
 		}
 
 		hash, err := state.ComputeHash(path)
 		if err != nil {
-			log.Printf("error hashing %s: %v", path, err)
+			slog.Error("error hashing file", slog.String("file", path), slog.String("error", err.Error()))
 			continue
 		}
 		st.MarkProcessed(path, hash)
 		if err := st.Save(); err != nil {
-			log.Printf("error saving state: %v", err)
+			slog.Error("error saving state", slog.String("error", err.Error()))
 		}
-		log.Printf("processed %s successfully", path)
+		slog.Info("processed file", slog.String("file", path))
 	}
 
-	log.Println("shutting down")
+	slog.Info("shutting down")
 }

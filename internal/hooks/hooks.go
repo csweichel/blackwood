@@ -3,7 +3,7 @@ package hooks
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os/exec"
 
 	"github.com/csweichel/blackwood/internal/config"
@@ -30,7 +30,11 @@ func (r *Runner) Run(ctx context.Context, filePath string) error {
 
 		out, err := cmd.CombinedOutput()
 		if len(out) > 0 {
-			log.Printf("hook[%d] %s output:\n%s", i, h.Command, out)
+			slog.Info("hook output",
+				slog.Int("index", i),
+				slog.String("command", h.Command),
+				slog.String("output", string(out)),
+			)
 		}
 		if err != nil {
 			return fmt.Errorf("hook[%d] %s failed: %w", i, h.Command, err)

@@ -1,0 +1,24 @@
+[Unit]
+Description=Blackwood - viwoods notes file watcher
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/blackwood --config /etc/blackwood/config.yaml
+Restart=on-failure
+RestartSec=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=blackwood
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/blackwood
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
