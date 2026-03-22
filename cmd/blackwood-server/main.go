@@ -13,6 +13,7 @@ import (
 
 	"github.com/csweichel/blackwood/gen/blackwood/v1/blackwoodv1connect"
 	"github.com/csweichel/blackwood/internal/api"
+	"github.com/csweichel/blackwood/internal/storage"
 )
 
 func main() {
@@ -26,11 +27,33 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 	slog.Info("starting blackwood-server", "addr", *addr, "data-dir", *dataDir)
 
+	// Ensure data directory exists.
+	if err := os.MkdirAll(*dataDir, 0o755); err != nil {
+		slog.Error("create data dir", "error", err)
+		os.Exit(1)
+	}
+
+	// Open the storage layer.
+	dbPath := filepath.Join(*dataDir, "blackwood.db")
+	store, err := storage.New(dbPath, *dataDir)
+	if err != nil {
+		slog.Error("open storage", "error", err)
+		os.Exit(1)
+	}
+	defer store.Close()
+
 	srv := api.NewServer(*addr)
 
 	// Register the health service.
 	path, handler := blackwoodv1connect.NewHealthServiceHandler(&api.HealthHandler{})
 	srv.Handle(path, handler)
+
+	// Register the daily notes service.
+	dnPath, dnHandler := blackwoodv1connect.NewDailyNotesServiceHandler(api.NewDailyNotesHandler(store))
+	srv.Handle(dnPath, dnHandler)
+
+	// Serve attachment files.
+	srv.Handle("GET /api/attachments/{id}", api.ServeAttachment(store))
 
 	// Serve static files from web/dist/ if the directory exists (for future web UI).
 	if info, err := os.Stat("web/dist"); err == nil && info.IsDir() {

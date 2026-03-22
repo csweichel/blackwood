@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package blackwood.v1;
+
+option go_package = "github.com/csweichel/blackwood/gen/blackwood/v1;blackwoodv1";
+
+import "google/protobuf/timestamp.proto";
+
+enum EntryType {
+  ENTRY_TYPE_UNSPECIFIED = 0;
+  ENTRY_TYPE_TEXT = 1;
+  ENTRY_TYPE_AUDIO = 2;
+  ENTRY_TYPE_PHOTO = 3;
+  ENTRY_TYPE_VIWOODS = 4;
+  ENTRY_TYPE_WEBCLIP = 5;
+}
+
+enum EntrySource {
+  ENTRY_SOURCE_UNSPECIFIED = 0;
+  ENTRY_SOURCE_WEB = 1;
+  ENTRY_SOURCE_TELEGRAM = 2;
+  ENTRY_SOURCE_WHATSAPP = 3;
+  ENTRY_SOURCE_API = 4;
+  ENTRY_SOURCE_IMPORT = 5;
+}
+
+message Attachment {
+  string id = 1;
+  string entry_id = 2;
+  string filename = 3;
+  string content_type = 4;
+  int64 size = 5;
+  string url = 6;
+}
+
+message Entry {
+  string id = 1;
+  string daily_note_id = 2;
+  EntryType type = 3;
+  string content = 4;
+  string raw_content = 5;
+  EntrySource source = 6;
+  string metadata = 7;
+  repeated Attachment attachments = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+message DailyNote {
+  string id = 1;
+  string date = 2;
+  repeated Entry entries = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp updated_at = 5;
+}
+
+message GetDailyNoteRequest {
+  string date = 1;
+}
+
+message ListDailyNotesRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+  string start_date = 3;
+  string end_date = 4;
+}
+
+message ListDailyNotesResponse {
+  repeated DailyNote daily_notes = 1;
+}
+
+message CreateEntryRequest {
+  string date = 1;
+  EntryType type = 2;
+  string content = 3;
+  EntrySource source = 4;
+  string metadata = 5;
+  repeated bytes attachment_data = 6;
+  repeated string attachment_filenames = 7;
+  repeated string attachment_content_types = 8;
+}
+
+message UpdateEntryRequest {
+  string id = 1;
+  string content = 2;
+  string metadata = 3;
+}
+
+message DeleteEntryRequest {
+  string id = 1;
+}
+
+message DeleteEntryResponse {}
+
+message ListEntriesRequest {
+  string daily_note_id = 1;
+}
+
+message ListEntriesResponse {
+  repeated Entry entries = 1;
+}
+
+service DailyNotesService {
+  rpc GetDailyNote(GetDailyNoteRequest) returns (DailyNote);
+  rpc ListDailyNotes(ListDailyNotesRequest) returns (ListDailyNotesResponse);
+  rpc CreateEntry(CreateEntryRequest) returns (Entry);
+  rpc UpdateEntry(UpdateEntryRequest) returns (Entry);
+  rpc DeleteEntry(DeleteEntryRequest) returns (DeleteEntryResponse);
+  rpc ListEntries(ListEntriesRequest) returns (ListEntriesResponse);
+}
