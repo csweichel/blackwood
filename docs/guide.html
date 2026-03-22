@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Getting Started — Blackwood</title>
+  <meta name="description" content="Step-by-step guide to install, configure, and run Blackwood.">
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #ffffff;
+      --bg-secondary: #f8fafc;
+      --text: #0f172a;
+      --text-secondary: #475569;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --border: #e2e8f0;
+      --card-bg: #ffffff;
+      --code-bg: #1e293b;
+      --code-text: #e2e8f0;
+      --code-inline-bg: #f1f5f9;
+      --code-inline-text: #0f172a;
+      --warning-bg: #fffbeb;
+      --warning-border: #f59e0b;
+      --warning-text: #92400e;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f172a;
+        --bg-secondary: #1e293b;
+        --text: #f1f5f9;
+        --text-secondary: #94a3b8;
+        --accent: #3b82f6;
+        --accent-hover: #60a5fa;
+        --border: #334155;
+        --card-bg: #1e293b;
+        --code-bg: #0f172a;
+        --code-text: #e2e8f0;
+        --code-inline-bg: #334155;
+        --code-inline-text: #e2e8f0;
+        --warning-bg: #422006;
+        --warning-border: #f59e0b;
+        --warning-text: #fef3c7;
+      }
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Nav */
+    nav {
+      padding: 20px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    nav .nav-inner {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 0 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    nav .logo {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    nav .nav-links {
+      display: flex;
+      gap: 24px;
+      list-style: none;
+    }
+
+    nav .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    nav .nav-links a:hover {
+      color: var(--accent);
+    }
+
+    /* Content */
+    .content {
+      padding: 48px 0 80px;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      font-size: 1.1rem;
+      color: var(--text-secondary);
+      margin-bottom: 40px;
+    }
+
+    h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-top: 48px;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    h3 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-top: 32px;
+      margin-bottom: 12px;
+    }
+
+    p {
+      margin-bottom: 16px;
+    }
+
+    ul, ol {
+      margin-bottom: 16px;
+      padding-left: 24px;
+    }
+
+    li {
+      margin-bottom: 8px;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    code {
+      font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+      font-size: 0.88em;
+      background: var(--code-inline-bg);
+      color: var(--code-inline-text);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    pre {
+      background: var(--code-bg);
+      color: var(--code-text);
+      border-radius: 10px;
+      padding: 20px 24px;
+      overflow-x: auto;
+      font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+      font-size: 0.86rem;
+      line-height: 1.7;
+      margin-bottom: 20px;
+    }
+
+    pre code {
+      background: none;
+      color: inherit;
+      padding: 0;
+      border-radius: 0;
+      font-size: inherit;
+    }
+
+    .comment { color: #64748b; }
+    .command { color: #7dd3fc; }
+    .string  { color: #86efac; }
+    .key     { color: #c4b5fd; }
+
+    .callout {
+      border-left: 3px solid var(--accent);
+      background: var(--bg-secondary);
+      padding: 16px 20px;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 20px;
+    }
+
+    .callout p:last-child {
+      margin-bottom: 0;
+    }
+
+    .warning {
+      border-left-color: var(--warning-border);
+      background: var(--warning-bg);
+      color: var(--warning-text);
+    }
+
+    .toc {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 40px;
+    }
+
+    .toc h2 {
+      font-size: 1rem;
+      margin: 0 0 12px;
+      padding: 0;
+      border: none;
+    }
+
+    .toc ol {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .toc li {
+      margin-bottom: 4px;
+    }
+
+    .toc a {
+      color: var(--text);
+      font-weight: 500;
+      font-size: 0.95rem;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 0;
+      text-align: center;
+    }
+
+    footer p {
+      color: var(--text-secondary);
+      font-size: 0.88rem;
+      margin-bottom: 8px;
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      h1 { font-size: 2rem; }
+      h2 { font-size: 1.3rem; }
+      nav .nav-links { gap: 16px; }
+    }
+
+    @media (max-width: 480px) {
+      nav .nav-links { display: none; }
+      .content { padding: 32px 0 56px; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="nav-inner">
+      <a href="./" class="logo">Blackwood</a>
+      <ul class="nav-links">
+        <li><a href="./">Home</a></li>
+        <li><a href="./guide.html">Guide</a></li>
+        <li><a href="https://github.com/csweichel/blackwood">GitHub</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="content">
+    <div class="container">
+
+      <h1>Getting Started</h1>
+      <p class="subtitle">Install, configure, and run Blackwood in a few minutes.</p>
+
+      <div class="toc">
+        <h2>Contents</h2>
+        <ol>
+          <li><a href="#prerequisites">Prerequisites</a></li>
+          <li><a href="#install">Install</a></li>
+          <li><a href="#configure">Configure</a></li>
+          <li><a href="#run">Run the Server</a></li>
+          <li><a href="#whatsapp">WhatsApp Integration</a></li>
+          <li><a href="#daemon">Viwoods File Watcher</a></li>
+          <li><a href="#systemd">Running as a Service</a></li>
+        </ol>
+      </div>
+
+      <!-- Prerequisites -->
+      <h2 id="prerequisites">1. Prerequisites</h2>
+      <ul>
+        <li>An <a href="https://platform.openai.com/api-keys">OpenAI API key</a> &mdash; used for transcription (Whisper), vision/OCR, chat, and embeddings.</li>
+        <li>macOS (Apple Silicon or Intel) or Linux (x86_64 or arm64).</li>
+      </ul>
+      <p>If building from source, you also need:</p>
+      <ul>
+        <li><a href="https://go.dev/dl/">Go 1.23+</a></li>
+        <li><a href="https://nodejs.org/">Node.js 20+</a> (for the web UI)</li>
+      </ul>
+
+      <!-- Install -->
+      <h2 id="install">2. Install</h2>
+
+      <h3>Option A: Download a release</h3>
+      <p>Grab the latest binary from <a href="https://github.com/csweichel/blackwood/releases">GitHub Releases</a>:</p>
+<pre><code><span class="comment"># macOS (Apple Silicon)</span>
+<span class="command">curl -L https://github.com/csweichel/blackwood/releases/latest/download/blackwood-server_darwin_arm64.tar.gz | tar xz</span>
+
+<span class="comment"># macOS (Intel)</span>
+<span class="command">curl -L https://github.com/csweichel/blackwood/releases/latest/download/blackwood-server_darwin_amd64.tar.gz | tar xz</span>
+
+<span class="comment"># Linux (x86_64)</span>
+<span class="command">curl -L https://github.com/csweichel/blackwood/releases/latest/download/blackwood-server_linux_amd64.tar.gz | tar xz</span>
+
+<span class="comment"># Linux (arm64)</span>
+<span class="command">curl -L https://github.com/csweichel/blackwood/releases/latest/download/blackwood-server_linux_arm64.tar.gz | tar xz</span></code></pre>
+      <p>Move the binary somewhere on your <code>PATH</code>:</p>
+<pre><code><span class="command">sudo mv blackwood-server /usr/local/bin/</span></code></pre>
+
+      <h3>Option B: Build from source</h3>
+<pre><code><span class="command">git clone https://github.com/csweichel/blackwood.git</span>
+<span class="command">cd blackwood</span>
+
+<span class="comment"># Build the web UI</span>
+<span class="command">cd web && npm ci && npm run build && cd ..</span>
+
+<span class="comment"># Copy built UI into the embed directory</span>
+<span class="command">rm -rf cmd/blackwood-server/static && cp -r web/dist cmd/blackwood-server/static</span>
+
+<span class="comment"># Build the server</span>
+<span class="command">go build -o blackwood-server ./cmd/blackwood-server</span></code></pre>
+
+      <!-- Configure -->
+      <h2 id="configure">3. Configure</h2>
+
+      <p>Blackwood uses a YAML config file. Create the data directory and config:</p>
+
+<pre><code><span class="command">mkdir -p ~/.blackwood/secrets</span></code></pre>
+
+      <h3>Store your OpenAI API key</h3>
+      <p>Secrets are read from files, not stored in the config directly. This avoids leaking keys in version control or process listings.</p>
+<pre><code><span class="comment"># Write your API key to a file (replace sk-... with your actual key)</span>
+<span class="command">echo -n "sk-..." > ~/.blackwood/secrets/openai-api-key</span>
+<span class="command">chmod 600 ~/.blackwood/secrets/openai-api-key</span></code></pre>
+
+      <h3>Create the config file</h3>
+      <p>Save this as <code>~/.blackwood/config.yaml</code>:</p>
+<pre><code><span class="key">server</span>:
+  <span class="key">addr</span>: <span class="string">":8080"</span>
+  <span class="key">data_dir</span>: <span class="string">~/.blackwood</span>
+
+<span class="key">openai</span>:
+  <span class="key">api_key_file</span>: <span class="string">~/.blackwood/secrets/openai-api-key</span>
+  <span class="key">model</span>: <span class="string">gpt-5.2</span>
+  <span class="key">chat_model</span>: <span class="string">gpt-5.2</span>
+  <span class="key">embedding_model</span>: <span class="string">text-embedding-3-small</span></code></pre>
+
+      <div class="callout">
+        <p><strong>Env var fallback:</strong> If you prefer environment variables, skip the config file entirely. Set <code>OPENAI_API_KEY</code> and Blackwood will use it. The config file takes priority when both are present.</p>
+      </div>
+
+      <h3>Config reference</h3>
+      <p>All fields and their defaults:</p>
+      <table style="width:100%; border-collapse:collapse; margin-bottom:20px; font-size:0.92rem;">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border); text-align:left;">
+            <th style="padding:8px 12px;">Field</th>
+            <th style="padding:8px 12px;">Default</th>
+            <th style="padding:8px 12px;">Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;"><code>server.addr</code></td>
+            <td style="padding:8px 12px;"><code>:8080</code></td>
+            <td style="padding:8px 12px;">Listen address</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;"><code>server.data_dir</code></td>
+            <td style="padding:8px 12px;"><code>~/.blackwood</code></td>
+            <td style="padding:8px 12px;">SQLite database and attachments</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;"><code>openai.api_key_file</code></td>
+            <td style="padding:8px 12px;">&mdash;</td>
+            <td style="padding:8px 12px;">Path to file containing your OpenAI API key</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;"><code>openai.model</code></td>
+            <td style="padding:8px 12px;"><code>gpt-5.2</code></td>
+            <td style="padding:8px 12px;">Model for OCR and vision</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;"><code>openai.chat_model</code></td>
+            <td style="padding:8px 12px;">same as <code>model</code></td>
+            <td style="padding:8px 12px;">Model for RAG chat</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;"><code>openai.embedding_model</code></td>
+            <td style="padding:8px 12px;"><code>text-embedding-3-small</code></td>
+            <td style="padding:8px 12px;">Model for semantic embeddings</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;"><code>openai.ocr_prompt</code></td>
+            <td style="padding:8px 12px;">built-in</td>
+            <td style="padding:8px 12px;">Custom prompt for handwriting OCR</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;"><code>whatsapp.verify_token</code></td>
+            <td style="padding:8px 12px;">&mdash;</td>
+            <td style="padding:8px 12px;">Webhook verification token</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;"><code>whatsapp.app_secret_file</code></td>
+            <td style="padding:8px 12px;">&mdash;</td>
+            <td style="padding:8px 12px;">Path to file containing app secret</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;"><code>whatsapp.access_token_file</code></td>
+            <td style="padding:8px 12px;">&mdash;</td>
+            <td style="padding:8px 12px;">Path to file containing access token</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 12px;"><code>whatsapp.phone_number_id</code></td>
+            <td style="padding:8px 12px;">&mdash;</td>
+            <td style="padding:8px 12px;">WhatsApp Business phone number ID</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Run -->
+      <h2 id="run">4. Run the Server</h2>
+<pre><code><span class="command">blackwood-server --config ~/.blackwood/config.yaml</span></code></pre>
+      <p>Open <code>http://localhost:8080</code> in your browser. You should see the calendar view with today's date.</p>
+
+      <p>CLI flags override config values:</p>
+<pre><code><span class="comment"># Listen on a different port</span>
+<span class="command">blackwood-server --config ~/.blackwood/config.yaml --addr :3000</span>
+
+<span class="comment"># Use a different data directory</span>
+<span class="command">blackwood-server --config ~/.blackwood/config.yaml --data-dir /var/lib/blackwood</span></code></pre>
+
+      <div class="callout">
+        <p><strong>Quick start without a config file:</strong></p>
+<pre style="margin:8px 0 0;"><code><span class="command">export OPENAI_API_KEY=sk-...</span>
+<span class="command">blackwood-server</span></code></pre>
+        <p style="margin-top:8px;">This uses all defaults: listens on <code>:8080</code>, stores data in <code>~/.blackwood</code>.</p>
+      </div>
+
+      <!-- WhatsApp -->
+      <h2 id="whatsapp">5. WhatsApp Integration (Optional)</h2>
+      <p>Blackwood can receive text, voice, and photo messages via WhatsApp. Messages are appended to today's daily note.</p>
+
+      <h3>Setup</h3>
+      <ol>
+        <li>Create a <a href="https://developers.facebook.com/">Meta Developer</a> app with WhatsApp Business API access.</li>
+        <li>In the app dashboard, note your <strong>Phone Number ID</strong> and generate a permanent <strong>Access Token</strong>.</li>
+        <li>Choose a <strong>Verify Token</strong> (any string you pick).</li>
+        <li>Store the secrets:</li>
+      </ol>
+<pre><code><span class="command">echo -n "your-app-secret" > ~/.blackwood/secrets/whatsapp-app-secret</span>
+<span class="command">echo -n "your-access-token" > ~/.blackwood/secrets/whatsapp-access-token</span>
+<span class="command">chmod 600 ~/.blackwood/secrets/whatsapp-*</span></code></pre>
+
+      <p>Add the WhatsApp section to your config:</p>
+<pre><code><span class="key">whatsapp</span>:
+  <span class="key">verify_token</span>: <span class="string">your-verify-token</span>
+  <span class="key">app_secret_file</span>: <span class="string">~/.blackwood/secrets/whatsapp-app-secret</span>
+  <span class="key">access_token_file</span>: <span class="string">~/.blackwood/secrets/whatsapp-access-token</span>
+  <span class="key">phone_number_id</span>: <span class="string">"123456789"</span></code></pre>
+
+      <h3>Webhook URL</h3>
+      <p>In the Meta Developer dashboard, set the webhook URL to:</p>
+<pre><code><span class="string">https://your-domain.com/api/webhooks/whatsapp</span></code></pre>
+      <p>Blackwood must be reachable from the internet. Use a reverse proxy (nginx, Caddy) or a tunnel (ngrok, Cloudflare Tunnel) to expose it.</p>
+
+      <div class="callout warning">
+        <p><strong>Security:</strong> The webhook validates request signatures using your app secret. Do not expose the server without HTTPS in production.</p>
+      </div>
+
+      <!-- Daemon -->
+      <h2 id="daemon">6. Viwoods File Watcher (Optional)</h2>
+      <p>The <code>blackwood</code> binary (separate from <code>blackwood-server</code>) watches a directory for Viwoods <code>.note</code> files, runs OCR, and writes the results to Obsidian daily notes.</p>
+
+      <p>Create <code>~/.blackwood/blackwood.yaml</code>:</p>
+<pre><code><span class="key">watch_dir</span>: <span class="string">/path/to/viwoods/notes</span>
+<span class="key">state_path</span>: <span class="string">~/.blackwood/state.json</span>
+<span class="key">poll_interval</span>: <span class="string">30s</span>
+
+<span class="key">obsidian</span>:
+  <span class="key">vault_path</span>: <span class="string">/path/to/obsidian/vault</span>
+  <span class="key">daily_notes_dir</span>: <span class="string">Daily Notes</span>
+  <span class="key">daily_format</span>: <span class="string">"2006-01-02"</span>
+  <span class="key">attachments_dir</span>: <span class="string">attachments</span>
+
+<span class="key">llm</span>:
+  <span class="key">provider</span>: <span class="string">openai</span>
+  <span class="key">model</span>: <span class="string">gpt-5.2</span>
+  <span class="key">api_key_env</span>: <span class="string">OPENAI_API_KEY</span></code></pre>
+
+<pre><code><span class="command">export OPENAI_API_KEY=sk-...</span>
+<span class="command">blackwood --config ~/.blackwood/blackwood.yaml</span></code></pre>
+
+      <!-- Systemd -->
+      <h2 id="systemd">7. Running as a Service</h2>
+      <p>To run Blackwood on startup, create a systemd user service:</p>
+<pre><code><span class="command">mkdir -p ~/.config/systemd/user</span></code></pre>
+
+      <p>Save as <code>~/.config/systemd/user/blackwood-server.service</code>:</p>
+<pre><code><span class="key">[Unit]</span>
+Description=Blackwood Server
+After=network.target
+
+<span class="key">[Service]</span>
+ExecStart=/usr/local/bin/blackwood-server --config %h/.blackwood/config.yaml
+Restart=on-failure
+RestartSec=5
+
+<span class="key">[Install]</span>
+WantedBy=default.target</code></pre>
+
+      <p>Enable and start:</p>
+<pre><code><span class="command">systemctl --user daemon-reload</span>
+<span class="command">systemctl --user enable --now blackwood-server</span>
+
+<span class="comment"># Check status</span>
+<span class="command">systemctl --user status blackwood-server</span>
+
+<span class="comment"># View logs</span>
+<span class="command">journalctl --user -u blackwood-server -f</span></code></pre>
+
+      <div class="callout">
+        <p><strong>macOS:</strong> Use a launchd plist instead. Place it in <code>~/Library/LaunchAgents/</code> and load with <code>launchctl load</code>.</p>
+      </div>
+
+    </div>
+  </div>
+
+  <footer>
+    <div class="container">
+      <p>
+        <a href="./">Home</a> &middot;
+        <a href="https://github.com/csweichel/blackwood">GitHub</a> &middot;
+        <a href="https://github.com/csweichel/blackwood/releases">Releases</a>
+      </p>
+    </div>
+  </footer>
+
+</body>
+</html>
