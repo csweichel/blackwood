@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package blackwood.v1;
+
+option go_package = "github.com/csweichel/blackwood/gen/blackwood/v1;blackwoodv1";
+
+service ImportService {
+  rpc ImportViwoods(ImportViwoodsRequest) returns (ImportViwoodsResponse);
+}
+
+message ImportViwoodsRequest {
+  bytes note_file = 1;
+  string filename = 2;
+}
+
+message ImportViwoodsResponse {
+  string daily_note_id = 1;
+  string entry_id = 2;
+  int32 pages_processed = 3;
+}

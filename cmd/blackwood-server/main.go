@@ -13,6 +13,7 @@ import (
 
 	"github.com/csweichel/blackwood/gen/blackwood/v1/blackwoodv1connect"
 	"github.com/csweichel/blackwood/internal/api"
+	"github.com/csweichel/blackwood/internal/ocr"
 	"github.com/csweichel/blackwood/internal/storage"
 )
 
@@ -51,6 +52,25 @@ func main() {
 	// Register the daily notes service.
 	dnPath, dnHandler := blackwoodv1connect.NewDailyNotesServiceHandler(api.NewDailyNotesHandler(store))
 	srv.Handle(dnPath, dnHandler)
+
+	// Set up OCR recognizer if OPENAI_API_KEY is configured.
+	var recognizer ocr.Recognizer
+	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
+		model := os.Getenv("OPENAI_MODEL")
+		if model == "" {
+			model = "gpt-4o"
+		}
+		prompt := os.Getenv("OPENAI_OCR_PROMPT")
+		if prompt == "" {
+			prompt = "Transcribe the handwritten text in this image. Return only the transcribed text, no commentary."
+		}
+		recognizer = ocr.NewOpenAI(apiKey, model, prompt)
+		slog.Info("OCR recognizer enabled", "model", model)
+	}
+
+	// Register the import service.
+	importPath, importHandler := blackwoodv1connect.NewImportServiceHandler(api.NewImportHandler(store, recognizer))
+	srv.Handle(importPath, importHandler)
 
 	// Serve attachment files.
 	srv.Handle("GET /api/attachments/{id}", api.ServeAttachment(store))
