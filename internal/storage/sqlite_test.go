@@ -197,7 +197,7 @@ func TestCreateAttachmentWithFileStorage(t *testing.T) {
 		Filename:    "photo.jpg",
 		ContentType: "image/jpeg",
 	}
-	if err := s.CreateAttachment(ctx, a, data); err != nil {
+	if err := s.CreateAttachment(ctx, a, data, "2025-04-01"); err != nil {
 		t.Fatalf("create attachment: %v", err)
 	}
 	if a.ID == "" {
@@ -223,7 +223,7 @@ func TestGetAttachmentData(t *testing.T) {
 
 	content := []byte("hello attachment")
 	a := &Attachment{EntryID: e.ID, Filename: "doc.txt", ContentType: "text/plain"}
-	if err := s.CreateAttachment(ctx, a, content); err != nil {
+	if err := s.CreateAttachment(ctx, a, content, "2025-04-02"); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
@@ -246,7 +246,7 @@ func TestListAttachments(t *testing.T) {
 
 	for _, name := range []string{"a.txt", "b.txt", "c.txt"} {
 		a := &Attachment{EntryID: e.ID, Filename: name, ContentType: "text/plain"}
-		if err := s.CreateAttachment(ctx, a, []byte("data")); err != nil {
+		if err := s.CreateAttachment(ctx, a, []byte("data"), "2025-04-03"); err != nil {
 			t.Fatalf("create %s: %v", name, err)
 		}
 	}
@@ -269,7 +269,7 @@ func TestDeleteEntryCascadesToAttachments(t *testing.T) {
 	_ = s.CreateEntry(ctx, e)
 
 	a := &Attachment{EntryID: e.ID, Filename: "img.png", ContentType: "image/png"}
-	if err := s.CreateAttachment(ctx, a, []byte("png data")); err != nil {
+	if err := s.CreateAttachment(ctx, a, []byte("png data"), "2025-04-04"); err != nil {
 		t.Fatalf("create attachment: %v", err)
 	}
 	storagePath := a.StoragePath

@@ -139,7 +139,7 @@ func (h *DailyNotesHandler) CreateEntry(ctx context.Context, req *connect.Reques
 		if i < len(req.Msg.AttachmentContentTypes) {
 			att.ContentType = req.Msg.AttachmentContentTypes[i]
 		}
-		if err := h.store.CreateAttachment(ctx, att, data); err != nil {
+		if err := h.store.CreateAttachment(ctx, att, data, date); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create attachment: %w", err))
 		}
 	}

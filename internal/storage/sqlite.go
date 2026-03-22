@@ -109,14 +109,20 @@ func (s *Store) DB() *sql.DB {
 	return s.db
 }
 
-// notePath returns the filesystem path for a daily note's markdown file.
-// Date format is "YYYY-MM-DD", stored as notes/YYYY/MM/DD.md.
-func (s *Store) notePath(date string) string {
+// dayDir returns the filesystem path for a daily note's folder.
+// Date format is "YYYY-MM-DD", stored as notes/YYYY/MM/DD/.
+func (s *Store) dayDir(date string) string {
 	parts := strings.Split(date, "-")
 	if len(parts) != 3 {
-		return filepath.Join(s.dataDir, "notes", date+".md")
+		return filepath.Join(s.dataDir, "notes", date)
 	}
-	return filepath.Join(s.dataDir, "notes", parts[0], parts[1], parts[2]+".md")
+	return filepath.Join(s.dataDir, "notes", parts[0], parts[1], parts[2])
+}
+
+// notePath returns the filesystem path for a daily note's markdown file.
+// Date format is "YYYY-MM-DD", stored as notes/YYYY/MM/DD/index.md.
+func (s *Store) notePath(date string) string {
+	return filepath.Join(s.dayDir(date), "index.md")
 }
 
 func (s *Store) readNoteContent(date string) string {
@@ -384,16 +390,19 @@ func (s *Store) DeleteEntry(ctx context.Context, id string) error {
 // --- Attachments ---
 
 // CreateAttachment stores the file data on disk and inserts a metadata row.
-func (s *Store) CreateAttachment(ctx context.Context, a *Attachment, data []byte) error {
+// The date parameter (YYYY-MM-DD) determines the day folder where the file is stored.
+func (s *Store) CreateAttachment(ctx context.Context, a *Attachment, data []byte, date string) error {
 	a.ID = newUUID()
 	a.CreatedAt = time.Now().UTC()
 	a.Size = int64(len(data))
 
-	dir := filepath.Join(s.dataDir, "attachments")
+	dir := s.dayDir(date)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("create attachment dir: %w", err)
+		return fmt.Errorf("create day dir: %w", err)
 	}
-	a.StoragePath = filepath.Join(dir, a.ID+"_"+a.Filename)
+	ext := filepath.Ext(a.Filename)
+	base := strings.TrimSuffix(a.Filename, ext)
+	a.StoragePath = filepath.Join(dir, base+"-"+a.ID[:8]+ext)
 	if err := os.WriteFile(a.StoragePath, data, 0o644); err != nil {
 		return fmt.Errorf("write attachment file: %w", err)
 	}

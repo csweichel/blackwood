@@ -271,7 +271,7 @@ func (h *WebhookHandler) handleAudio(ctx context.Context, from, mediaID, mimeTyp
 		EntryID:     entry.ID,
 		Filename:    "voice." + format,
 		ContentType: contentType,
-	}, data); err != nil {
+	}, data, date); err != nil {
 		slog.Error("whatsapp: create audio attachment", "error", err)
 		return
 	}
@@ -336,7 +336,7 @@ func (h *WebhookHandler) handleImage(ctx context.Context, from, mediaID, mimeTyp
 		EntryID:     entry.ID,
 		Filename:    "photo." + ext,
 		ContentType: contentType,
-	}, data); err != nil {
+	}, data, date); err != nil {
 		slog.Error("whatsapp: create image attachment", "error", err)
 		return
 	}

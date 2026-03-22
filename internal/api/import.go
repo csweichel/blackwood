@@ -102,7 +102,7 @@ func (h *ImportHandler) ImportViwoods(ctx context.Context, req *connect.Request[
 			Filename:    fmt.Sprintf("page_%d.png", i+1),
 			ContentType: "image/png",
 		}
-		if err := h.store.CreateAttachment(ctx, att, page.Image); err != nil {
+		if err := h.store.CreateAttachment(ctx, att, page.Image, date); err != nil {
 			slog.Warn("failed to store page attachment", "page", i+1, "error", err)
 		}
 	}
