@@ -43,6 +43,7 @@ export interface Entry {
 export interface DailyNote {
   id: string;
   date: string;
+  content: string;
   entries: Entry[];
   createdAt: string;
   updatedAt: string;

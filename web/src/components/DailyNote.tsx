@@ -1,7 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import type { DailyNote as DailyNoteType } from "../api/types";
-import { getDailyNote } from "../api/client";
-import EntryCard from "./EntryCard";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { getDailyNote, updateDailyNoteContent } from "../api/client";
 import EntryForm from "./EntryForm";
 
 interface DailyNoteViewProps {
@@ -18,22 +16,25 @@ function formatDateHeading(dateStr: string): string {
   });
 }
 
+type SaveStatus = "idle" | "saving" | "saved" | "error";
+
 export default function DailyNoteView({ date }: DailyNoteViewProps) {
-  const [note, setNote] = useState<DailyNoteType | null>(null);
+  const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await getDailyNote({ date });
-      setNote(data);
+      setContent(data.content ?? "");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to load";
-      // A "not found" style error just means no entries yet
       if (msg.includes("404") || msg.includes("not found") || msg.includes("not_found")) {
-        setNote({ id: "", date, entries: [], createdAt: "", updatedAt: "" });
+        setContent("");
       } else {
         setError(msg);
       }
@@ -44,7 +45,41 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
 
   useEffect(() => {
     load();
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
   }, [load]);
+
+  const doSave = useCallback(
+    async (text: string) => {
+      setSaveStatus("saving");
+      try {
+        await updateDailyNoteContent(date, text);
+        setSaveStatus("saved");
+        setTimeout(() => setSaveStatus((s) => (s === "saved" ? "idle" : s)), 2000);
+      } catch {
+        setSaveStatus("error");
+      }
+    },
+    [date]
+  );
+
+  function handleContentChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const text = e.target.value;
+    setContent(text);
+    setSaveStatus("idle");
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      doSave(text);
+    }, 1000);
+  }
+
+  // After an entry is created via EntryForm, reload to pick up appended content
+  async function handleEntryCreated() {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    await load();
+  }
 
   if (loading) {
     return (
@@ -62,27 +97,43 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     );
   }
 
-  const entries = note?.entries ?? [];
-
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-semibold text-gray-900">
-        {formatDateHeading(date)}
-      </h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-gray-900">
+          {formatDateHeading(date)}
+        </h2>
+        <span
+          className={`text-xs transition-opacity ${
+            saveStatus === "idle" ? "opacity-0" : "opacity-100"
+          } ${
+            saveStatus === "saving"
+              ? "text-gray-400"
+              : saveStatus === "saved"
+              ? "text-green-500"
+              : saveStatus === "error"
+              ? "text-red-500"
+              : ""
+          }`}
+        >
+          {saveStatus === "saving"
+            ? "Saving..."
+            : saveStatus === "saved"
+            ? "Saved"
+            : saveStatus === "error"
+            ? "Save failed"
+            : ""}
+        </span>
+      </div>
 
-      <EntryForm date={date} onCreated={load} />
+      <textarea
+        value={content}
+        onChange={handleContentChange}
+        placeholder="Start writing..."
+        className="w-full min-h-[300px] border border-gray-200 rounded-lg p-4 text-sm font-mono leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+      />
 
-      {entries.length === 0 ? (
-        <div className="text-center py-8 text-gray-400 text-sm">
-          No entries for this date.
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {entries.map((entry) => (
-            <EntryCard key={entry.id} entry={entry} onDeleted={load} />
-          ))}
-        </div>
-      )}
+      <EntryForm date={date} onCreated={handleEntryCreated} />
     </div>
   );
 }

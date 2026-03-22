@@ -47,6 +47,14 @@ export async function deleteEntry(req: DeleteEntryRequest): Promise<void> {
   await rpc<DeleteEntryRequest, Record<string, never>>("DeleteEntry", req);
 }
 
+export async function updateDailyNoteContent(date: string, content: string): Promise<DailyNote> {
+  return rpc<{ date: string; content: string }, DailyNote>("UpdateDailyNoteContent", { date, content });
+}
+
+export async function listDatesWithContent(startDate: string, endDate: string): Promise<{ dates: string[] }> {
+  return rpc<{ startDate: string; endDate: string }, { dates: string[] }>("ListDatesWithContent", { startDate, endDate });
+}
+
 export async function createEntryWithAttachment(
   date: string,
   type: EntryType,

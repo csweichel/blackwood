@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import Timeline from "./components/Timeline";
+import Calendar from "./components/Calendar";
 import DailyNoteView from "./components/DailyNote";
 import ChatView from "./components/ChatView";
 
@@ -86,7 +86,7 @@ export default function App() {
               ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
             `}
           >
-            <Timeline selectedDate={selectedDate} onSelectDate={handleSelectDate} />
+            <Calendar selectedDate={selectedDate} onSelectDate={handleSelectDate} />
           </aside>
 
           {/* Main content */}
