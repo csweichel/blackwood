@@ -13,6 +13,7 @@ import (
 
 	"github.com/csweichel/blackwood/gen/blackwood/v1/blackwoodv1connect"
 	"github.com/csweichel/blackwood/internal/api"
+	"github.com/csweichel/blackwood/internal/config"
 	"github.com/csweichel/blackwood/internal/describe"
 	"github.com/csweichel/blackwood/internal/index"
 	"github.com/csweichel/blackwood/internal/ocr"
@@ -23,32 +24,58 @@ import (
 )
 
 func main() {
-	homeDir, _ := os.UserHomeDir()
-	defaultDataDir := filepath.Join(homeDir, ".blackwood")
-
-	addr := flag.String("addr", ":8080", "listen address")
-	dataDir := flag.String("data-dir", defaultDataDir, "data directory")
+	configFile := flag.String("config", "", "path to config file")
+	addrFlag := flag.String("addr", "", "listen address (overrides config)")
+	dataDirFlag := flag.String("data-dir", "", "data directory (overrides config)")
 	flag.Parse()
 
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
-	slog.Info("starting blackwood-server", "addr", *addr, "data-dir", *dataDir)
+
+	cfg, err := config.LoadServerConfig(*configFile)
+	if err != nil {
+		slog.Error("load config", "error", err)
+		os.Exit(1)
+	}
+	if err := cfg.Resolve(); err != nil {
+		slog.Error("resolve config", "error", err)
+		os.Exit(1)
+	}
+
+	// CLI flags override config file values.
+	if *addrFlag != "" {
+		cfg.Server.Addr = *addrFlag
+	}
+	if *dataDirFlag != "" {
+		cfg.Server.DataDir = *dataDirFlag
+	}
+
+	if *configFile != "" {
+		slog.Info("loaded config", "file", *configFile)
+	} else {
+		slog.Info("no config file, using env vars and defaults")
+	}
+
+	addr := cfg.Server.Addr
+	dataDir := cfg.Server.DataDir
+
+	slog.Info("starting blackwood-server", "addr", addr, "data-dir", dataDir)
 
 	// Ensure data directory exists.
-	if err := os.MkdirAll(*dataDir, 0o755); err != nil {
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		slog.Error("create data dir", "error", err)
 		os.Exit(1)
 	}
 
 	// Open the storage layer.
-	dbPath := filepath.Join(*dataDir, "blackwood.db")
-	store, err := storage.New(dbPath, *dataDir)
+	dbPath := filepath.Join(dataDir, "blackwood.db")
+	store, err := storage.New(dbPath, dataDir)
 	if err != nil {
 		slog.Error("open storage", "error", err)
 		os.Exit(1)
 	}
 	defer store.Close()
 
-	srv := api.NewServer(*addr)
+	srv := api.NewServer(addr)
 
 	// Register the health service.
 	path, handler := blackwoodv1connect.NewHealthServiceHandler(&api.HealthHandler{})
@@ -58,27 +85,19 @@ func main() {
 	dnPath, dnHandler := blackwoodv1connect.NewDailyNotesServiceHandler(api.NewDailyNotesHandler(store))
 	srv.Handle(dnPath, dnHandler)
 
-	// Set up OCR recognizer if OPENAI_API_KEY is configured.
+	// Set up OCR recognizer if OpenAI API key is configured.
 	var recognizer ocr.Recognizer
-	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
-		model := os.Getenv("OPENAI_MODEL")
-		if model == "" {
-			model = "gpt-5.2"
-		}
-		prompt := os.Getenv("OPENAI_OCR_PROMPT")
-		if prompt == "" {
-			prompt = "Transcribe the handwritten text in this image. Return only the transcribed text, no commentary."
-		}
-		recognizer = ocr.NewOpenAI(apiKey, model, prompt)
-		slog.Info("OCR recognizer enabled", "model", model)
+	if apiKey := cfg.APIKey(); apiKey != "" {
+		recognizer = ocr.NewOpenAI(apiKey, cfg.OpenAI.Model, cfg.OpenAI.OCRPrompt)
+		slog.Info("OCR recognizer enabled", "model", cfg.OpenAI.Model)
 	}
 
 	// Register the import service.
 	importPath, importHandler := blackwoodv1connect.NewImportServiceHandler(api.NewImportHandler(store, recognizer))
 	srv.Handle(importPath, importHandler)
 
-	// Set up the RAG chat service if OPENAI_API_KEY is configured.
-	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
+	// Set up the RAG chat service if OpenAI API key is configured.
+	if apiKey := cfg.APIKey(); apiKey != "" {
 		embClient := index.NewOpenAIEmbeddingClient(apiKey)
 
 		idx, err := index.New(store.DB(), embClient)
@@ -87,35 +106,27 @@ func main() {
 			os.Exit(1)
 		}
 
-		chatModel := os.Getenv("OPENAI_CHAT_MODEL")
-		if chatModel == "" {
-			chatModel = "gpt-5.2"
-		}
-		ragEngine := rag.New(idx, store, apiKey, chatModel)
+		ragEngine := rag.New(idx, store, apiKey, cfg.OpenAI.ChatModel)
 
 		chatPath, chatHandler := blackwoodv1connect.NewChatServiceHandler(api.NewChatHandler(ragEngine, store))
 		srv.Handle(chatPath, chatHandler)
-		slog.Info("chat service enabled", "model", chatModel)
+		slog.Info("chat service enabled", "model", cfg.OpenAI.ChatModel)
 	}
 
-	// WhatsApp webhook (configured via env vars).
-	if waToken := os.Getenv("WHATSAPP_VERIFY_TOKEN"); waToken != "" {
+	// WhatsApp webhook.
+	if cfg.WhatsApp.Enabled {
 		waCfg := whatsapp.WebhookConfig{
-			VerifyToken:   waToken,
-			AppSecret:     os.Getenv("WHATSAPP_APP_SECRET"),
-			AccessToken:   os.Getenv("WHATSAPP_ACCESS_TOKEN"),
-			PhoneNumberID: os.Getenv("WHATSAPP_PHONE_NUMBER_ID"),
+			VerifyToken:   cfg.WhatsApp.VerifyToken,
+			AppSecret:     cfg.WhatsAppAppSecret(),
+			AccessToken:   cfg.WhatsAppAccessToken(),
+			PhoneNumberID: cfg.WhatsApp.PhoneNumberID,
 		}
 
 		var t transcribe.Transcriber
 		var d describe.Describer
-		if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
+		if apiKey := cfg.APIKey(); apiKey != "" {
 			t = transcribe.NewWhisper(apiKey)
-			model := os.Getenv("OPENAI_MODEL")
-			if model == "" {
-				model = "gpt-5.2"
-			}
-			d = describe.NewVision(apiKey, model)
+			d = describe.NewVision(apiKey, cfg.OpenAI.Model)
 		}
 
 		waHandler := whatsapp.NewWebhookHandler(waCfg, store, t, d)
@@ -132,7 +143,7 @@ func main() {
 	}
 
 	httpServer := &http.Server{
-		Addr:              *addr,
+		Addr:              addr,
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
