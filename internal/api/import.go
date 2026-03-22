@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 
@@ -109,4 +110,97 @@ func (h *ImportHandler) ImportViwoods(ctx context.Context, req *connect.Request[
 		EntryId:        entry.ID,
 		PagesProcessed: int32(len(note.Pages)),
 	}), nil
+}
+
+// ImportObsidian imports Obsidian daily note markdown files.
+func (h *ImportHandler) ImportObsidian(ctx context.Context, req *connect.Request[blackwoodv1.ImportObsidianRequest]) (*connect.Response[blackwoodv1.ImportObsidianResponse], error) {
+	var imported, skipped int32
+	var errors []string
+
+	for _, f := range req.Msg.Files {
+		date, err := parseDateFromFilename(f.Filename)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", f.Filename, err))
+			skipped++
+			continue
+		}
+
+		dailyNote, err := h.store.GetOrCreateDailyNote(ctx, date)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", f.Filename, err))
+			skipped++
+			continue
+		}
+
+		content := string(f.Content)
+
+		if dailyNote.Content != "" {
+			separator := "\n\n---\n*Imported from Obsidian*\n\n"
+			if err := h.store.AppendDailyNoteContent(ctx, dailyNote.ID, separator+content); err != nil {
+				errors = append(errors, fmt.Sprintf("%s: %v", f.Filename, err))
+				skipped++
+				continue
+			}
+		} else {
+			if err := h.store.UpdateDailyNoteContent(ctx, dailyNote.ID, content); err != nil {
+				errors = append(errors, fmt.Sprintf("%s: %v", f.Filename, err))
+				skipped++
+				continue
+			}
+		}
+
+		// Create an entry for audit trail.
+		entry := &storage.Entry{
+			DailyNoteID: dailyNote.ID,
+			Type:        "text",
+			Content:     content,
+			RawContent:  content,
+			Source:      "import",
+		}
+		if err := h.store.CreateEntry(ctx, entry); err != nil {
+			slog.Warn("failed to create audit entry for obsidian import", "file", f.Filename, "error", err)
+		}
+
+		imported++
+	}
+
+	return connect.NewResponse(&blackwoodv1.ImportObsidianResponse{
+		Imported: imported,
+		Skipped:  skipped,
+		Errors:   errors,
+	}), nil
+}
+
+// parseDateFromFilename extracts a YYYY-MM-DD date string from an Obsidian daily note filename.
+func parseDateFromFilename(filename string) (string, error) {
+	name := strings.TrimSuffix(filename, ".md")
+
+	// Try YYYY-MM-DD (with optional suffix after space, e.g. "2025-01-15 Wed")
+	if len(name) >= 10 {
+		candidate := name[:10]
+		if _, err := time.Parse("2006-01-02", candidate); err == nil {
+			return candidate, nil
+		}
+	}
+
+	// Try YYYY_MM_DD
+	if len(name) >= 10 {
+		candidate := strings.ReplaceAll(name[:10], "_", "-")
+		if _, err := time.Parse("2006-01-02", candidate); err == nil {
+			return candidate, nil
+		}
+	}
+
+	// Try DD-MM-YYYY
+	if len(name) >= 10 {
+		parts := strings.SplitN(name[:10], "-", 3)
+		if len(parts) == 3 {
+			candidate := parts[2] + "-" + parts[1] + "-" + parts[0]
+			if _, err := time.Parse("2006-01-02", candidate); err == nil {
+				return candidate, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("cannot parse date from filename: %s", filename)
 }

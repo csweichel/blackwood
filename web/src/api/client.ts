@@ -14,6 +14,7 @@ import { type EntryType, type EntrySource } from "./types";
 
 const DAILY_NOTES_SERVICE = "/blackwood.v1.DailyNotesService";
 const CHAT_SERVICE = "/blackwood.v1.ChatService";
+const IMPORT_SERVICE = "/blackwood.v1.ImportService";
 
 // Connect-go uses POST with JSON body and Content-Type: application/json.
 // Field names use camelCase in the JSON wire format (protobuf JSON mapping).
@@ -79,6 +80,23 @@ export async function createEntryWithAttachment(
     attachmentFilenames: [file.name],
     attachmentContentTypes: [file.type],
   });
+}
+
+// Import API
+
+export async function importObsidian(files: File[]): Promise<{imported: number, skipped: number, errors: string[]}> {
+  const obsidianFiles = await Promise.all(files.map(async (f) => {
+    const buffer = await f.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return { filename: f.name, content: btoa(binary) };
+  }));
+  return rpc<{files: typeof obsidianFiles}, {imported: number, skipped: number, errors: string[]}>(
+    "ImportObsidian", { files: obsidianFiles }, IMPORT_SERVICE
+  );
 }
 
 // Chat API
