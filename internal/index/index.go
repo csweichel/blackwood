@@ -89,7 +89,7 @@ func (idx *Index) Search(ctx context.Context, query string, limit int) ([]Search
 	if err != nil {
 		return nil, fmt.Errorf("querying embeddings: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var results []SearchResult
 	for rows.Next() {

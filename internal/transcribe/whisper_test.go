@@ -21,7 +21,7 @@ func TestTranscribe_Success(t *testing.T) {
 
 		resp := whisperResponse{Text: "hello world"}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -57,7 +57,7 @@ func TestTranscribe_MultipartFormat(t *testing.T) {
 		if err != nil {
 			t.Fatalf("getting form file: %v", err)
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 
 		if header.Filename != "audio.m4a" {
 			t.Errorf("expected filename %q, got %q", "audio.m4a", header.Filename)
@@ -70,7 +70,7 @@ func TestTranscribe_MultipartFormat(t *testing.T) {
 
 		resp := whisperResponse{Text: "transcribed"}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -95,12 +95,12 @@ func TestTranscribe_RetryOn500(t *testing.T) {
 		n := attempts.Add(1)
 		if n < 3 {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("server error"))
+			_, _ = w.Write([]byte("server error"))
 			return
 		}
 		resp := whisperResponse{Text: "recovered"}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 

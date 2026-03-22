@@ -23,6 +23,9 @@ import (
 	"github.com/csweichel/blackwood/internal/whatsapp"
 )
 
+// Version is set by goreleaser via ldflags.
+var Version = "dev"
+
 func main() {
 	configFile := flag.String("config", "", "path to config file")
 	addrFlag := flag.String("addr", "", "listen address (overrides config)")
@@ -73,7 +76,7 @@ func main() {
 		slog.Error("open storage", "error", err)
 		os.Exit(1)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	srv := api.NewServer(addr)
 

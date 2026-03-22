@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -292,7 +293,9 @@ func ServeAttachment(store *storage.Store) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", att.ContentType)
 		w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", att.Filename))
-		w.Write(data)
+		if _, err := w.Write(data); err != nil {
+			slog.Error("write attachment response", "error", err)
+		}
 	}
 }
 

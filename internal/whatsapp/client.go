@@ -53,7 +53,7 @@ func (c *Client) DownloadMedia(ctx context.Context, mediaID string) ([]byte, str
 	if err != nil {
 		return nil, "", fmt.Errorf("fetch media metadata: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -76,7 +76,7 @@ func (c *Client) DownloadMedia(ctx context.Context, mediaID string) ([]byte, str
 	if err != nil {
 		return nil, "", fmt.Errorf("download media: %w", err)
 	}
-	defer dlResp.Body.Close()
+	defer func() { _ = dlResp.Body.Close() }()
 
 	if dlResp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(dlResp.Body)
@@ -130,7 +130,7 @@ func (c *Client) SendTextMessage(ctx context.Context, to, text string) error {
 	if err != nil {
 		return fmt.Errorf("send message: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)

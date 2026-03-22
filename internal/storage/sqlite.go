@@ -91,7 +91,7 @@ func New(dbPath string, dataDir string) (*Store, error) {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
 	if _, err := db.Exec(schema); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("run migrations: %w", err)
 	}
 	return &Store{db: db, dataDir: dataDir}, nil
@@ -167,7 +167,7 @@ func (s *Store) ListDailyNotes(ctx context.Context, limit, offset int) ([]DailyN
 	if err != nil {
 		return nil, fmt.Errorf("list daily notes: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var notes []DailyNote
 	for rows.Next() {
@@ -207,7 +207,7 @@ func (s *Store) ListDatesWithContent(ctx context.Context, startDate, endDate str
 	if err != nil {
 		return nil, fmt.Errorf("list dates with content: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var dates []string
 	for rows.Next() {
@@ -261,7 +261,7 @@ func (s *Store) ListEntries(ctx context.Context, dailyNoteID string) ([]Entry, e
 	if err != nil {
 		return nil, fmt.Errorf("list entries: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var entries []Entry
 	for rows.Next() {
@@ -337,7 +337,7 @@ func (s *Store) CreateAttachment(ctx context.Context, a *Attachment, data []byte
 		a.ID, a.EntryID, a.Filename, a.ContentType, a.Size, a.StoragePath, a.CreatedAt,
 	)
 	if err != nil {
-		os.Remove(a.StoragePath)
+		_ = os.Remove(a.StoragePath)
 		return fmt.Errorf("create attachment: %w", err)
 	}
 	return nil
@@ -378,7 +378,7 @@ func (s *Store) ListAttachments(ctx context.Context, entryID string) ([]Attachme
 	if err != nil {
 		return nil, fmt.Errorf("list attachments: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var attachments []Attachment
 	for rows.Next() {
@@ -424,7 +424,7 @@ func (s *Store) GetConversation(ctx context.Context, id string) (*Conversation, 
 	if err != nil {
 		return nil, fmt.Errorf("get conversation messages: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var m Message
@@ -451,7 +451,7 @@ func (s *Store) ListConversations(ctx context.Context, limit, offset int) ([]Con
 	if err != nil {
 		return nil, fmt.Errorf("list conversations: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var convos []Conversation
 	for rows.Next() {

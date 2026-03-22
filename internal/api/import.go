@@ -38,13 +38,15 @@ func (h *ImportHandler) ImportViwoods(ctx context.Context, req *connect.Request[
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create temp file: %w", err))
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	if _, err := tmpFile.Write(req.Msg.NoteFile); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("write temp file: %w", err))
 	}
-	tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("close temp file: %w", err))
+	}
 
 	// Parse the .note ZIP archive.
 	note, err := noteparser.Parse(tmpFile.Name())
@@ -64,7 +66,7 @@ func (h *ImportHandler) ImportViwoods(ctx context.Context, req *connect.Request[
 	md.WriteString("## " + note.Name + "\n")
 
 	for i, page := range note.Pages {
-		md.WriteString(fmt.Sprintf("\n### Page %d\n", i+1))
+		fmt.Fprintf(&md, "\n### Page %d\n", i+1)
 
 		if h.recognizer != nil {
 			text, err := h.recognizer.Recognize(ctx, page.Image)

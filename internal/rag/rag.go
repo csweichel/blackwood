@@ -111,7 +111,7 @@ func (e *Engine) Query(ctx context.Context, query string, conversationHistory []
 	var apiMessages []chatMsg
 	apiMessages = append(apiMessages, chatMsg{Role: "system", Content: systemPrompt})
 	for _, m := range conversationHistory {
-		apiMessages = append(apiMessages, chatMsg{Role: m.Role, Content: m.Content})
+		apiMessages = append(apiMessages, chatMsg(m))
 	}
 	apiMessages = append(apiMessages, chatMsg{Role: "user", Content: query})
 
@@ -179,7 +179,7 @@ func (e *Engine) streamChat(ctx context.Context, messages []chatMsg) (<-chan str
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		cancel()
 		return nil, fmt.Errorf("OpenAI API returned HTTP %d: %s", resp.StatusCode, string(body))
 	}
@@ -188,7 +188,7 @@ func (e *Engine) streamChat(ctx context.Context, messages []chatMsg) (<-chan str
 	go func() {
 		defer cancel()
 		defer close(ch)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		scanner := bufio.NewScanner(resp.Body)
 		for scanner.Scan() {

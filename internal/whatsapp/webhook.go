@@ -108,7 +108,7 @@ func (h *WebhookHandler) handleVerification(w http.ResponseWriter, r *http.Reque
 
 	if mode == "subscribe" && token == h.verifyToken {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, challenge)
+		_, _ = fmt.Fprint(w, challenge)
 		return
 	}
 

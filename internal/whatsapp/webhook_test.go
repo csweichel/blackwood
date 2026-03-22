@@ -246,7 +246,7 @@ func TestTextMessageProcessing(t *testing.T) {
 	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/messages") {
 			body, _ := io.ReadAll(r.Body)
-			json.Unmarshal(body, &sentReply)
+			_ = json.Unmarshal(body, &sentReply)
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -255,7 +255,7 @@ func TestTextMessageProcessing(t *testing.T) {
 	defer apiSrv.Close()
 
 	store := newTestStore(t)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	h := NewWebhookHandler(WebhookConfig{
 		VerifyToken:   "token",

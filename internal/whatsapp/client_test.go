@@ -26,10 +26,10 @@ func TestDownloadMedia(t *testing.T) {
 				URL:      srv.URL + "/download/media123",
 				MimeType: "audio/ogg",
 			}
-			json.NewEncoder(w).Encode(resp)
+			_ = json.NewEncoder(w).Encode(resp)
 		case "/download/media123":
 			w.Header().Set("Content-Type", "audio/ogg")
-			w.Write(mediaContent)
+			_, _ = w.Write(mediaContent)
 		default:
 			http.NotFound(w, r)
 		}
@@ -80,7 +80,7 @@ func TestSendTextMessage(t *testing.T) {
 			t.Errorf("path = %s, want /phone123/messages", r.URL.Path)
 		}
 
-		json.NewDecoder(r.Body).Decode(&receivedBody)
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
