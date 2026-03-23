@@ -84,7 +84,7 @@ export async function createEntryWithAttachment(
 
 // Import API
 
-export async function importObsidian(files: File[]): Promise<{imported: number, skipped: number, errors: string[]}> {
+export async function importObsidian(files: File[]): Promise<{imported: number, skipped: number, errors: string[], dates: string[]}> {
   const obsidianFiles = await Promise.all(files.map(async (f) => {
     const buffer = await f.arrayBuffer();
     const bytes = new Uint8Array(buffer);
@@ -94,7 +94,7 @@ export async function importObsidian(files: File[]): Promise<{imported: number, 
     }
     return { filename: f.name, content: btoa(binary) };
   }));
-  return rpc<{files: typeof obsidianFiles}, {imported: number, skipped: number, errors: string[]}>(
+  return rpc<{files: typeof obsidianFiles}, {imported: number, skipped: number, errors: string[], dates: string[]}>(
     "ImportObsidian", { files: obsidianFiles }, IMPORT_SERVICE
   );
 }

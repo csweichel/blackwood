@@ -74,6 +74,7 @@ export default function App() {
                     ...r,
                     status: "done",
                     message: parts.join(", ") || "Imported",
+                    date: result.dates?.[0],
                   }
                 : r
             )
