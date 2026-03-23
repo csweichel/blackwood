@@ -2,8 +2,10 @@ import { useState, useCallback, useRef } from "react";
 import Calendar from "./components/Calendar";
 import DailyNoteView from "./components/DailyNote";
 import ChatView from "./components/ChatView";
-import ImportModal, { type ImportFileResult } from "./components/ImportModal";
-import { importObsidian, importViwoods } from "./api/client";
+import ImportModal from "./components/ImportModal";
+import ImportBanner from "./components/ImportBanner";
+import { useImportJobs } from "./hooks/useImportJobs";
+import { jobToFileResult } from "./components/importUtils";
 
 type View = "notes" | "chat";
 
@@ -17,91 +19,14 @@ export default function App() {
   const [activeView, setActiveView] = useState<View>("notes");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
-  const [importFiles, setImportFiles] = useState<ImportFileResult[]>([]);
+
+  const { jobs, activeCount, submit } = useImportJobs();
 
   async function handleImportFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-
-    const fileList = Array.from(files);
-
-    // Initialize all files as pending
-    const initial: ImportFileResult[] = fileList.map((f) => ({
-      filename: f.name,
-      status: "pending" as const,
-    }));
-    setImportFiles(initial);
     setImportModalOpen(true);
-
-    // Process each file sequentially
-    for (let i = 0; i < fileList.length; i++) {
-      const f = fileList[i];
-
-      // Mark as processing
-      setImportFiles((prev) =>
-        prev.map((r, j) => (j === i ? { ...r, status: "processing" } : r))
-      );
-
-      try {
-        if (f.name.endsWith(".note")) {
-          const result = await importViwoods(f);
-          // Extract date from dailyNoteId (format: "daily/<YYYY-MM-DD>")
-          const dateMatch = result.dailyNoteId?.match(/\d{4}-\d{2}-\d{2}/);
-          setImportFiles((prev) =>
-            prev.map((r, j) =>
-              j === i
-                ? {
-                    ...r,
-                    status: "done",
-                    message: `${result.pagesProcessed} pages processed`,
-                    pagesProcessed: result.pagesProcessed,
-                    date: dateMatch ? dateMatch[0] : undefined,
-                  }
-                : r
-            )
-          );
-        } else if (f.name.endsWith(".md")) {
-          const result = await importObsidian([f]);
-          const parts: string[] = [];
-          if (result.imported) parts.push(`${result.imported} imported`);
-          if (result.skipped) parts.push(`${result.skipped} skipped`);
-          if (result.errors?.length)
-            parts.push(`${result.errors.length} errors`);
-          setImportFiles((prev) =>
-            prev.map((r, j) =>
-              j === i
-                ? {
-                    ...r,
-                    status: "done",
-                    message: parts.join(", ") || "Imported",
-                  }
-                : r
-            )
-          );
-        } else {
-          setImportFiles((prev) =>
-            prev.map((r, j) =>
-              j === i
-                ? { ...r, status: "error", message: "Unsupported file type" }
-                : r
-            )
-          );
-        }
-      } catch (err) {
-        setImportFiles((prev) =>
-          prev.map((r, j) =>
-            j === i
-              ? {
-                  ...r,
-                  status: "error",
-                  message: err instanceof Error ? err.message : String(err),
-                }
-              : r
-          )
-        );
-      }
-    }
-
+    await submit(Array.from(files));
     e.target.value = "";
   }
 
@@ -149,6 +74,11 @@ export default function App() {
           >
             Import
           </button>
+
+          <ImportBanner
+            activeCount={activeCount}
+            onClick={() => setImportModalOpen(true)}
+          />
 
         {/* View toggle */}
         <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
@@ -211,7 +141,7 @@ export default function App() {
 
       <ImportModal
         open={importModalOpen}
-        files={importFiles}
+        files={jobs.map(jobToFileResult)}
         onClose={() => setImportModalOpen(false)}
         onNavigateToDate={(date) => {
           setSelectedDate(date);
