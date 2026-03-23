@@ -223,6 +223,36 @@ body {
   margin-bottom: 0.75em;
 }
 
+/* --- Collapsible sections --- */
+
+.note-prose details { /* no extra margin — inherits from content */ }
+.note-prose summary { cursor: pointer; list-style: none; }
+.note-prose summary::-webkit-details-marker { display: none; }
+.note-prose summary::marker { display: none; }
+
+/* Custom chevron indicator */
+.note-prose summary::before {
+  content: "▶";
+  display: inline-block;
+  margin-right: 0.4em;
+  font-size: 0.6em;
+  transition: transform 0.15s ease;
+  vertical-align: middle;
+}
+.note-prose details[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+/* Preserve heading styles inside summary */
+.note-prose summary > h1,
+.note-prose summary > h2,
+.note-prose summary > h3,
+.note-prose summary > h4,
+.note-prose summary > h5,
+.note-prose summary > h6 {
+  display: inline;
+}
+
 /* --- Wikilink pill style --- */
 
 .wikilink {
