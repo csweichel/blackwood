@@ -99,6 +99,18 @@ export async function importObsidian(files: File[]): Promise<{imported: number, 
   );
 }
 
+export async function importViwoods(file: File): Promise<{dailyNoteId: string, entryId: string, pagesProcessed: number}> {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return rpc<{noteFile: string, filename: string}, {dailyNoteId: string, entryId: string, pagesProcessed: number}>(
+    "ImportViwoods", { noteFile: btoa(binary), filename: file.name }, IMPORT_SERVICE
+  );
+}
+
 // Chat API
 
 export async function listConversations(limit = 50, offset = 0): Promise<ListConversationsResponse> {

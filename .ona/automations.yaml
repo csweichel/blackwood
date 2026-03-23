@@ -1,0 +1,21 @@
+tasks:
+  build:
+    name: Build
+    description: Build the web UI and server binary.
+    command: |
+      cd web && npm ci && npm run build && cd ..
+      rm -rf cmd/blackwood/static && cp -r web/dist cmd/blackwood/static
+      go build -o blackwood ./cmd/blackwood
+    triggeredBy:
+      - postDevcontainerStart
+
+services:
+  blackwood:
+    name: Blackwood Server
+    description: Runs the Blackwood daily notes server.
+    commands:
+      start: |
+        mkdir -p .blackwood/data
+        ./blackwood --config .blackwood/config.yaml
+      ready: |
+        curl -sf http://localhost:8090/blackwood.v1.HealthService/Check -H "Content-Type: application/json" -d "{}"

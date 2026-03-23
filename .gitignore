@@ -41,3 +41,13 @@ web/dist/
 # Embedded static files (populated during build)
 cmd/blackwood-server/static/
 !cmd/blackwood-server/static/.gitkeep
+
+# Embedded static files (renamed binary)
+cmd/blackwood/static/
+!cmd/blackwood/static/.gitkeep
+
+# Local data directory
+.blackwood/
+
+# Built binary
+blackwood

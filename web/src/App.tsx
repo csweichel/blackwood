@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import Calendar from "./components/Calendar";
 import DailyNoteView from "./components/DailyNote";
 import ChatView from "./components/ChatView";
-import { importObsidian } from "./api/client";
+import { importObsidian, importViwoods } from "./api/client";
 
 type View = "notes" | "chat";
 
@@ -20,15 +20,30 @@ export default function App() {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     try {
-      const result = await importObsidian(Array.from(files));
-      const parts = [`Imported: ${result.imported ?? 0}`];
-      if (result.skipped) parts.push(`Skipped: ${result.skipped}`);
-      if (result.errors?.length) parts.push(`Errors:\n${result.errors.join("\n")}`);
-      alert(parts.join("\n"));
+      const fileList = Array.from(files);
+      const noteFiles = fileList.filter(f => f.name.endsWith(".note"));
+      const mdFiles = fileList.filter(f => f.name.endsWith(".md"));
+
+      const parts: string[] = [];
+
+      if (noteFiles.length > 0) {
+        for (const f of noteFiles) {
+          const result = await importViwoods(f);
+          parts.push(`${f.name}: ${result.pagesProcessed} pages processed`);
+        }
+      }
+
+      if (mdFiles.length > 0) {
+        const result = await importObsidian(mdFiles);
+        parts.push(`Markdown: ${result.imported ?? 0} imported`);
+        if (result.skipped) parts.push(`Skipped: ${result.skipped}`);
+        if (result.errors?.length) parts.push(`Errors:\n${result.errors.join("\n")}`);
+      }
+
+      alert(parts.join("\n") || "No supported files selected");
     } catch (err) {
       alert(`Import failed: ${err instanceof Error ? err.message : err}`);
     }
-    // Reset so the same files can be re-selected
     e.target.value = "";
   }
 
@@ -65,7 +80,7 @@ export default function App() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".md"
+            accept=".md,.note"
             multiple
             className="hidden"
             onChange={handleImportFiles}

@@ -1,0 +1,11 @@
+{
+	"name": "Blackwood",
+	"image": "mcr.microsoft.com/devcontainers/universal:4.0.1-noble",
+	"forwardPorts": [8090],
+	"portsAttributes": {
+		"8090": {
+			"label": "Blackwood Server",
+			"onAutoForward": "notify"
+		}
+	}
+}
