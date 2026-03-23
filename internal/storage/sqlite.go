@@ -742,6 +742,37 @@ func (s *Store) UpdateImportJobResult(ctx context.Context, id, result string) er
 	return nil
 }
 
+// DeleteImportJob removes an import job from the database and cleans up its staging file.
+func (s *Store) DeleteImportJob(ctx context.Context, id string) error {
+	// Look up the file path so we can clean up the staging file.
+	var filePath string
+	err := s.db.QueryRowContext(ctx, `SELECT file_path FROM import_jobs WHERE id = ?`, id).Scan(&filePath)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("delete import job: not found")
+		}
+		return fmt.Errorf("delete import job: %w", err)
+	}
+
+	res, err := s.db.ExecContext(ctx, `DELETE FROM import_jobs WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("delete import job: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("delete import job: not found")
+	}
+
+	// Clean up the staging file and its parent directory.
+	if filePath != "" {
+		_ = os.Remove(filePath)
+		dir := filepath.Dir(filePath)
+		_ = os.Remove(dir) // only succeeds if empty
+	}
+
+	return nil
+}
+
 // ClaimNextPendingJob atomically transitions the oldest pending job to processing and returns it.
 // Returns nil, nil if no pending jobs exist.
 func (s *Store) ClaimNextPendingJob(ctx context.Context) (*ImportJob, error) {

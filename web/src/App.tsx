@@ -19,7 +19,7 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
 
-  const { jobs, activeCount, submit } = useImportJobs();
+  const { jobs, activeCount, submit, deleteJob } = useImportJobs();
 
   async function handleImportFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
@@ -120,6 +120,7 @@ export default function App() {
           setActiveView("notes");
           setImportModalOpen(false);
         }}
+        onDeleteJob={deleteJob}
       />
     </div>
   );

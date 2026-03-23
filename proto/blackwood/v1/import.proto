@@ -9,6 +9,7 @@ service ImportService {
   rpc ImportObsidian(ImportObsidianRequest) returns (ImportObsidianResponse);
   rpc SubmitImport(SubmitImportRequest) returns (SubmitImportResponse);
   rpc GetImportJobs(GetImportJobsRequest) returns (GetImportJobsResponse);
+  rpc DeleteImportJob(DeleteImportJobRequest) returns (DeleteImportJobResponse);
 }
 
 message ImportViwoodsRequest {
@@ -71,3 +72,9 @@ message GetImportJobsRequest {
 message GetImportJobsResponse {
   repeated ImportJobStatus jobs = 1;
 }
+
+message DeleteImportJobRequest {
+  string id = 1;
+}
+
+message DeleteImportJobResponse {}
