@@ -1,6 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { ChatMessage, Conversation } from "../api/types";
-import { getConversation } from "../api/client";
+import { getConversation, listConversations } from "../api/client";
 import ChatPanel from "./ChatPanel";
 import ConversationList from "./ConversationList";
 
@@ -13,6 +13,24 @@ export default function ChatView({ onNavigateToDate }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const loadedLastChat = useRef(false);
+
+  // On mount, load the most recent conversation
+  useEffect(() => {
+    if (loadedLastChat.current) return;
+    loadedLastChat.current = true;
+
+    listConversations(1, 0)
+      .then(async (res) => {
+        const convs = res.conversations || [];
+        if (convs.length > 0) {
+          const full = await getConversation(convs[0].id);
+          setConversationId(full.id);
+          setMessages(full.messages || []);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleNewConversation = useCallback(() => {
     setConversationId("");

@@ -80,7 +80,9 @@ export default function ChatPanel({ conversationId, messages, onMessagesUpdate, 
   }, [messages, isStreaming]);
 
   useEffect(() => {
-    inputRef.current?.focus();
+    // Small delay to ensure DOM is ready after view switch
+    const t = setTimeout(() => inputRef.current?.focus(), 50);
+    return () => clearTimeout(t);
   }, [conversationId]);
 
   async function handleSend() {
