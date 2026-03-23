@@ -531,26 +531,28 @@
 <pre><code><span class="command">echo -n "YOUR_BOT_TOKEN" > ~/.blackwood/secrets/telegram-bot-token</span>
 <span class="command">chmod 600 ~/.blackwood/secrets/telegram-bot-token</span></code></pre>
 
-      <h3>Find your chat ID</h3>
-      <p>The <code>allowed_chat_ids</code> setting controls who can send messages to the bot. To find your chat ID:</p>
-      <ol>
-        <li>Send any message to your new bot in Telegram (e.g. "hello").</li>
-        <li>Open this URL in a browser, replacing <code>&lt;TOKEN&gt;</code> with your bot token:</li>
-      </ol>
-<pre><code><span class="string">https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</span></code></pre>
-      <p>Look for <code>"chat":{"id":123456789,...}</code> in the JSON response. That number is your chat ID. For group chats, the ID is negative (e.g. <code>-1001234567890</code>).</p>
-
       <h3>Configure</h3>
       <p>Add the Telegram section to your config:</p>
 <pre><code><span class="key">telegram</span>:
+  <span class="key">bot_token_file</span>: <span class="string">~/.blackwood/secrets/telegram-bot-token</span></code></pre>
+
+      <div class="callout">
+        <p><strong>Without a config file:</strong> Set the <code>TELEGRAM_BOT_TOKEN</code> environment variable instead.</p>
+      </div>
+
+      <h3>Authorize your chat</h3>
+      <p>Start Blackwood. The server logs will show a 6-digit authorization code:</p>
+<pre><code>telegram: bot started — send this code to the bot to authorize a chat  <span class="key">auth_code</span>=<span class="string">482910</span></code></pre>
+      <p>Open your bot in Telegram and send that code as a message. The bot replies with &ldquo;✓ Authorized!&rdquo; and your chat is connected. The authorization is persisted in the database &mdash; you only need to do this once.</p>
+      <p>The code rotates after each use, so you can authorize multiple devices or group chats by checking the logs each time.</p>
+      <p>To disconnect a chat, send <code>/revoke</code> to the bot.</p>
+
+      <div class="callout">
+        <p><strong>Static allowlist:</strong> You can also pre-authorize chat IDs in the config file. These are always authorized and can&rsquo;t be revoked via <code>/revoke</code>:</p>
+<pre style="margin:8px 0 0;"><code><span class="key">telegram</span>:
   <span class="key">bot_token_file</span>: <span class="string">~/.blackwood/secrets/telegram-bot-token</span>
   <span class="key">allowed_chat_ids</span>:
     - <span class="string">123456789</span></code></pre>
-
-      <p>If <code>allowed_chat_ids</code> is omitted or empty, the bot accepts messages from anyone. Set it to restrict access to specific users or groups.</p>
-
-      <div class="callout">
-        <p><strong>Without a config file:</strong> Set the <code>TELEGRAM_BOT_TOKEN</code> environment variable instead. Note that <code>allowed_chat_ids</code> can only be set via the config file.</p>
       </div>
 
       <h3>What the bot does</h3>
@@ -579,7 +581,7 @@
       <p>All messages are appended to the daily note with a timestamp and &ldquo;Telegram&rdquo; source label. Audio and photo files are stored as attachments alongside the note.</p>
 
       <div class="callout warning">
-        <p><strong>Security:</strong> Keep your bot token secret. Anyone with the token has full control over the bot. Use <code>allowed_chat_ids</code> to prevent unauthorized users from writing to your notes.</p>
+        <p><strong>Security:</strong> Keep your bot token secret. Anyone with the token has full control over the bot. Without authorization, the bot rejects all messages and tells the sender to provide the auth code.</p>
       </div>
 
       <!-- Watcher -->

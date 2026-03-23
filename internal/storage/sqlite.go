@@ -850,3 +850,60 @@ func (s *Store) UpsertWatchedFile(ctx context.Context, wf *WatchedFile) error {
 	}
 	return nil
 }
+
+// --- Telegram authorized chats ---
+
+// IsTelegramChatAuthorized checks if a chat ID is in the authorized list.
+func (s *Store) IsTelegramChatAuthorized(ctx context.Context, chatID int64) (bool, error) {
+	var count int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM telegram_authorized_chats WHERE chat_id = ?`, chatID,
+	).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("check telegram auth: %w", err)
+	}
+	return count > 0, nil
+}
+
+// AuthorizeTelegramChat adds a chat ID to the authorized list.
+func (s *Store) AuthorizeTelegramChat(ctx context.Context, chatID int64) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO telegram_authorized_chats (chat_id) VALUES (?) ON CONFLICT(chat_id) DO NOTHING`,
+		chatID,
+	)
+	if err != nil {
+		return fmt.Errorf("authorize telegram chat: %w", err)
+	}
+	return nil
+}
+
+// RevokeTelegramChat removes a chat ID from the authorized list.
+func (s *Store) RevokeTelegramChat(ctx context.Context, chatID int64) error {
+	_, err := s.db.ExecContext(ctx,
+		`DELETE FROM telegram_authorized_chats WHERE chat_id = ?`, chatID,
+	)
+	if err != nil {
+		return fmt.Errorf("revoke telegram chat: %w", err)
+	}
+	return nil
+}
+
+// ListTelegramAuthorizedChats returns all authorized chat IDs.
+func (s *Store) ListTelegramAuthorizedChats(ctx context.Context) ([]int64, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT chat_id FROM telegram_authorized_chats`)
+	if err != nil {
+		return nil, fmt.Errorf("list telegram authorized chats: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan telegram chat id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+

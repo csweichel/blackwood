@@ -212,36 +212,43 @@ echo -n "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" > ~/.blackwood/secrets/teleg
 chmod 600 ~/.blackwood/secrets/telegram-bot-token
 ```
 
-#### 3. Find your chat ID
-
-Your chat ID controls who can send messages to the bot. To find it:
-
-1. Send any message to your new bot in Telegram.
-2. Open `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` in a browser.
-3. Look for `"chat":{"id":123456789,...}` in the JSON response. That number is your chat ID.
-
-#### 4. Configure Blackwood
+#### 3. Configure Blackwood
 
 Add to your config file:
 
 ```yaml
 telegram:
   bot_token_file: ~/.blackwood/secrets/telegram-bot-token
-  allowed_chat_ids:
-    - 123456789   # your chat ID from step 3
 ```
 
-If `allowed_chat_ids` is omitted or empty, the bot accepts messages from anyone. Set it to restrict access to specific users or groups.
-
-You can also skip the config file and use an environment variable:
+Or use an environment variable instead:
 
 ```sh
 export TELEGRAM_BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
 ```
 
-#### 5. Restart Blackwood
+#### 4. Authorize your chat
 
-The bot starts polling automatically on launch. You should see `Telegram bot enabled` in the logs.
+Start Blackwood. The server logs will show a 6-digit authorization code:
+
+```
+telegram: bot started — send this code to the bot to authorize a chat  auth_code=482910
+```
+
+Open your bot in Telegram and send that code as a message. The bot will reply with "✓ Authorized!" and your chat is now connected. The authorization is persisted in the database — you only need to do this once.
+
+The code rotates after each use, so you can authorize multiple devices or group chats by checking the logs each time.
+
+To disconnect a chat, send `/revoke` to the bot.
+
+You can also pre-authorize chat IDs in the config file (these can't be revoked via `/revoke`):
+
+```yaml
+telegram:
+  bot_token_file: ~/.blackwood/secrets/telegram-bot-token
+  allowed_chat_ids:
+    - 123456789
+```
 
 #### What the bot does
 

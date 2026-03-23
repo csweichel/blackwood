@@ -69,3 +69,8 @@ CREATE TABLE IF NOT EXISTS watched_files (
     job_id TEXT NOT NULL,
     processed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS telegram_authorized_chats (
+    chat_id INTEGER PRIMARY KEY,
+    authorized_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

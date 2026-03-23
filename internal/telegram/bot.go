@@ -3,10 +3,12 @@ package telegram
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
+	"math/big"
 	"net/http"
 	"strings"
 	"time"
@@ -69,7 +71,8 @@ type sendMessageRequest struct {
 // Bot receives Telegram messages and adds them as daily note entries.
 type Bot struct {
 	token       string
-	allowedIDs  map[int64]bool
+	staticIDs   map[int64]bool // from config, always authorized
+	authCode    string         // one-time auth code for pairing
 	store       *storage.Store
 	transcriber transcribe.Transcriber
 	describer   describe.Describer
@@ -84,13 +87,17 @@ type BotConfig struct {
 
 // NewBot creates a new Telegram bot.
 func NewBot(cfg BotConfig, store *storage.Store, transcriber transcribe.Transcriber, describer describe.Describer, indexer *index.Index) *Bot {
-	allowed := make(map[int64]bool, len(cfg.AllowedChatIDs))
+	static := make(map[int64]bool, len(cfg.AllowedChatIDs))
 	for _, id := range cfg.AllowedChatIDs {
-		allowed[id] = true
+		static[id] = true
 	}
+
+	code := generateAuthCode()
+
 	return &Bot{
 		token:       cfg.Token,
-		allowedIDs:  allowed,
+		staticIDs:   static,
+		authCode:    code,
 		store:       store,
 		transcriber: transcriber,
 		describer:   describer,
@@ -98,8 +105,20 @@ func NewBot(cfg BotConfig, store *storage.Store, transcriber transcribe.Transcri
 	}
 }
 
+// generateAuthCode returns a cryptographically random 6-digit code.
+func generateAuthCode() string {
+	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
+	if err != nil {
+		return fmt.Sprintf("%06d", time.Now().UnixNano()%1_000_000)
+	}
+	return fmt.Sprintf("%06d", n.Int64())
+}
+
 // Start runs the long-poll loop. It blocks until ctx is cancelled.
 func (b *Bot) Start(ctx context.Context) {
+	slog.Info("telegram: bot started — send this code to the bot to authorize a chat",
+		"auth_code", b.authCode)
+
 	var offset int64
 	client := &http.Client{Timeout: 60 * time.Second}
 
@@ -157,22 +176,76 @@ func (b *Bot) getUpdates(ctx context.Context, client *http.Client, offset int64)
 	return result.Result, nil
 }
 
+// isAuthorized checks if a chat ID is allowed (static config or DB-persisted).
+func (b *Bot) isAuthorized(ctx context.Context, chatID int64) bool {
+	if b.staticIDs[chatID] {
+		return true
+	}
+	ok, err := b.store.IsTelegramChatAuthorized(ctx, chatID)
+	if err != nil {
+		slog.Error("telegram: check auth", "chat_id", chatID, "error", err)
+		return false
+	}
+	return ok
+}
+
 func (b *Bot) processMessage(ctx context.Context, client *http.Client, msg *Message) {
 	chatID := msg.Chat.ID
+	text := strings.TrimSpace(msg.Text)
 
-	// Chat ID filtering.
-	if len(b.allowedIDs) > 0 && !b.allowedIDs[chatID] {
-		slog.Warn("telegram: message from disallowed chat", "chat_id", chatID)
+	// Handle auth code from anyone — this is how new chats get authorized.
+	if text == b.authCode {
+		if err := b.store.AuthorizeTelegramChat(ctx, chatID); err != nil {
+			slog.Error("telegram: authorize chat", "chat_id", chatID, "error", err)
+			b.sendMessage(ctx, client, chatID, "Failed to authorize. Check server logs.")
+			return
+		}
+		slog.Info("telegram: chat authorized", "chat_id", chatID)
+		b.sendMessage(ctx, client, chatID, "✓ Authorized! You can now send messages to your daily notes.\n\nSend text, voice messages, or photos and they'll be added to today's note.")
+		// Rotate the code so it can't be reused by someone else.
+		b.authCode = generateAuthCode()
+		slog.Info("telegram: new auth code generated — check logs to authorize another chat",
+			"auth_code", b.authCode)
 		return
 	}
 
+	// Handle /start for unauthenticated users.
+	if text == "/start" && !b.isAuthorized(ctx, chatID) {
+		b.sendMessage(ctx, client, chatID, "Welcome to Blackwood!\n\nTo connect this chat, send the authorization code shown in the Blackwood server logs.")
+		return
+	}
+
+	// Handle /revoke from authorized users.
+	if text == "/revoke" {
+		if b.staticIDs[chatID] {
+			b.sendMessage(ctx, client, chatID, "This chat is authorized via server config and cannot be revoked here.")
+			return
+		}
+		if err := b.store.RevokeTelegramChat(ctx, chatID); err != nil {
+			slog.Error("telegram: revoke chat", "chat_id", chatID, "error", err)
+			b.sendMessage(ctx, client, chatID, "Failed to revoke. Check server logs.")
+			return
+		}
+		slog.Info("telegram: chat revoked", "chat_id", chatID)
+		b.sendMessage(ctx, client, chatID, "✓ Access revoked. Send the auth code again to re-authorize.")
+		return
+	}
+
+	// All other messages require authorization.
+	if !b.isAuthorized(ctx, chatID) {
+		slog.Warn("telegram: message from unauthorized chat", "chat_id", chatID)
+		b.sendMessage(ctx, client, chatID, "This chat is not authorized. Send the authorization code from the Blackwood server logs to get started.")
+		return
+	}
+
+	// Authorized — process the message.
 	switch {
 	case msg.Voice != nil:
 		b.handleVoice(ctx, client, chatID, msg.Voice)
 	case len(msg.Photo) > 0:
 		b.handlePhoto(ctx, client, chatID, msg.Photo, msg.Caption)
-	case msg.Text != "":
-		b.handleText(ctx, client, chatID, msg.Text)
+	case text != "":
+		b.handleText(ctx, client, chatID, text)
 	default:
 		slog.Info("telegram: unsupported message type", "chat_id", chatID)
 	}
