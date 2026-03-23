@@ -4,6 +4,10 @@
 server:
   addr: ":8080"
   data_dir: ~/.blackwood
+  # TLS (optional) — serve over HTTPS
+  # tls:
+  #   cert_file: /path/to/cert.pem
+  #   key_file: /path/to/key.pem
 
 openai:
   # Path to a file containing your OpenAI API key
