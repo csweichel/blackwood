@@ -6,6 +6,7 @@ export interface ImportFileResult {
   message?: string;
   date?: string;
   pagesProcessed?: number;
+  source?: string;
 }
 
 interface ImportModalProps {
@@ -134,11 +135,20 @@ export default function ImportModal({
                   <StatusIcon status={file.status} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    {file.filename}
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {file.filename}
+                    </p>
+                    {file.source === "watcher" && (
+                      <span className="shrink-0 text-[10px] font-medium text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+                        auto-imported
+                      </span>
+                    )}
+                  </div>
                   {file.status === "processing" && (
-                    <p className="text-xs text-blue-500">Processing...</p>
+                    <p className="text-xs text-blue-500">
+                      {file.message || "Processing..."}
+                    </p>
                   )}
                   {file.status === "done" && file.message && (
                     <p className="text-xs text-gray-500">{file.message}</p>

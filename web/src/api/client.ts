@@ -9,6 +9,7 @@ import type {
   ListConversationsResponse,
   Conversation,
   SourceReference,
+  ImportJobStatus,
 } from "./types";
 import { type EntryType, type EntrySource } from "./types";
 
@@ -108,6 +109,32 @@ export async function importViwoods(file: File): Promise<{dailyNoteId: string, e
   }
   return rpc<{noteFile: string, filename: string}, {dailyNoteId: string, entryId: string, pagesProcessed: number}>(
     "ImportViwoods", { noteFile: btoa(binary), filename: file.name }, IMPORT_SERVICE
+  );
+}
+
+// Background import API
+
+export async function submitImport(files: File[]): Promise<{jobIds: string[]}> {
+  const importFiles = await Promise.all(files.map(async (f) => {
+    const buffer = await f.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return { filename: f.name, content: btoa(binary) };
+  }));
+  return rpc<{files: typeof importFiles}, {jobIds: string[]}>(
+    "SubmitImport", { files: importFiles }, IMPORT_SERVICE
+  );
+}
+
+export async function getImportJobs(
+  ids?: string[],
+  activeOnly?: boolean
+): Promise<{jobs: ImportJobStatus[]}> {
+  return rpc<{ids?: string[], activeOnly?: boolean}, {jobs: ImportJobStatus[]}>(
+    "GetImportJobs", { ids, activeOnly }, IMPORT_SERVICE
   );
 }
 

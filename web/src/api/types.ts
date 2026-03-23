@@ -94,6 +94,21 @@ export const entrySourceLabel: Record<EntrySource, string> = {
   [EntrySource.IMPORT]: "Import",
 };
 
+// Import job types
+
+export interface ImportJobStatus {
+  id: string;
+  status: "pending" | "processing" | "done" | "error";
+  filename: string;
+  fileType: string;   // "viwoods" or "obsidian"
+  source: string;     // "upload" or "watcher"
+  progress: number;
+  totalSteps: number;
+  resultJson: string; // JSON string with dates, errors, etc.
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Chat types
 
 export interface SourceReference {
