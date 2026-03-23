@@ -267,6 +267,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
           <MarkdownEditor
             value={editContent}
             onChange={handleEditChange}
+            onSubmit={handleSave}
             placeholder="Start writing..."
             autoFocus
           />
@@ -293,6 +294,8 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
       <div className="mt-12 pt-6 border-t border-border">
         <p className="text-xs text-muted-foreground">
           <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Cmd+T</kbd> insert time
+          <span className="mx-2">&middot;</span>
+          <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Cmd+Enter</kbd> done editing
           <span className="mx-2">&middot;</span>
           <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Esc</kbd> exit edit
         </p>

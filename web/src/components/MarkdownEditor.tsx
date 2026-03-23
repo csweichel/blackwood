@@ -81,6 +81,7 @@ const noteEditorTheme = EditorView.theme({
 interface MarkdownEditorProps {
   value: string;
   onChange: (value: string) => void;
+  onSubmit?: () => void;
   placeholder?: string;
   autoFocus?: boolean;
 }
@@ -88,6 +89,7 @@ interface MarkdownEditorProps {
 export default function MarkdownEditor({
   value,
   onChange,
+  onSubmit,
   placeholder = "Start writing...",
   autoFocus = false,
 }: MarkdownEditorProps) {
@@ -95,6 +97,8 @@ export default function MarkdownEditor({
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const onSubmitRef = useRef(onSubmit);
+  onSubmitRef.current = onSubmit;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -107,7 +111,19 @@ export default function MarkdownEditor({
         markdown({ base: markdownLanguage, codeLanguages: languages }),
         phPlugin(placeholder),
         history(),
-        keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
+        keymap.of([
+          {
+            key: "Mod-Enter",
+            run: () => {
+              onSubmitRef.current?.();
+              return true;
+            },
+          },
+          ...defaultKeymap,
+          ...historyKeymap,
+          ...searchKeymap,
+          indentWithTab,
+        ]),
         EditorView.lineWrapping,
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
