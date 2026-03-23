@@ -25,108 +25,109 @@ type Page struct {
 	Image []byte // PNG data
 }
 
-// notesBean maps the *_NotesBean.json structure.
-type notesBean struct {
-	NoteID     string `json:"noteId"`
-	NoteName   string `json:"noteName"`
-	CreateTime int64  `json:"createTime"`
+// noteFileInfo is the notebook-level metadata from *_NoteFileInfo.json.
+type noteFileInfo struct {
+	ID               string `json:"id"`
+	FileName         string `json:"fileName"`
+	CreationTime     int64  `json:"creationTime"`
+	LastModifiedTime int64  `json:"lastModifiedTime"`
 }
 
-// noteListEntry maps a single entry in *_NoteList.json.
-type noteListEntry struct {
-	PageID    string `json:"pageId"`
-	PathOrder int    `json:"pathOrder"`
+// pageInfo is a single page entry from *_PageListFileInfo.json.
+type pageInfo struct {
+	ID           string `json:"id"`
+	FileName     string `json:"fileName"`
+	Order        int    `json:"order"`
+	CreationTime int64  `json:"creationTime"`
 }
 
-// Parse opens a .note file (a ZIP archive) and extracts metadata and page images.
+// Parse opens a .note file (a ZIP archive) and extracts metadata and page screenshots.
 func Parse(path string) (*Note, error) {
 	r, err := zip.OpenReader(path)
 	if err != nil {
-		return nil, fmt.Errorf("opening note file: %w", err)
+		return nil, fmt.Errorf("open zip: %w", err)
 	}
 	defer r.Close() //nolint:errcheck
 
-	// Index ZIP entries by name for fast lookup.
+	// Index all files by name for quick lookup.
 	files := make(map[string]*zip.File, len(r.File))
 	for _, f := range r.File {
 		files[f.Name] = f
 	}
 
-	// Find *_NotesBean.json
-	bean, err := findAndParse[notesBean](files, "_NotesBean.json")
-	if err != nil {
-		return nil, fmt.Errorf("reading notes bean: %w", err)
-	}
-
-	// Find *_NoteList.json
-	var noteList []noteListEntry
-	for name, f := range files {
-		if strings.HasSuffix(name, "_NoteList.json") {
-			data, err := readZipFile(f)
-			if err != nil {
-				return nil, fmt.Errorf("reading note list: %w", err)
-			}
-			if err := json.Unmarshal(data, &noteList); err != nil {
-				return nil, fmt.Errorf("parsing note list: %w", err)
-			}
+	// Find the notebook name prefix by looking for *_NoteFileInfo.json.
+	var prefix string
+	for name := range files {
+		if strings.HasSuffix(name, "_NoteFileInfo.json") {
+			prefix = strings.TrimSuffix(name, "_NoteFileInfo.json")
 			break
 		}
 	}
-	if noteList == nil {
-		return nil, fmt.Errorf("no *_NoteList.json found in archive")
+	if prefix == "" {
+		return nil, fmt.Errorf("no *_NoteFileInfo.json found in archive")
 	}
 
-	// Sort pages by PathOrder.
-	sort.Slice(noteList, func(i, j int) bool {
-		return noteList[i].PathOrder < noteList[j].PathOrder
+	// Parse notebook metadata.
+	var info noteFileInfo
+	if err := readJSON(files, prefix+"_NoteFileInfo.json", &info); err != nil {
+		return nil, fmt.Errorf("read NoteFileInfo: %w", err)
+	}
+
+	// Parse page list.
+	var pages []pageInfo
+	if err := readJSON(files, prefix+"_PageListFileInfo.json", &pages); err != nil {
+		return nil, fmt.Errorf("read PageListFileInfo: %w", err)
+	}
+
+	// Sort pages by order.
+	sort.Slice(pages, func(i, j int) bool {
+		return pages[i].Order < pages[j].Order
 	})
 
-	// Extract page images.
-	pages := make([]Page, 0, len(noteList))
-	for _, entry := range noteList {
-		imgName := entry.PageID + ".png"
-		imgFile, ok := files[imgName]
-		if !ok {
-			return nil, fmt.Errorf("page image %s not found in archive", imgName)
-		}
-		imgData, err := readZipFile(imgFile)
+	// Extract screenshot images for each page.
+	var notePages []Page
+	for _, p := range pages {
+		// Screenshot files are named screenshotBmp_{pageId}.png
+		screenshotName := "screenshotBmp_" + p.ID + ".png"
+		imgData, err := readFile(files, screenshotName)
 		if err != nil {
-			return nil, fmt.Errorf("reading page image %s: %w", imgName, err)
+			// Skip pages with no screenshot available.
+			continue
 		}
-		pages = append(pages, Page{
-			ID:    entry.PageID,
-			Order: entry.PathOrder,
+
+		notePages = append(notePages, Page{
+			ID:    p.ID,
+			Order: p.Order,
 			Image: imgData,
 		})
 	}
 
 	return &Note{
-		ID:         bean.NoteID,
-		Name:       bean.NoteName,
-		CreateTime: time.UnixMilli(bean.CreateTime),
-		Pages:      pages,
+		ID:         info.ID,
+		Name:       info.FileName,
+		CreateTime: time.UnixMilli(info.CreationTime),
+		Pages:      notePages,
 	}, nil
 }
 
-// findAndParse locates a ZIP entry by suffix and JSON-decodes it into T.
-func findAndParse[T any](files map[string]*zip.File, suffix string) (*T, error) {
-	for name, f := range files {
-		if strings.HasSuffix(name, suffix) {
-			data, err := readZipFile(f)
-			if err != nil {
-				return nil, err
-			}
-			var v T
-			if err := json.Unmarshal(data, &v); err != nil {
-				return nil, fmt.Errorf("parsing %s: %w", name, err)
-			}
-			return &v, nil
-		}
+func readJSON(files map[string]*zip.File, name string, v any) error {
+	f, ok := files[name]
+	if !ok {
+		return fmt.Errorf("file %q not found in archive", name)
 	}
-	return nil, fmt.Errorf("no *%s found in archive", suffix)
+	rc, err := f.Open()
+	if err != nil {
+		return err
+	}
+	defer rc.Close() //nolint:errcheck
+	return json.NewDecoder(rc).Decode(v)
 }
 
-func readZipFile(f *zip.File) ([]byte, error) {
+func readFile(files map[string]*zip.File, name string) ([]byte, error) {
+	f, ok := files[name]
+	if !ok {
+		return nil, fmt.Errorf("file %q not found in archive", name)
+	}
 	rc, err := f.Open()
 	if err != nil {
 		return nil, err

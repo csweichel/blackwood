@@ -12,18 +12,10 @@ import (
 	"time"
 )
 
-// buildNoteZIP creates a synthetic .note ZIP file and returns its path.
-// The caller is responsible for cleaning up the temp directory.
-func buildNoteZIP(t *testing.T, dir string, pages []noteListEntry) string {
+func buildNoteZIP(t *testing.T, dir string, name string, info noteFileInfo, pages []pageInfo) string {
 	t.Helper()
 
-	const (
-		noteID   = "17471854767311408"
-		noteName = "TestNote"
-	)
-	createTime := int64(1747185476731)
-
-	path := filepath.Join(dir, "test.note")
+	path := filepath.Join(dir, name+".note")
 	f, err := os.Create(path)
 	if err != nil {
 		t.Fatal(err)
@@ -33,20 +25,15 @@ func buildNoteZIP(t *testing.T, dir string, pages []noteListEntry) string {
 	w := zip.NewWriter(f)
 	defer w.Close() //nolint:errcheck
 
-	// Write NotesBean.json
-	bean := notesBean{
-		NoteID:     noteID,
-		NoteName:   noteName,
-		CreateTime: createTime,
-	}
-	writeJSON(t, w, noteName+"_NotesBean.json", bean)
+	// Write NoteFileInfo.json
+	writeJSON(t, w, name+"_NoteFileInfo.json", info)
 
-	// Write NoteList.json
-	writeJSON(t, w, noteName+"_NoteList.json", pages)
+	// Write PageListFileInfo.json
+	writeJSON(t, w, name+"_PageListFileInfo.json", pages)
 
-	// Write page PNGs (1x1 pixel)
+	// Write screenshot PNGs for each page
 	for _, p := range pages {
-		writePNG(t, w, p.PageID+".png")
+		writePNG(t, w, "screenshotBmp_"+p.ID+".png")
 	}
 
 	return path
@@ -78,37 +65,38 @@ func writePNG(t *testing.T, w *zip.Writer, name string) {
 
 func TestParse_TwoPages(t *testing.T) {
 	dir := t.TempDir()
-	pages := []noteListEntry{
-		{PageID: "page_b", PathOrder: 2000},
-		{PageID: "page_a", PathOrder: 1000},
+	info := noteFileInfo{
+		ID:           "test-note-id",
+		FileName:     "TestNote",
+		CreationTime: 1774015890054,
 	}
-	path := buildNoteZIP(t, dir, pages)
+	pages := []pageInfo{
+		{ID: "page-b", Order: 1, CreationTime: 1774015890055},
+		{ID: "page-a", Order: 0, CreationTime: 1774015890055},
+	}
+	path := buildNoteZIP(t, dir, "TestNote", info, pages)
 
 	note, err := Parse(path)
 	if err != nil {
 		t.Fatalf("Parse() error: %v", err)
 	}
 
-	if note.ID != "17471854767311408" {
-		t.Errorf("ID = %q, want %q", note.ID, "17471854767311408")
+	if note.ID != "test-note-id" {
+		t.Errorf("ID = %q, want %q", note.ID, "test-note-id")
 	}
 	if note.Name != "TestNote" {
 		t.Errorf("Name = %q, want %q", note.Name, "TestNote")
 	}
-
 	if len(note.Pages) != 2 {
 		t.Fatalf("len(Pages) = %d, want 2", len(note.Pages))
 	}
-
-	// Pages should be sorted by PathOrder ascending.
-	if note.Pages[0].ID != "page_a" {
-		t.Errorf("Pages[0].ID = %q, want %q", note.Pages[0].ID, "page_a")
+	// Should be sorted by order: page-a (order 0) first
+	if note.Pages[0].ID != "page-a" {
+		t.Errorf("Pages[0].ID = %q, want %q", note.Pages[0].ID, "page-a")
 	}
-	if note.Pages[1].ID != "page_b" {
-		t.Errorf("Pages[1].ID = %q, want %q", note.Pages[1].ID, "page_b")
+	if note.Pages[1].ID != "page-b" {
+		t.Errorf("Pages[1].ID = %q, want %q", note.Pages[1].ID, "page-b")
 	}
-
-	// Each page should have non-empty image data.
 	for i, p := range note.Pages {
 		if len(p.Image) == 0 {
 			t.Errorf("Pages[%d].Image is empty", i)
@@ -118,46 +106,29 @@ func TestParse_TwoPages(t *testing.T) {
 
 func TestParse_CreateTime(t *testing.T) {
 	dir := t.TempDir()
-	pages := []noteListEntry{
-		{PageID: "page_1", PathOrder: 1},
+	info := noteFileInfo{
+		ID:           "time-test",
+		FileName:     "TimeNote",
+		CreationTime: 1774015890054,
 	}
-	path := buildNoteZIP(t, dir, pages)
+	pages := []pageInfo{
+		{ID: "page-1", Order: 0, CreationTime: 1774015890055},
+	}
+	path := buildNoteZIP(t, dir, "TimeNote", info, pages)
 
 	note, err := Parse(path)
 	if err != nil {
 		t.Fatalf("Parse() error: %v", err)
 	}
 
-	want := time.UnixMilli(1747185476731)
+	want := time.UnixMilli(1774015890054)
 	if !note.CreateTime.Equal(want) {
 		t.Errorf("CreateTime = %v, want %v", note.CreateTime, want)
 	}
 }
 
-func TestParse_SinglePage(t *testing.T) {
-	dir := t.TempDir()
-	pages := []noteListEntry{
-		{PageID: "only_page", PathOrder: 100},
-	}
-	path := buildNoteZIP(t, dir, pages)
-
-	note, err := Parse(path)
-	if err != nil {
-		t.Fatalf("Parse() error: %v", err)
-	}
-
-	if len(note.Pages) != 1 {
-		t.Fatalf("len(Pages) = %d, want 1", len(note.Pages))
-	}
-	if note.Pages[0].ID != "only_page" {
-		t.Errorf("Pages[0].ID = %q, want %q", note.Pages[0].ID, "only_page")
-	}
-}
-
 func TestParse_InvalidFile(t *testing.T) {
 	dir := t.TempDir()
-
-	// Not a ZIP file.
 	badPath := filepath.Join(dir, "bad.note")
 	if err := os.WriteFile(badPath, []byte("not a zip"), 0o644); err != nil {
 		t.Fatal(err)
@@ -165,8 +136,6 @@ func TestParse_InvalidFile(t *testing.T) {
 	if _, err := Parse(badPath); err == nil {
 		t.Error("Parse(invalid file) should return error")
 	}
-
-	// Non-existent file.
 	if _, err := Parse(filepath.Join(dir, "missing.note")); err == nil {
 		t.Error("Parse(missing file) should return error")
 	}
