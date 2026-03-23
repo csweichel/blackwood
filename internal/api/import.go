@@ -85,6 +85,18 @@ func (h *ImportHandler) ImportViwoods(ctx context.Context, req *connect.Request[
 
 	content := md.String()
 
+	// Write content to the daily note file so it appears in calendar and daily note view.
+	if dailyNote.Content != "" {
+		separator := "\n\n---\n*Imported from Viwoods*\n\n"
+		if err := h.store.AppendDailyNoteContent(ctx, dailyNote.ID, separator+content); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("append daily note content: %w", err))
+		}
+	} else {
+		if err := h.store.UpdateDailyNoteContent(ctx, dailyNote.ID, content); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update daily note content: %w", err))
+		}
+	}
+
 	// Create the entry.
 	entry := &storage.Entry{
 		DailyNoteID: dailyNote.ID,
