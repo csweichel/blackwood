@@ -680,7 +680,7 @@ func (s *Store) ListImportJobs(ctx context.Context, ids []string, activeOnly boo
 	if err != nil {
 		return nil, fmt.Errorf("list import jobs: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var jobs []*ImportJob
 	for rows.Next() {
@@ -894,7 +894,7 @@ func (s *Store) ListTelegramAuthorizedChats(ctx context.Context) ([]int64, error
 	if err != nil {
 		return nil, fmt.Errorf("list telegram authorized chats: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var ids []int64
 	for rows.Next() {

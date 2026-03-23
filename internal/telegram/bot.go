@@ -164,7 +164,7 @@ func (b *Bot) getUpdates(ctx context.Context, client *http.Client, offset int64)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result getUpdatesResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -445,7 +445,7 @@ func (b *Bot) downloadFile(ctx context.Context, client *http.Client, fileID stri
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var fileResp getFileResponse
 	if err := json.NewDecoder(resp.Body).Decode(&fileResp); err != nil {
@@ -466,7 +466,7 @@ func (b *Bot) downloadFile(ctx context.Context, client *http.Client, fileID stri
 	if err != nil {
 		return nil, err
 	}
-	defer dlResp.Body.Close()
+	defer func() { _ = dlResp.Body.Close() }()
 
 	return io.ReadAll(dlResp.Body)
 }
@@ -493,7 +493,7 @@ func (b *Bot) sendMessage(ctx context.Context, client *http.Client, chatID int64
 		slog.Error("telegram: sendMessage", "error", err)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		slog.Error("telegram: sendMessage non-200", "status", resp.StatusCode)
