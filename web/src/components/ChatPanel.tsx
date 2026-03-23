@@ -188,7 +188,7 @@ export default function ChatPanel({ conversationId, messages, onMessagesUpdate, 
 
       {/* Input */}
       <div className="border-t border-border bg-card px-4 py-3">
-        <div className="flex items-end gap-2 max-w-2xl mx-auto">
+        <div className="flex items-end gap-2 max-w-3xl mx-auto">
           <textarea
             ref={inputRef}
             value={input}

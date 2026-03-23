@@ -260,12 +260,6 @@ func (h *WebhookHandler) handleAudio(ctx context.Context, from, mediaID, mimeTyp
 		return
 	}
 
-	snippet := fmt.Sprintf("\n\n---\n*%s — WhatsApp voice message*\n\n%s\n", now.Format("15:04"), text)
-	if err := h.store.AppendDailyNoteContent(ctx, note.ID, snippet); err != nil {
-		slog.Error("whatsapp: append audio transcription", "error", err)
-		return
-	}
-
 	audioEntry := &storage.Entry{
 		DailyNoteID: note.ID,
 		Type:        "audio",
@@ -283,12 +277,20 @@ func (h *WebhookHandler) handleAudio(ctx context.Context, from, mediaID, mimeTyp
 		}
 	}
 
-	if err := h.store.CreateAttachment(ctx, &storage.Attachment{
+	att := &storage.Attachment{
 		EntryID:     audioEntry.ID,
 		Filename:    "voice." + format,
 		ContentType: contentType,
-	}, data, date); err != nil {
+	}
+	if err := h.store.CreateAttachment(ctx, att, data, date); err != nil {
 		slog.Error("whatsapp: create audio attachment", "error", err)
+		return
+	}
+
+	audioRef := fmt.Sprintf(`<audio controls src="/api/attachments/%s"></audio>`, att.ID)
+	snippet := fmt.Sprintf("\n\n---\n*%s — WhatsApp voice message*\n\n%s\n\n%s\n", now.Format("15:04"), audioRef, text)
+	if err := h.store.AppendDailyNoteContent(ctx, note.ID, snippet); err != nil {
+		slog.Error("whatsapp: append audio transcription", "error", err)
 		return
 	}
 

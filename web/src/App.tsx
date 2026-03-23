@@ -42,7 +42,7 @@ export default function App() {
     <div className="h-screen flex flex-col bg-background">
       {/* Header */}
       <header className="border-b border-border bg-card shrink-0">
-        <div className="max-w-3xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
+        <div className="max-w-4xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
           <h1 className="text-lg font-medium tracking-tight text-foreground">Blackwood</h1>
 
           {/* Actions */}
@@ -102,7 +102,7 @@ export default function App() {
 
           {/* Main content */}
           <main className="flex-1 overflow-y-auto">
-            <div className="max-w-3xl mx-auto px-4 md:px-6 py-6">
+            <div className="max-w-4xl mx-auto px-4 md:px-6 py-6">
               <DailyNoteView key={selectedDate} date={selectedDate} />
             </div>
           </main>

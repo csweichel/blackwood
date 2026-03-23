@@ -327,12 +327,6 @@ func (b *Bot) handleVoice(ctx context.Context, client *http.Client, chatID int64
 		return
 	}
 
-	snippet := fmt.Sprintf("\n\n---\n*%s — Telegram voice message*\n\n%s\n", now.Format("15:04"), text)
-	if err := b.store.AppendDailyNoteContent(ctx, note.ID, snippet); err != nil {
-		slog.Error("telegram: append voice transcription", "error", err)
-		return
-	}
-
 	entry := &storage.Entry{
 		DailyNoteID: note.ID,
 		Type:        "audio",
@@ -351,12 +345,20 @@ func (b *Bot) handleVoice(ctx context.Context, client *http.Client, chatID int64
 	}
 
 	contentType := mimeType
-	if err := b.store.CreateAttachment(ctx, &storage.Attachment{
+	att := &storage.Attachment{
 		EntryID:     entry.ID,
 		Filename:    "voice." + format,
 		ContentType: contentType,
-	}, data, date); err != nil {
+	}
+	if err := b.store.CreateAttachment(ctx, att, data, date); err != nil {
 		slog.Error("telegram: create voice attachment", "error", err)
+		return
+	}
+
+	audioRef := fmt.Sprintf(`<audio controls src="/api/attachments/%s"></audio>`, att.ID)
+	snippet := fmt.Sprintf("\n\n---\n*%s — Telegram voice message*\n\n%s\n\n%s\n", now.Format("15:04"), audioRef, text)
+	if err := b.store.AppendDailyNoteContent(ctx, note.ID, snippet); err != nil {
+		slog.Error("telegram: append voice transcription", "error", err)
 		return
 	}
 

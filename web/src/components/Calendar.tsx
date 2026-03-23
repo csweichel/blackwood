@@ -120,7 +120,7 @@ export default function Calendar({ selectedDate, onSelectDate }: CalendarProps) 
 
   return (
     <div className="border-b border-border bg-card">
-      <div className="max-w-3xl mx-auto px-4 md:px-6 py-3">
+      <div className="max-w-4xl mx-auto px-4 md:px-6 py-3">
         {/* Month nav row */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
