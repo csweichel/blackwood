@@ -38,9 +38,9 @@ func NewOpenAI(apiKey, model, prompt string) *OpenAIRecognizer {
 
 // chatRequest is the request body for the chat completions API.
 type chatRequest struct {
-	Model     string        `json:"model"`
-	Messages  []chatMessage `json:"messages"`
-	MaxTokens int           `json:"max_tokens"`
+	Model              string        `json:"model"`
+	Messages           []chatMessage `json:"messages"`
+	MaxCompletionTokens int          `json:"max_completion_tokens"`
 }
 
 // chatMessage represents a single message in the chat.
@@ -86,7 +86,7 @@ func (r *OpenAIRecognizer) Recognize(ctx context.Context, image []byte) (string,
 				{Type: "image_url", ImageURL: &imageURL{URL: dataURL}},
 			}},
 		},
-		MaxTokens: maxTokens,
+		MaxCompletionTokens: maxTokens,
 	}
 
 	bodyBytes, err := json.Marshal(reqBody)

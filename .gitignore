@@ -51,3 +51,5 @@ cmd/blackwood/static/
 
 # Built binary
 blackwood
+blackwood.yaml
+dont-commit-openai-key
