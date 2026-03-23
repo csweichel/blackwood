@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import Calendar from "./components/Calendar";
 import DailyNoteView from "./components/DailyNote";
 import ChatView from "./components/ChatView";
+import ImportModal, { type ImportFileResult } from "./components/ImportModal";
 import { importObsidian, importViwoods } from "./api/client";
 
 type View = "notes" | "chat";
@@ -15,35 +16,92 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeView, setActiveView] = useState<View>("notes");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importFiles, setImportFiles] = useState<ImportFileResult[]>([]);
 
   async function handleImportFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    try {
-      const fileList = Array.from(files);
-      const noteFiles = fileList.filter(f => f.name.endsWith(".note"));
-      const mdFiles = fileList.filter(f => f.name.endsWith(".md"));
 
-      const parts: string[] = [];
+    const fileList = Array.from(files);
 
-      if (noteFiles.length > 0) {
-        for (const f of noteFiles) {
+    // Initialize all files as pending
+    const initial: ImportFileResult[] = fileList.map((f) => ({
+      filename: f.name,
+      status: "pending" as const,
+    }));
+    setImportFiles(initial);
+    setImportModalOpen(true);
+
+    // Process each file sequentially
+    for (let i = 0; i < fileList.length; i++) {
+      const f = fileList[i];
+
+      // Mark as processing
+      setImportFiles((prev) =>
+        prev.map((r, j) => (j === i ? { ...r, status: "processing" } : r))
+      );
+
+      try {
+        if (f.name.endsWith(".note")) {
           const result = await importViwoods(f);
-          parts.push(`${f.name}: ${result.pagesProcessed} pages processed`);
+          // Extract date from dailyNoteId (format: "daily/<YYYY-MM-DD>")
+          const dateMatch = result.dailyNoteId?.match(/\d{4}-\d{2}-\d{2}/);
+          setImportFiles((prev) =>
+            prev.map((r, j) =>
+              j === i
+                ? {
+                    ...r,
+                    status: "done",
+                    message: `${result.pagesProcessed} pages processed`,
+                    pagesProcessed: result.pagesProcessed,
+                    date: dateMatch ? dateMatch[0] : undefined,
+                  }
+                : r
+            )
+          );
+        } else if (f.name.endsWith(".md")) {
+          const result = await importObsidian([f]);
+          const parts: string[] = [];
+          if (result.imported) parts.push(`${result.imported} imported`);
+          if (result.skipped) parts.push(`${result.skipped} skipped`);
+          if (result.errors?.length)
+            parts.push(`${result.errors.length} errors`);
+          setImportFiles((prev) =>
+            prev.map((r, j) =>
+              j === i
+                ? {
+                    ...r,
+                    status: "done",
+                    message: parts.join(", ") || "Imported",
+                  }
+                : r
+            )
+          );
+        } else {
+          setImportFiles((prev) =>
+            prev.map((r, j) =>
+              j === i
+                ? { ...r, status: "error", message: "Unsupported file type" }
+                : r
+            )
+          );
         }
+      } catch (err) {
+        setImportFiles((prev) =>
+          prev.map((r, j) =>
+            j === i
+              ? {
+                  ...r,
+                  status: "error",
+                  message: err instanceof Error ? err.message : String(err),
+                }
+              : r
+          )
+        );
       }
-
-      if (mdFiles.length > 0) {
-        const result = await importObsidian(mdFiles);
-        parts.push(`Markdown: ${result.imported ?? 0} imported`);
-        if (result.skipped) parts.push(`Skipped: ${result.skipped}`);
-        if (result.errors?.length) parts.push(`Errors:\n${result.errors.join("\n")}`);
-      }
-
-      alert(parts.join("\n") || "No supported files selected");
-    } catch (err) {
-      alert(`Import failed: ${err instanceof Error ? err.message : err}`);
     }
+
     e.target.value = "";
   }
 
@@ -150,6 +208,17 @@ export default function App() {
       ) : (
         <ChatView onNavigateToDate={handleNavigateToDate} />
       )}
+
+      <ImportModal
+        open={importModalOpen}
+        files={importFiles}
+        onClose={() => setImportModalOpen(false)}
+        onNavigateToDate={(date) => {
+          setSelectedDate(date);
+          setActiveView("notes");
+          setImportModalOpen(false);
+        }}
+      />
     </div>
   );
 }
