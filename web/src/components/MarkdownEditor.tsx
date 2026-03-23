@@ -10,18 +10,18 @@ import { searchKeymap } from "@codemirror/search";
 
 // Minimal highlight style that makes markdown structure visible while editing
 const markdownHighlight = HighlightStyle.define([
-  { tag: tags.heading1, fontWeight: "600", fontSize: "1.375rem", color: "#2C2416" },
-  { tag: tags.heading2, fontWeight: "600", fontSize: "1.175rem", color: "#2C2416" },
-  { tag: tags.heading3, fontWeight: "600", fontSize: "1.05rem", color: "#2C2416" },
-  { tag: tags.heading4, fontWeight: "600", color: "#2C2416" },
+  { tag: tags.heading1, fontWeight: "600", fontSize: "1.375rem" },
+  { tag: tags.heading2, fontWeight: "600", fontSize: "1.175rem" },
+  { tag: tags.heading3, fontWeight: "600", fontSize: "1.05rem" },
+  { tag: tags.heading4, fontWeight: "600" },
   { tag: tags.strong, fontWeight: "600" },
   { tag: tags.emphasis, fontStyle: "italic" },
   { tag: tags.strikethrough, textDecoration: "line-through" },
-  { tag: tags.link, color: "#B8860B" },
-  { tag: tags.url, color: "#B8860B", textDecoration: "underline" },
-  { tag: tags.monospace, fontFamily: "'JetBrains Mono', Menlo, monospace", fontSize: "0.85em", backgroundColor: "#F0EBE3", borderRadius: "3px", padding: "1px 4px" },
-  { tag: tags.quote, color: "#6B5D4D", fontStyle: "italic" },
-  { tag: tags.processingInstruction, color: "#6B5D4D" }, // markdown markers like #, *, etc.
+  { tag: tags.link, class: "cm-link-colored" },
+  { tag: tags.url, class: "cm-link-colored", textDecoration: "underline" },
+  { tag: tags.monospace, fontFamily: "'JetBrains Mono', Menlo, monospace", fontSize: "0.85em", class: "cm-code-bg" },
+  { tag: tags.quote, class: "cm-quote-colored", fontStyle: "italic" },
+  { tag: tags.processingInstruction, class: "cm-quote-colored" },
 ]);
 
 // Theme that matches the note-prose reading view
@@ -36,20 +36,21 @@ const noteEditorTheme = EditorView.theme({
   },
   ".cm-content": {
     padding: "0",
-    caretColor: "#2C2416",
+    caretColor: "var(--accent)",
+    color: "var(--foreground)",
   },
   ".cm-line": {
     padding: "0",
   },
   ".cm-cursor": {
-    borderLeftColor: "#2C2416",
+    borderLeftColor: "var(--accent)",
     borderLeftWidth: "1.5px",
   },
   ".cm-selectionBackground": {
-    backgroundColor: "#E5DFD5 !important",
+    backgroundColor: "var(--muted) !important",
   },
   "&.cm-focused .cm-selectionBackground": {
-    backgroundColor: "#E5DFD5 !important",
+    backgroundColor: "var(--muted) !important",
   },
   ".cm-activeLine": {
     backgroundColor: "transparent",
@@ -58,8 +59,19 @@ const noteEditorTheme = EditorView.theme({
     display: "none",
   },
   ".cm-placeholder": {
-    color: "#6B5D4D",
+    color: "var(--muted-foreground)",
     fontStyle: "normal",
+  },
+  ".cm-link-colored": {
+    color: "var(--accent)",
+  },
+  ".cm-code-bg": {
+    backgroundColor: "var(--muted)",
+    borderRadius: "3px",
+    padding: "1px 4px",
+  },
+  ".cm-quote-colored": {
+    color: "var(--muted-foreground)",
   },
   ".cm-scroller": {
     overflow: "auto",

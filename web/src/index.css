@@ -1,19 +1,38 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/* Light mode */
 :root {
-  --background: #FAF8F5;
-  --foreground: #2C2416;
+  --background: #F8FAFC;
+  --foreground: #0F172A;
   --card: #FFFFFF;
-  --card-foreground: #2C2416;
-  --muted: #F0EBE3;
-  --muted-foreground: #6B5D4D;
-  --accent: #B8860B;
-  --accent-foreground: #FFFFFF;
-  --border: #E5DFD5;
-  --destructive: #B54343;
-  --primary: #2C2416;
-  --primary-foreground: #FAF8F5;
+  --card-foreground: #0F172A;
+  --muted: #E2E8F0;
+  --muted-foreground: #64748B;
+  --accent: #FBBF24;
+  --accent-foreground: #0F172A;
+  --border: #CBD5E1;
+  --destructive: #DC2626;
+  --primary: #0F172A;
+  --primary-foreground: #F8FAFC;
+}
+
+/* Dark mode (midnight scholar) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0F1419;
+    --foreground: #E8E2D6;
+    --card: #1A1F26;
+    --card-foreground: #E8E2D6;
+    --muted: #242A33;
+    --muted-foreground: #8B9AAF;
+    --accent: #C4973B;
+    --accent-foreground: #0F1419;
+    --border: #2A3140;
+    --destructive: #C45454;
+    --primary: #C4973B;
+    --primary-foreground: #0F1419;
+  }
 }
 
 @theme inline {

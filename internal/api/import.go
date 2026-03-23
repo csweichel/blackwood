@@ -67,19 +67,43 @@ func (h *ImportHandler) ImportViwoods(ctx context.Context, req *connect.Request[
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get or create daily note: %w", err))
 	}
 
-	// Run OCR on each page and build markdown content.
+	// Create a placeholder entry so we can attach page images to it.
+	entry := &storage.Entry{
+		DailyNoteID: dailyNote.ID,
+		Type:        "viwoods",
+		Content:     "",
+		RawContent:  "",
+		Source:      "import",
+	}
+	if err := h.store.CreateEntry(ctx, entry); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create entry: %w", err))
+	}
+
+	// OCR each page, store the image as an attachment, and build markdown
+	// that includes both the page image and the OCR text.
 	var md strings.Builder
 	md.WriteString("## " + note.Name + "\n")
 
 	for i, page := range note.Pages {
-		fmt.Fprintf(&md, "\n### Page %d\n", i+1)
+		fmt.Fprintf(&md, "\n### Page %d\n\n", i+1)
+
+		// Store the page image as an attachment.
+		att := &storage.Attachment{
+			EntryID:     entry.ID,
+			Filename:    fmt.Sprintf("page_%d.png", i+1),
+			ContentType: "image/png",
+		}
+		if err := h.store.CreateAttachment(ctx, att, page.Image, date); err != nil {
+			slog.Warn("failed to store page attachment", "page", i+1, "error", err)
+		} else {
+			fmt.Fprintf(&md, "![Page %d](/api/attachments/%s)\n\n", i+1, att.ID)
+		}
 
 		if h.recognizer != nil {
 			text, err := h.recognizer.Recognize(ctx, page.Image)
 			if err != nil {
 				slog.Warn("OCR failed for page", "page", i+1, "noteID", note.ID, "error", err)
 			} else {
-				// Format recognized text as blockquote lines.
 				for _, line := range strings.Split(text, "\n") {
 					md.WriteString("> " + line + "\n")
 				}
@@ -88,6 +112,11 @@ func (h *ImportHandler) ImportViwoods(ctx context.Context, req *connect.Request[
 	}
 
 	content := md.String()
+
+	// Update the entry with the final content.
+	if err := h.store.UpdateEntryContent(ctx, entry.ID, content); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update entry content: %w", err))
+	}
 
 	// Write content to the daily note file so it appears in calendar and daily note view.
 	if dailyNote.Content != "" {
@@ -99,18 +128,6 @@ func (h *ImportHandler) ImportViwoods(ctx context.Context, req *connect.Request[
 		if err := h.store.UpdateDailyNoteContent(ctx, dailyNote.ID, content); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update daily note content: %w", err))
 		}
-	}
-
-	// Create the entry.
-	entry := &storage.Entry{
-		DailyNoteID: dailyNote.ID,
-		Type:        "viwoods",
-		Content:     content,
-		RawContent:  content,
-		Source:      "import",
-	}
-	if err := h.store.CreateEntry(ctx, entry); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create entry: %w", err))
 	}
 
 	if h.indexer != nil && entry.Content != "" {

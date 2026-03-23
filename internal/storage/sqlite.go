@@ -363,7 +363,7 @@ func (s *Store) UpdateEntry(ctx context.Context, e *Entry) error {
 
 // UpdateEntryContent updates only the content field of an entry.
 func (s *Store) UpdateEntryContent(ctx context.Context, id, content string) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE entries SET content = ?, updated_at = ? WHERE id = ?`, content, time.Now().UTC(), id)
+	_, err := s.db.ExecContext(ctx, `UPDATE entries SET content = ?, raw_content = ?, updated_at = ? WHERE id = ?`, content, content, time.Now().UTC(), id)
 	if err != nil {
 		return fmt.Errorf("update entry content: %w", err)
 	}

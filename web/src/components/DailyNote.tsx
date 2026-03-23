@@ -5,6 +5,8 @@ import { visit } from "unist-util-visit";
 import { getDailyNote, updateDailyNoteContent } from "../api/client";
 import EntryForm from "./EntryForm";
 import MarkdownEditor from "./MarkdownEditor";
+import AudioRecorder from "./AudioRecorder";
+import PhotoCapture from "./PhotoCapture";
 
 /**
  * Remark plugin that converts Obsidian-style [[wikilinks]] into
@@ -97,9 +99,14 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     };
   }, [load]);
 
+  const [showRecorder, setShowRecorder] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+
   // Reset editing state when date changes
   useEffect(() => {
     setEditing(false);
+    setShowRecorder(false);
+    setShowCamera(false);
   }, [date]);
 
 
@@ -194,6 +201,20 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
               ? "Save failed"
               : ""}
           </span>
+          <button
+            onClick={() => { setShowRecorder((v) => !v); setShowCamera(false); }}
+            className={`p-1.5 rounded-md transition-colors ${showRecorder ? "text-accent bg-muted" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+            title="Record audio"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+          </button>
+          <button
+            onClick={() => { setShowCamera((v) => !v); setShowRecorder(false); }}
+            className={`p-1.5 rounded-md transition-colors ${showCamera ? "text-accent bg-muted" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+            title="Take photo"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+          </button>
           {!editing ? (
             <button
               onClick={startEditing}
@@ -219,6 +240,27 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
           )}
         </div>
       </div>
+
+      {showRecorder && (
+        <div className="mb-4">
+          <AudioRecorder
+            date={date}
+            onCreated={() => { setShowRecorder(false); handleEntryCreated(); }}
+            onClose={() => setShowRecorder(false)}
+            autoStart
+          />
+        </div>
+      )}
+
+      {showCamera && (
+        <div className="mb-4">
+          <PhotoCapture
+            date={date}
+            onCreated={() => { setShowCamera(false); handleEntryCreated(); }}
+            onClose={() => setShowCamera(false)}
+          />
+        </div>
+      )}
 
       <div className="flex-1 min-h-0 overflow-y-auto mb-4">
         {editing ? (

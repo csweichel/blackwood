@@ -127,13 +127,39 @@ func (w *Worker) processViwoods(ctx context.Context, job *storage.ImportJob) err
 	totalPages := len(note.Pages)
 	_ = w.store.UpdateImportJobProgress(ctx, job.ID, 0, totalPages)
 
-	// OCR each page and build markdown.
+	// Create a placeholder entry first so we can attach images to it.
+	entry := &storage.Entry{
+		DailyNoteID: dailyNote.ID,
+		Type:        "viwoods",
+		Content:     "",
+		RawContent:  "",
+		Source:      "import",
+	}
+	if err := w.store.CreateEntry(ctx, entry); err != nil {
+		return fmt.Errorf("create entry: %w", err)
+	}
+
+	// OCR each page, store the image as an attachment, and build markdown
+	// that includes both the page image and the OCR text.
 	var md strings.Builder
 	md.WriteString("## " + note.Name + "\n")
 
 	for i, page := range note.Pages {
-		fmt.Fprintf(&md, "\n### Page %d\n", i+1)
+		fmt.Fprintf(&md, "\n### Page %d\n\n", i+1)
 
+		// Store the page image as an attachment.
+		att := &storage.Attachment{
+			EntryID:     entry.ID,
+			Filename:    fmt.Sprintf("page_%d.png", i+1),
+			ContentType: "image/png",
+		}
+		if err := w.store.CreateAttachment(ctx, att, page.Image, date); err != nil {
+			slog.Warn("failed to store page attachment", "page", i+1, "error", err)
+		} else {
+			fmt.Fprintf(&md, "![Page %d](/api/attachments/%s)\n\n", i+1, att.ID)
+		}
+
+		// OCR the page text.
 		if w.recognizer != nil {
 			text, err := w.recognizer.Recognize(ctx, page.Image)
 			if err != nil {
@@ -150,6 +176,11 @@ func (w *Worker) processViwoods(ctx context.Context, job *storage.ImportJob) err
 
 	content := md.String()
 
+	// Update the entry with the final content.
+	if err := w.store.UpdateEntryContent(ctx, entry.ID, content); err != nil {
+		return fmt.Errorf("update entry content: %w", err)
+	}
+
 	// Write content to the daily note.
 	if dailyNote.Content != "" {
 		separator := "\n\n---\n*Imported from Viwoods*\n\n"
@@ -159,30 +190,6 @@ func (w *Worker) processViwoods(ctx context.Context, job *storage.ImportJob) err
 	} else {
 		if err := w.store.UpdateDailyNoteContent(ctx, dailyNote.ID, content); err != nil {
 			return fmt.Errorf("update daily note content: %w", err)
-		}
-	}
-
-	// Create entry.
-	entry := &storage.Entry{
-		DailyNoteID: dailyNote.ID,
-		Type:        "viwoods",
-		Content:     content,
-		RawContent:  content,
-		Source:      "import",
-	}
-	if err := w.store.CreateEntry(ctx, entry); err != nil {
-		return fmt.Errorf("create entry: %w", err)
-	}
-
-	// Store page attachments.
-	for i, page := range note.Pages {
-		att := &storage.Attachment{
-			EntryID:     entry.ID,
-			Filename:    fmt.Sprintf("page_%d.png", i+1),
-			ContentType: "image/png",
-		}
-		if err := w.store.CreateAttachment(ctx, att, page.Image, date); err != nil {
-			slog.Warn("failed to store page attachment", "page", i+1, "error", err)
 		}
 	}
 
