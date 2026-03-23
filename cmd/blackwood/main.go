@@ -24,6 +24,7 @@ import (
 	"github.com/csweichel/blackwood/internal/storage"
 	"github.com/csweichel/blackwood/internal/transcribe"
 	"github.com/csweichel/blackwood/internal/watcher"
+	"github.com/csweichel/blackwood/internal/telegram"
 	"github.com/csweichel/blackwood/internal/whatsapp"
 )
 
@@ -171,6 +172,25 @@ func main() {
 
 	// Start the background import worker.
 	go worker.Start(ctx)
+
+	// Telegram bot.
+	if cfg.Telegram.Enabled {
+		tgCfg := telegram.BotConfig{
+			Token:          cfg.TelegramBotToken(),
+			AllowedChatIDs: cfg.Telegram.AllowedChatIDs,
+		}
+
+		var t transcribe.Transcriber
+		var d describe.Describer
+		if apiKey := cfg.APIKey(); apiKey != "" {
+			t = transcribe.NewWhisper(apiKey)
+			d = describe.NewVision(apiKey, cfg.OpenAI.Model)
+		}
+
+		tgBot := telegram.NewBot(tgCfg, store, t, d, semanticIndex)
+		go tgBot.Start(ctx)
+		slog.Info("Telegram bot enabled")
+	}
 
 	// Start the file watcher if configured.
 	if len(cfg.Watcher.WatchDirs) > 0 {

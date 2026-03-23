@@ -14,12 +14,14 @@ type ServerConfig struct {
 	Server   ServerSettings   `yaml:"server"`
 	OpenAI   OpenAISettings   `yaml:"openai"`
 	WhatsApp WhatsAppSettings `yaml:"whatsapp"`
+	Telegram TelegramSettings `yaml:"telegram"`
 	Watcher  WatcherSettings  `yaml:"watcher"`
 
 	// Resolved secrets (not serialized).
-	openaiAPIKey       string
-	whatsappAppSecret  string
+	openaiAPIKey        string
+	whatsappAppSecret   string
 	whatsappAccessToken string
+	telegramBotToken    string
 }
 
 // WatcherSettings holds configuration for the file watcher.
@@ -42,6 +44,13 @@ type OpenAISettings struct {
 	ChatModel      string `yaml:"chat_model"`
 	EmbeddingModel string `yaml:"embedding_model"`
 	OCRPrompt      string `yaml:"ocr_prompt"`
+}
+
+// TelegramSettings holds Telegram bot configuration.
+type TelegramSettings struct {
+	Enabled        bool    `yaml:"enabled"`
+	BotTokenFile   string  `yaml:"bot_token_file"`
+	AllowedChatIDs []int64 `yaml:"allowed_chat_ids"`
 }
 
 // WhatsAppSettings holds WhatsApp webhook configuration.
@@ -191,6 +200,22 @@ func (c *ServerConfig) Resolve() error {
 		c.WhatsApp.Enabled = true
 	}
 
+	// Telegram bot token: file > env var.
+	if c.Telegram.BotTokenFile != "" {
+		token, err := readSecretFile(c.Telegram.BotTokenFile)
+		if err != nil {
+			return err
+		}
+		c.telegramBotToken = token
+	} else if t := os.Getenv("TELEGRAM_BOT_TOKEN"); t != "" {
+		c.telegramBotToken = t
+	}
+
+	// Auto-enable Telegram if bot token is resolved.
+	if c.telegramBotToken != "" {
+		c.Telegram.Enabled = true
+	}
+
 	return nil
 }
 
@@ -202,6 +227,9 @@ func (c *ServerConfig) WhatsAppAppSecret() string { return c.whatsappAppSecret }
 
 // WhatsAppAccessToken returns the resolved WhatsApp access token.
 func (c *ServerConfig) WhatsAppAccessToken() string { return c.whatsappAccessToken }
+
+// TelegramBotToken returns the resolved Telegram bot token.
+func (c *ServerConfig) TelegramBotToken() string { return c.telegramBotToken }
 
 // readSecretFile reads a file and returns its contents trimmed of whitespace.
 func readSecretFile(path string) (string, error) {
