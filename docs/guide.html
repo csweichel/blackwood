@@ -308,6 +308,7 @@
           <li><a href="#configure">Configure</a></li>
           <li><a href="#run">Run the Server</a></li>
           <li><a href="#whatsapp">WhatsApp Integration</a></li>
+          <li><a href="#telegram">Telegram Bot</a></li>
           <li><a href="#daemon">Viwoods File Watcher</a></li>
           <li><a href="#systemd">Running as a Service</a></li>
         </ol>
@@ -447,10 +448,20 @@
             <td style="padding:8px 12px;">&mdash;</td>
             <td style="padding:8px 12px;">Path to file containing access token</td>
           </tr>
-          <tr>
+          <tr style="border-bottom:1px solid var(--border);">
             <td style="padding:8px 12px;"><code>whatsapp.phone_number_id</code></td>
             <td style="padding:8px 12px;">&mdash;</td>
             <td style="padding:8px 12px;">WhatsApp Business phone number ID</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;"><code>telegram.bot_token_file</code></td>
+            <td style="padding:8px 12px;">&mdash;</td>
+            <td style="padding:8px 12px;">Path to file containing Telegram bot token</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 12px;"><code>telegram.allowed_chat_ids</code></td>
+            <td style="padding:8px 12px;">[] (allow all)</td>
+            <td style="padding:8px 12px;">List of Telegram chat IDs allowed to use the bot</td>
           </tr>
         </tbody>
       </table>
@@ -505,8 +516,74 @@
         <p><strong>Security:</strong> The webhook validates request signatures using your app secret. Do not expose the server without HTTPS in production.</p>
       </div>
 
+      <!-- Telegram -->
+      <h2 id="telegram">6. Telegram Bot (Optional)</h2>
+      <p>Send text, voice messages, and photos from Telegram to your daily notes. The bot uses long polling &mdash; no public URL or webhook setup is needed.</p>
+
+      <h3>Create a bot with @BotFather</h3>
+      <ol>
+        <li>Open Telegram and search for <a href="https://t.me/botfather">@BotFather</a>.</li>
+        <li>Send <code>/newbot</code> and follow the prompts to choose a display name and username for your bot.</li>
+        <li>BotFather replies with a <strong>bot token</strong> like <code>123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11</code>. Copy it.</li>
+      </ol>
+
+      <h3>Store the token</h3>
+<pre><code><span class="command">echo -n "YOUR_BOT_TOKEN" > ~/.blackwood/secrets/telegram-bot-token</span>
+<span class="command">chmod 600 ~/.blackwood/secrets/telegram-bot-token</span></code></pre>
+
+      <h3>Find your chat ID</h3>
+      <p>The <code>allowed_chat_ids</code> setting controls who can send messages to the bot. To find your chat ID:</p>
+      <ol>
+        <li>Send any message to your new bot in Telegram (e.g. "hello").</li>
+        <li>Open this URL in a browser, replacing <code>&lt;TOKEN&gt;</code> with your bot token:</li>
+      </ol>
+<pre><code><span class="string">https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</span></code></pre>
+      <p>Look for <code>"chat":{"id":123456789,...}</code> in the JSON response. That number is your chat ID. For group chats, the ID is negative (e.g. <code>-1001234567890</code>).</p>
+
+      <h3>Configure</h3>
+      <p>Add the Telegram section to your config:</p>
+<pre><code><span class="key">telegram</span>:
+  <span class="key">bot_token_file</span>: <span class="string">~/.blackwood/secrets/telegram-bot-token</span>
+  <span class="key">allowed_chat_ids</span>:
+    - <span class="string">123456789</span></code></pre>
+
+      <p>If <code>allowed_chat_ids</code> is omitted or empty, the bot accepts messages from anyone. Set it to restrict access to specific users or groups.</p>
+
+      <div class="callout">
+        <p><strong>Without a config file:</strong> Set the <code>TELEGRAM_BOT_TOKEN</code> environment variable instead. Note that <code>allowed_chat_ids</code> can only be set via the config file.</p>
+      </div>
+
+      <h3>What the bot does</h3>
+      <table style="width:100%; border-collapse:collapse; margin-bottom:20px; font-size:0.92rem;">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border); text-align:left;">
+            <th style="padding:8px 12px;">You send</th>
+            <th style="padding:8px 12px;">Blackwood does</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;">Text message</td>
+            <td style="padding:8px 12px;">Adds it as a text entry in today's note</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;">Voice message</td>
+            <td style="padding:8px 12px;">Transcribes via Whisper, adds transcription as entry</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 12px;">Photo</td>
+            <td style="padding:8px 12px;">Describes via vision model, adds description as entry</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>All messages are appended to the daily note with a timestamp and &ldquo;Telegram&rdquo; source label. Audio and photo files are stored as attachments alongside the note.</p>
+
+      <div class="callout warning">
+        <p><strong>Security:</strong> Keep your bot token secret. Anyone with the token has full control over the bot. Use <code>allowed_chat_ids</code> to prevent unauthorized users from writing to your notes.</p>
+      </div>
+
       <!-- Watcher -->
-      <h2 id="daemon">6. Viwoods File Watcher (Optional)</h2>
+      <h2 id="daemon">7. Viwoods File Watcher (Optional)</h2>
       <p>Blackwood can watch a directory for Viwoods <code>.note</code> files, run OCR on each page, and append the results to your daily notes. Add the <code>watcher</code> section to your config:</p>
 
 <pre><code><span class="key">watcher</span>:
@@ -516,7 +593,7 @@
       <p>The watcher runs inside the main <code>blackwood</code> process. No separate binary is needed.</p>
 
       <!-- Systemd -->
-      <h2 id="systemd">7. Running as a Service</h2>
+      <h2 id="systemd">8. Running as a Service</h2>
       <p>To run Blackwood on startup, create a systemd user service:</p>
 <pre><code><span class="command">mkdir -p ~/.config/systemd/user</span></code></pre>
 

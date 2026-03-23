@@ -20,6 +20,12 @@ openai:
 #   access_token_file: ~/.blackwood/secrets/whatsapp-access-token
 #   phone_number_id: "123456789"
 
+# Telegram bot (optional)
+# telegram:
+#   bot_token_file: ~/.blackwood/secrets/telegram-bot-token
+#   allowed_chat_ids:
+#     - 123456789
+
 # File watcher (optional)
 # watcher:
 #   watch_dirs:

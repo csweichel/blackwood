@@ -14,6 +14,7 @@ Blackwood runs entirely on your machine. Your data stays local.
 - **Viwoods handwriting** — import `.note` files from Viwoods AIPaper; pages are OCR'd and added to your daily note
 - **Obsidian import** — bulk import your existing daily notes from Obsidian
 - **WhatsApp integration** — text, voice messages, and photos sent to your bot appear in today's note
+- **Telegram bot** — send text, voice, and photos from Telegram; uses long polling so no public URL is needed
 - **Semantic search & RAG chat** — ask questions about your notes in natural language; get answers with source citations
 - **Calendar view** — monthly grid showing which days have content; click to navigate
 - **Rendered markdown view** — rendered display with edit toggle for switching between reading and editing
@@ -89,7 +90,8 @@ Blackwood is a single Go binary (`blackwood`) serving a React frontend over a si
 │               Go API Server                     │
 │                                                 │
 │  DailyNotesService · ChatService · ImportService│
-│  WhatsApp Webhook · Attachment Serving          │
+│  WhatsApp Webhook · Telegram Bot                │
+│  Attachment Serving                             │
 ├─────────────────────────────────────────────────┤
 │  AI Pipelines                                   │
 │  Whisper (audio) · gpt-5.2 (vision/chat/OCR)   │
@@ -118,6 +120,7 @@ Blackwood is a single Go binary (`blackwood`) serving a React frontend over a si
 | `internal/noteparser` | Viwoods `.note` file parser |
 | `internal/watcher` | Viwoods file watcher (polls a directory for new `.note` files) |
 | `internal/whatsapp` | WhatsApp Business API webhook |
+| `internal/telegram` | Telegram bot (long polling) |
 | `web/` | React + TypeScript + Vite frontend |
 
 ### API
@@ -157,6 +160,12 @@ openai:
 #   access_token_file: ~/.blackwood/secrets/whatsapp-access-token
 #   phone_number_id: "123456789"
 
+# Telegram bot (optional)
+# telegram:
+#   bot_token_file: ~/.blackwood/secrets/telegram-bot-token
+#   allowed_chat_ids:
+#     - 123456789
+
 # Viwoods file watcher (optional)
 # watcher:
 #   watch_dir: /path/to/viwoods/notes
@@ -178,12 +187,71 @@ When no config file is used, the following environment variables are recognized:
 | `WHATSAPP_APP_SECRET` | — | App secret for signature verification |
 | `WHATSAPP_ACCESS_TOKEN` | — | Permanent access token |
 | `WHATSAPP_PHONE_NUMBER_ID` | — | Phone number ID for sending replies |
+| `TELEGRAM_BOT_TOKEN` | — | Telegram bot token from @BotFather |
 
 ### WhatsApp (optional)
 
 To receive messages via WhatsApp, set up a [WhatsApp Business App](https://developers.facebook.com/docs/whatsapp/cloud-api/get-started) and configure the `whatsapp` section in your config file (or set the corresponding environment variables).
 
 Set your webhook URL to `https://your-domain/api/webhooks/whatsapp`.
+
+### Telegram (optional)
+
+Send text, voice messages, and photos to a Telegram bot and have them appear in your daily notes. Unlike WhatsApp, the Telegram integration uses long polling — no public URL or webhook setup is needed.
+
+#### 1. Create a bot with @BotFather
+
+1. Open Telegram and search for [@BotFather](https://t.me/botfather).
+2. Send `/newbot` and follow the prompts to choose a name and username.
+3. BotFather will reply with a **bot token** like `123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11`. Copy it.
+
+#### 2. Store the token
+
+```sh
+echo -n "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" > ~/.blackwood/secrets/telegram-bot-token
+chmod 600 ~/.blackwood/secrets/telegram-bot-token
+```
+
+#### 3. Find your chat ID
+
+Your chat ID controls who can send messages to the bot. To find it:
+
+1. Send any message to your new bot in Telegram.
+2. Open `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` in a browser.
+3. Look for `"chat":{"id":123456789,...}` in the JSON response. That number is your chat ID.
+
+#### 4. Configure Blackwood
+
+Add to your config file:
+
+```yaml
+telegram:
+  bot_token_file: ~/.blackwood/secrets/telegram-bot-token
+  allowed_chat_ids:
+    - 123456789   # your chat ID from step 3
+```
+
+If `allowed_chat_ids` is omitted or empty, the bot accepts messages from anyone. Set it to restrict access to specific users or groups.
+
+You can also skip the config file and use an environment variable:
+
+```sh
+export TELEGRAM_BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
+```
+
+#### 5. Restart Blackwood
+
+The bot starts polling automatically on launch. You should see `Telegram bot enabled` in the logs.
+
+#### What the bot does
+
+| You send | Blackwood does |
+|----------|---------------|
+| Text message | Adds it as a text entry in today's note |
+| Voice message | Transcribes via Whisper, adds transcription as entry |
+| Photo | Describes via gpt-5.2 vision, adds description as entry |
+
+All messages are appended to the daily note with a timestamp and "Telegram" source label. Attachments (audio files, photos) are stored alongside the note.
 
 ## Storage
 
@@ -207,7 +275,7 @@ Attachments (photos, audio recordings) are stored alongside the daily note in th
 
 ## Roadmap
 
-- [ ] Telegram bot integration
+- [x] Telegram bot integration
 - [ ] Chrome extension (web clipper)
 - [ ] iOS app
 - [ ] Mac app (menu bar quick capture)
