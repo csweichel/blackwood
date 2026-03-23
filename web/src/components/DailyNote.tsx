@@ -182,6 +182,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
 
   const [showRecorder, setShowRecorder] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   // Reset editing state when date changes
   useEffect(() => {
@@ -204,6 +205,27 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     },
     [date]
   );
+
+  const downloadPdf = useCallback(async () => {
+    setPdfLoading(true);
+    try {
+      const resp = await fetch(`/api/daily-notes/${date}/pdf`);
+      if (!resp.ok) throw new Error("PDF generation failed");
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${date}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("PDF download failed:", err);
+    } finally {
+      setPdfLoading(false);
+    }
+  }, [date]);
 
   function handleEditChange(text: string) {
     setEditContent(text);
@@ -282,6 +304,16 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
               ? "Save failed"
               : ""}
           </span>
+          {content.trim() && (
+            <button
+              onClick={downloadPdf}
+              disabled={pdfLoading}
+              className={`p-1.5 rounded-md transition-colors ${pdfLoading ? "text-muted-foreground opacity-50 cursor-wait" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+              title="Download as PDF"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" x2="12" y1="18" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
+            </button>
+          )}
           <button
             onClick={() => { setShowRecorder((v) => !v); setShowCamera(false); }}
             className={`p-1.5 rounded-md transition-colors ${showRecorder ? "text-accent bg-muted" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
