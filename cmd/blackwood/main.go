@@ -283,9 +283,29 @@ func main() {
 	}
 
 	errCh := make(chan error, 1)
-	go func() {
-		errCh <- httpServer.ListenAndServe()
-	}()
+	if cfg.TLSEnabled() {
+		certFile := cfg.Server.TLS.CertFile
+		keyFile := cfg.Server.TLS.KeyFile
+
+		// Fail fast if cert/key files don't exist.
+		if _, err := os.Stat(certFile); err != nil {
+			slog.Error("TLS cert file not found", "path", certFile, "error", err)
+			os.Exit(1)
+		}
+		if _, err := os.Stat(keyFile); err != nil {
+			slog.Error("TLS key file not found", "path", keyFile, "error", err)
+			os.Exit(1)
+		}
+
+		slog.Info("starting server with TLS", "addr", addr, "cert", certFile)
+		go func() {
+			errCh <- httpServer.ListenAndServeTLS(certFile, keyFile)
+		}()
+	} else {
+		go func() {
+			errCh <- httpServer.ListenAndServe()
+		}()
+	}
 
 	select {
 	case err := <-errCh:
@@ -340,6 +360,9 @@ func runSetup() {
 		openaiKey     string
 		setupTG       bool
 		telegramToken string
+		setupTLS      bool
+		tlsCertFile   string
+		tlsKeyFile    string
 	)
 
 	// Collect server settings and OpenAI key.
@@ -411,6 +434,58 @@ func runSetup() {
 		}
 	}
 
+	// Ask about TLS.
+	err = huh.NewConfirm().
+		Title("Configure TLS?").
+		Description("Serve over HTTPS with your own certificate.").
+		Affirmative("Yes").
+		Negative("No").
+		Value(&setupTLS).
+		Run()
+	if err != nil {
+		if err == huh.ErrUserAborted {
+			fmt.Println("Setup cancelled.")
+			return
+		}
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if setupTLS {
+		err = huh.NewForm(
+			huh.NewGroup(
+				huh.NewInput().
+					Title("TLS certificate file path").
+					Value(&tlsCertFile).
+					Validate(func(s string) error {
+						if strings.TrimSpace(s) == "" {
+							return fmt.Errorf("cert file path is required")
+						}
+						return nil
+					}),
+				huh.NewInput().
+					Title("TLS private key file path").
+					Value(&tlsKeyFile).
+					Validate(func(s string) error {
+						if strings.TrimSpace(s) == "" {
+							return fmt.Errorf("key file path is required")
+						}
+						return nil
+					}),
+			),
+		).Run()
+		if err != nil {
+			if err == huh.ErrUserAborted {
+				fmt.Println("Setup cancelled.")
+				return
+			}
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		tlsCertFile = strings.TrimSpace(tlsCertFile)
+		tlsKeyFile = strings.TrimSpace(tlsKeyFile)
+	}
+
 	openaiKey = strings.TrimSpace(openaiKey)
 	telegramToken = strings.TrimSpace(telegramToken)
 
@@ -455,6 +530,15 @@ func runSetup() {
 	cfgBuf.WriteString("server:\n")
 	cfgBuf.WriteString(fmt.Sprintf("  addr: %q\n", listenAddr))
 	cfgBuf.WriteString(fmt.Sprintf("  data_dir: %s\n", displayDir))
+	if setupTLS {
+		cfgBuf.WriteString("  tls:\n")
+		cfgBuf.WriteString(fmt.Sprintf("    cert_file: %s\n", tlsCertFile))
+		cfgBuf.WriteString(fmt.Sprintf("    key_file: %s\n", tlsKeyFile))
+	} else {
+		cfgBuf.WriteString("  # tls:\n")
+		cfgBuf.WriteString("  #   cert_file: /path/to/cert.pem\n")
+		cfgBuf.WriteString("  #   key_file: /path/to/key.pem\n")
+	}
 	cfgBuf.WriteString("\n")
 	cfgBuf.WriteString("openai:\n")
 	cfgBuf.WriteString(fmt.Sprintf("  api_key_file: %s/secrets/openai-api-key\n", displayDir))

@@ -24,6 +24,12 @@ type ServerConfig struct {
 	telegramBotToken    string
 }
 
+// TLS holds TLS certificate configuration.
+type TLS struct {
+	CertFile string `yaml:"cert_file"`
+	KeyFile  string `yaml:"key_file"`
+}
+
 // WatcherSettings holds configuration for the file watcher.
 type WatcherSettings struct {
 	WatchDir     string   `yaml:"watch_dir"`      // backward compat (singular)
@@ -35,6 +41,7 @@ type WatcherSettings struct {
 type ServerSettings struct {
 	Addr    string `yaml:"addr"`
 	DataDir string `yaml:"data_dir"`
+	TLS     TLS    `yaml:"tls"`
 }
 
 // OpenAISettings holds OpenAI-related configuration.
@@ -95,6 +102,24 @@ func (c *ServerConfig) Resolve() error {
 		home, err := os.UserHomeDir()
 		if err == nil {
 			c.Server.DataDir = filepath.Join(home, c.Server.DataDir[2:])
+		}
+	}
+
+	// TLS validation: both or neither must be set.
+	hasCert := c.Server.TLS.CertFile != ""
+	hasKey := c.Server.TLS.KeyFile != ""
+	if hasCert != hasKey {
+		return fmt.Errorf("TLS config incomplete: both cert_file and key_file must be set")
+	}
+	// Expand ~ in TLS paths.
+	if strings.HasPrefix(c.Server.TLS.CertFile, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			c.Server.TLS.CertFile = filepath.Join(home, c.Server.TLS.CertFile[2:])
+		}
+	}
+	if strings.HasPrefix(c.Server.TLS.KeyFile, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			c.Server.TLS.KeyFile = filepath.Join(home, c.Server.TLS.KeyFile[2:])
 		}
 	}
 
@@ -230,6 +255,11 @@ func (c *ServerConfig) WhatsAppAccessToken() string { return c.whatsappAccessTok
 
 // TelegramBotToken returns the resolved Telegram bot token.
 func (c *ServerConfig) TelegramBotToken() string { return c.telegramBotToken }
+
+// TLSEnabled returns true when both CertFile and KeyFile are configured.
+func (c *ServerConfig) TLSEnabled() bool {
+	return c.Server.TLS.CertFile != "" && c.Server.TLS.KeyFile != ""
+}
 
 // readSecretFile reads a file and returns its contents trimmed of whitespace.
 func readSecretFile(path string) (string, error) {
