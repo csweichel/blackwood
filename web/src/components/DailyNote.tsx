@@ -4,6 +4,7 @@ import rehypeRaw from "rehype-raw";
 import { visit } from "unist-util-visit";
 import { getDailyNote, updateDailyNoteContent } from "../api/client";
 import EntryForm from "./EntryForm";
+import MarkdownEditor from "./MarkdownEditor";
 
 /**
  * Remark plugin that converts Obsidian-style [[wikilinks]] into
@@ -101,6 +102,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     setEditing(false);
   }, [date]);
 
+
   const doSave = useCallback(
     async (text: string) => {
       setSaveStatus("saving");
@@ -115,8 +117,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     [date]
   );
 
-  function handleEditChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    const text = e.target.value;
+  function handleEditChange(text: string) {
     setEditContent(text);
     setSaveStatus("idle");
 
@@ -221,11 +222,10 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
 
       <div className="flex-1 min-h-0 overflow-y-auto mb-4">
         {editing ? (
-          <textarea
+          <MarkdownEditor
             value={editContent}
             onChange={handleEditChange}
             placeholder="Start writing..."
-            className="note-textarea"
             autoFocus
           />
         ) : content.trim() ? (
