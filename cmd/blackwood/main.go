@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/charmbracelet/huh"
 	"github.com/csweichel/blackwood/gen/blackwood/v1/blackwoodv1connect"
 	"github.com/csweichel/blackwood/internal/api"
 	"github.com/csweichel/blackwood/internal/config"
@@ -32,6 +34,12 @@ import (
 var Version = "dev"
 
 func main() {
+	// Handle subcommands before flag.Parse() since flag doesn't support them.
+	if len(os.Args) > 1 && os.Args[1] == "setup" {
+		runSetup()
+		return
+	}
+
 	configFile := flag.String("config", "", "path to config file")
 	addrFlag := flag.String("addr", "", "listen address (overrides config)")
 	dataDirFlag := flag.String("data-dir", "", "data directory (overrides config)")
@@ -292,3 +300,182 @@ func main() {
 		}
 	}
 }
+
+func runSetup() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: cannot determine home directory: %v\n", err)
+		os.Exit(1)
+	}
+
+	defaultDir := filepath.Join(home, ".blackwood")
+	configPath := filepath.Join(defaultDir, "config.yaml")
+
+	// Check for existing config.
+	if _, err := os.Stat(configPath); err == nil {
+		var overwrite bool
+		err := huh.NewConfirm().
+			Title("Config file already exists at " + configPath).
+			Description("Do you want to overwrite it?").
+			Affirmative("Yes").
+			Negative("No").
+			Value(&overwrite).
+			Run()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		if !overwrite {
+			fmt.Println("Setup cancelled.")
+			return
+		}
+	}
+
+	var (
+		dataDir       = defaultDir
+		listenAddr    = ":8080"
+		openaiKey     string
+		setupTG       bool
+		telegramToken string
+	)
+
+	// Collect server settings and OpenAI key.
+	err = huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title("Blackwood Setup").
+				Description("Configure your Blackwood instance."),
+
+			huh.NewInput().
+				Title("Data directory").
+				Value(&dataDir).
+				Placeholder(defaultDir),
+
+			huh.NewInput().
+				Title("Listen address").
+				Value(&listenAddr).
+				Placeholder(":8080"),
+
+			huh.NewInput().
+				Title("OpenAI API key").
+				Description("Required for transcription, vision, and chat.").
+				Value(&openaiKey).
+				EchoMode(huh.EchoModePassword).
+				Validate(func(s string) error {
+					if strings.TrimSpace(s) == "" {
+						return fmt.Errorf("API key is required")
+					}
+					return nil
+				}),
+
+			huh.NewConfirm().
+				Title("Set up Telegram bot?").
+				Affirmative("Yes").
+				Negative("No").
+				Value(&setupTG),
+		),
+	).Run()
+	if err != nil {
+		if err == huh.ErrUserAborted {
+			fmt.Println("Setup cancelled.")
+			return
+		}
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Collect Telegram token if requested.
+	if setupTG {
+		err = huh.NewInput().
+			Title("Telegram bot token").
+			Description("From @BotFather").
+			Value(&telegramToken).
+			EchoMode(huh.EchoModePassword).
+			Validate(func(s string) error {
+				if strings.TrimSpace(s) == "" {
+					return fmt.Errorf("bot token is required")
+				}
+				return nil
+			}).
+			Run()
+		if err != nil {
+			if err == huh.ErrUserAborted {
+				fmt.Println("Setup cancelled.")
+				return
+			}
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	openaiKey = strings.TrimSpace(openaiKey)
+	telegramToken = strings.TrimSpace(telegramToken)
+
+	// Resolve ~ in dataDir.
+	if strings.HasPrefix(dataDir, "~/") {
+		dataDir = filepath.Join(home, dataDir[2:])
+	}
+
+	// Create directories.
+	secretsDir := filepath.Join(dataDir, "secrets")
+	if err := os.MkdirAll(secretsDir, 0o755); err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating directories: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("✓ Created %s\n", secretsDir)
+
+	// Write OpenAI API key.
+	openaiKeyPath := filepath.Join(secretsDir, "openai-api-key")
+	if err := os.WriteFile(openaiKeyPath, []byte(openaiKey), 0o600); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing API key: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("✓ Saved OpenAI API key to %s\n", openaiKeyPath)
+
+	// Write Telegram bot token if configured.
+	telegramTokenPath := filepath.Join(secretsDir, "telegram-bot-token")
+	if setupTG {
+		if err := os.WriteFile(telegramTokenPath, []byte(telegramToken), 0o600); err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing Telegram token: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("✓ Saved Telegram bot token to %s\n", telegramTokenPath)
+	}
+
+	// Build config YAML. Use ~ paths for portability.
+	displayDir := dataDir
+	if strings.HasPrefix(dataDir, home) {
+		displayDir = "~" + dataDir[len(home):]
+	}
+
+	var cfgBuf strings.Builder
+	cfgBuf.WriteString("server:\n")
+	cfgBuf.WriteString(fmt.Sprintf("  addr: %q\n", listenAddr))
+	cfgBuf.WriteString(fmt.Sprintf("  data_dir: %s\n", displayDir))
+	cfgBuf.WriteString("\n")
+	cfgBuf.WriteString("openai:\n")
+	cfgBuf.WriteString(fmt.Sprintf("  api_key_file: %s/secrets/openai-api-key\n", displayDir))
+	cfgBuf.WriteString("\n")
+
+	if setupTG {
+		cfgBuf.WriteString("telegram:\n")
+		cfgBuf.WriteString(fmt.Sprintf("  bot_token_file: %s/secrets/telegram-bot-token\n", displayDir))
+	} else {
+		cfgBuf.WriteString("# telegram:\n")
+		cfgBuf.WriteString(fmt.Sprintf("#   bot_token_file: %s/secrets/telegram-bot-token\n", displayDir))
+	}
+
+	// Resolve configPath relative to dataDir (in case user changed it).
+	configPath = filepath.Join(dataDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(cfgBuf.String()), 0o644); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing config: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("✓ Config written to %s\n", configPath)
+
+	fmt.Println()
+	fmt.Println("To start Blackwood:")
+	fmt.Printf("  blackwood --config %s\n", configPath)
+}
+
+

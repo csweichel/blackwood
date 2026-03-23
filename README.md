@@ -41,7 +41,15 @@ cd web && npm ci && npm run build && cd ..
 
 ### Configure
 
-Copy the example config and add your API key:
+The easiest way to get started is the interactive setup command:
+
+```sh
+./blackwood setup
+```
+
+This walks you through creating directories, storing your API key, and generating a config file.
+
+Alternatively, configure manually:
 
 ```sh
 cp blackwood.example.yaml ~/.blackwood/config.yaml
