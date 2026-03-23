@@ -9,6 +9,87 @@ import AudioRecorder from "./AudioRecorder";
 import PhotoCapture from "./PhotoCapture";
 
 /**
+ * Rehype plugin that converts standalone YouTube URLs in paragraphs
+ * into responsive embedded iframes using youtube-nocookie.com.
+ */
+function rehypeYoutubeEmbed() {
+  const YT_REGEX =
+    /^https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)(?:[&?].*)?$/;
+
+  function extractVideoId(url: string): { id: string; start?: string } | null {
+    const match = url.match(YT_REGEX);
+    if (!match) return null;
+    const id = match[1];
+    // Extract t= or start= parameter
+    try {
+      const parsed = new URL(url);
+      const t = parsed.searchParams.get("t") ?? parsed.searchParams.get("start");
+      return { id, start: t ?? undefined };
+    } catch {
+      return { id };
+    }
+  }
+
+  function isSoleYoutubeUrl(paragraph: any): { id: string; start?: string } | null {
+    const children = paragraph.children?.filter(
+      (c: any) => !(c.type === "text" && c.value.trim() === "")
+    );
+    if (!children || children.length !== 1) return null;
+    const child = children[0];
+
+    // Text node containing a bare URL
+    if (child.type === "text") {
+      return extractVideoId(child.value.trim());
+    }
+    // <a> element wrapping the URL (markdown autolink)
+    if (child.type === "element" && child.tagName === "a") {
+      const href = child.properties?.href ?? "";
+      return extractVideoId(href.trim());
+    }
+    return null;
+  }
+
+  return (tree: any) => {
+    visit(tree, "element", (node: any, index: number | undefined, parent: any) => {
+      if (index === undefined || !parent) return;
+      if (node.tagName !== "p") return;
+
+      const result = isSoleYoutubeUrl(node);
+      if (!result) return;
+
+      let src = `https://www.youtube-nocookie.com/embed/${result.id}`;
+      if (result.start) src += `?start=${result.start}`;
+
+      const embedNode = {
+        type: "element",
+        tagName: "div",
+        properties: {
+          style:
+            "position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:0.5rem;margin:0.75em 0",
+        },
+        children: [
+          {
+            type: "element",
+            tagName: "iframe",
+            properties: {
+              src,
+              style: "position:absolute;top:0;left:0;width:100%;height:100%",
+              frameBorder: "0",
+              allow:
+                "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture",
+              allowFullScreen: true,
+            },
+            children: [],
+          },
+        ],
+      };
+
+      parent.children.splice(index, 1, embedNode);
+    });
+  };
+}
+
+/**
  * Remark plugin that converts Obsidian-style [[wikilinks]] into
  * <span class="wikilink"> elements for styled rendering.
  */
@@ -276,7 +357,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
             className="prose prose-sm max-w-none note-prose note-container"
             onClick={startEditing}
           >
-            <Markdown remarkPlugins={[remarkWikilinks]} rehypePlugins={[rehypeRaw]}>
+            <Markdown remarkPlugins={[remarkWikilinks]} rehypePlugins={[rehypeRaw, rehypeYoutubeEmbed]}>
               {content}
             </Markdown>
           </div>
