@@ -39,12 +39,20 @@ const (
 	// ImportServiceImportObsidianProcedure is the fully-qualified name of the ImportService's
 	// ImportObsidian RPC.
 	ImportServiceImportObsidianProcedure = "/blackwood.v1.ImportService/ImportObsidian"
+	// ImportServiceSubmitImportProcedure is the fully-qualified name of the ImportService's
+	// SubmitImport RPC.
+	ImportServiceSubmitImportProcedure = "/blackwood.v1.ImportService/SubmitImport"
+	// ImportServiceGetImportJobsProcedure is the fully-qualified name of the ImportService's
+	// GetImportJobs RPC.
+	ImportServiceGetImportJobsProcedure = "/blackwood.v1.ImportService/GetImportJobs"
 )
 
 // ImportServiceClient is a client for the blackwood.v1.ImportService service.
 type ImportServiceClient interface {
 	ImportViwoods(context.Context, *connect.Request[v1.ImportViwoodsRequest]) (*connect.Response[v1.ImportViwoodsResponse], error)
 	ImportObsidian(context.Context, *connect.Request[v1.ImportObsidianRequest]) (*connect.Response[v1.ImportObsidianResponse], error)
+	SubmitImport(context.Context, *connect.Request[v1.SubmitImportRequest]) (*connect.Response[v1.SubmitImportResponse], error)
+	GetImportJobs(context.Context, *connect.Request[v1.GetImportJobsRequest]) (*connect.Response[v1.GetImportJobsResponse], error)
 }
 
 // NewImportServiceClient constructs a client for the blackwood.v1.ImportService service. By
@@ -70,6 +78,18 @@ func NewImportServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(importServiceMethods.ByName("ImportObsidian")),
 			connect.WithClientOptions(opts...),
 		),
+		submitImport: connect.NewClient[v1.SubmitImportRequest, v1.SubmitImportResponse](
+			httpClient,
+			baseURL+ImportServiceSubmitImportProcedure,
+			connect.WithSchema(importServiceMethods.ByName("SubmitImport")),
+			connect.WithClientOptions(opts...),
+		),
+		getImportJobs: connect.NewClient[v1.GetImportJobsRequest, v1.GetImportJobsResponse](
+			httpClient,
+			baseURL+ImportServiceGetImportJobsProcedure,
+			connect.WithSchema(importServiceMethods.ByName("GetImportJobs")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -77,6 +97,8 @@ func NewImportServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 type importServiceClient struct {
 	importViwoods  *connect.Client[v1.ImportViwoodsRequest, v1.ImportViwoodsResponse]
 	importObsidian *connect.Client[v1.ImportObsidianRequest, v1.ImportObsidianResponse]
+	submitImport   *connect.Client[v1.SubmitImportRequest, v1.SubmitImportResponse]
+	getImportJobs  *connect.Client[v1.GetImportJobsRequest, v1.GetImportJobsResponse]
 }
 
 // ImportViwoods calls blackwood.v1.ImportService.ImportViwoods.
@@ -89,10 +111,22 @@ func (c *importServiceClient) ImportObsidian(ctx context.Context, req *connect.R
 	return c.importObsidian.CallUnary(ctx, req)
 }
 
+// SubmitImport calls blackwood.v1.ImportService.SubmitImport.
+func (c *importServiceClient) SubmitImport(ctx context.Context, req *connect.Request[v1.SubmitImportRequest]) (*connect.Response[v1.SubmitImportResponse], error) {
+	return c.submitImport.CallUnary(ctx, req)
+}
+
+// GetImportJobs calls blackwood.v1.ImportService.GetImportJobs.
+func (c *importServiceClient) GetImportJobs(ctx context.Context, req *connect.Request[v1.GetImportJobsRequest]) (*connect.Response[v1.GetImportJobsResponse], error) {
+	return c.getImportJobs.CallUnary(ctx, req)
+}
+
 // ImportServiceHandler is an implementation of the blackwood.v1.ImportService service.
 type ImportServiceHandler interface {
 	ImportViwoods(context.Context, *connect.Request[v1.ImportViwoodsRequest]) (*connect.Response[v1.ImportViwoodsResponse], error)
 	ImportObsidian(context.Context, *connect.Request[v1.ImportObsidianRequest]) (*connect.Response[v1.ImportObsidianResponse], error)
+	SubmitImport(context.Context, *connect.Request[v1.SubmitImportRequest]) (*connect.Response[v1.SubmitImportResponse], error)
+	GetImportJobs(context.Context, *connect.Request[v1.GetImportJobsRequest]) (*connect.Response[v1.GetImportJobsResponse], error)
 }
 
 // NewImportServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -114,12 +148,28 @@ func NewImportServiceHandler(svc ImportServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(importServiceMethods.ByName("ImportObsidian")),
 		connect.WithHandlerOptions(opts...),
 	)
+	importServiceSubmitImportHandler := connect.NewUnaryHandler(
+		ImportServiceSubmitImportProcedure,
+		svc.SubmitImport,
+		connect.WithSchema(importServiceMethods.ByName("SubmitImport")),
+		connect.WithHandlerOptions(opts...),
+	)
+	importServiceGetImportJobsHandler := connect.NewUnaryHandler(
+		ImportServiceGetImportJobsProcedure,
+		svc.GetImportJobs,
+		connect.WithSchema(importServiceMethods.ByName("GetImportJobs")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/blackwood.v1.ImportService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ImportServiceImportViwoodsProcedure:
 			importServiceImportViwoodsHandler.ServeHTTP(w, r)
 		case ImportServiceImportObsidianProcedure:
 			importServiceImportObsidianHandler.ServeHTTP(w, r)
+		case ImportServiceSubmitImportProcedure:
+			importServiceSubmitImportHandler.ServeHTTP(w, r)
+		case ImportServiceGetImportJobsProcedure:
+			importServiceGetImportJobsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -135,4 +185,12 @@ func (UnimplementedImportServiceHandler) ImportViwoods(context.Context, *connect
 
 func (UnimplementedImportServiceHandler) ImportObsidian(context.Context, *connect.Request[v1.ImportObsidianRequest]) (*connect.Response[v1.ImportObsidianResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blackwood.v1.ImportService.ImportObsidian is not implemented"))
+}
+
+func (UnimplementedImportServiceHandler) SubmitImport(context.Context, *connect.Request[v1.SubmitImportRequest]) (*connect.Response[v1.SubmitImportResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blackwood.v1.ImportService.SubmitImport is not implemented"))
+}
+
+func (UnimplementedImportServiceHandler) GetImportJobs(context.Context, *connect.Request[v1.GetImportJobsRequest]) (*connect.Response[v1.GetImportJobsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blackwood.v1.ImportService.GetImportJobs is not implemented"))
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/csweichel/blackwood/internal/api"
 	"github.com/csweichel/blackwood/internal/config"
 	"github.com/csweichel/blackwood/internal/describe"
+	"github.com/csweichel/blackwood/internal/importqueue"
 	"github.com/csweichel/blackwood/internal/index"
 	"github.com/csweichel/blackwood/internal/noteparser"
 	"github.com/csweichel/blackwood/internal/ocr"
@@ -122,8 +123,11 @@ func main() {
 	dnPath, dnHandler := blackwoodv1connect.NewDailyNotesServiceHandler(api.NewDailyNotesHandler(store, audioTranscriber, semanticIndex))
 	srv.Handle(dnPath, dnHandler)
 
+	// Create the background import worker (started after context is created below).
+	worker := importqueue.New(store, recognizer, semanticIndex, dataDir)
+
 	// Register the import service.
-	importPath, importHandler := blackwoodv1connect.NewImportServiceHandler(api.NewImportHandler(store, recognizer, semanticIndex))
+	importPath, importHandler := blackwoodv1connect.NewImportServiceHandler(api.NewImportHandler(store, recognizer, semanticIndex, worker, dataDir))
 	srv.Handle(importPath, importHandler)
 
 	// Register the chat service.
@@ -166,6 +170,9 @@ func main() {
 	// Graceful shutdown on SIGINT/SIGTERM.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// Start the background import worker.
+	go worker.Start(ctx)
 
 	// Start the Viwoods file watcher if configured.
 	if cfg.Watcher.WatchDir != "" {

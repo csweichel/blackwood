@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"connectrpc.com/connect"
 
 	blackwoodv1 "github.com/csweichel/blackwood/gen/blackwood/v1"
+	"github.com/csweichel/blackwood/internal/importqueue"
 	"github.com/csweichel/blackwood/internal/index"
 	"github.com/csweichel/blackwood/internal/noteparser"
 	"github.com/csweichel/blackwood/internal/ocr"
@@ -22,11 +24,13 @@ type ImportHandler struct {
 	store      *storage.Store
 	recognizer ocr.Recognizer // may be nil if no LLM config
 	indexer    *index.Index   // may be nil if not configured
+	worker     *importqueue.Worker
+	dataDir    string
 }
 
 // NewImportHandler creates a new ImportHandler backed by the given store and optional OCR recognizer.
-func NewImportHandler(store *storage.Store, recognizer ocr.Recognizer, indexer *index.Index) *ImportHandler {
-	return &ImportHandler{store: store, recognizer: recognizer, indexer: indexer}
+func NewImportHandler(store *storage.Store, recognizer ocr.Recognizer, indexer *index.Index, worker *importqueue.Worker, dataDir string) *ImportHandler {
+	return &ImportHandler{store: store, recognizer: recognizer, indexer: indexer, worker: worker, dataDir: dataDir}
 }
 
 // ImportViwoods parses an uploaded .note file, runs OCR on each page, and stores the result.
@@ -199,34 +203,86 @@ func (h *ImportHandler) ImportObsidian(ctx context.Context, req *connect.Request
 
 // parseDateFromFilename extracts a YYYY-MM-DD date string from an Obsidian daily note filename.
 func parseDateFromFilename(filename string) (string, error) {
-	name := strings.TrimSuffix(filename, ".md")
+	return importqueue.ParseDateFromFilename(filename)
+}
 
-	// Try YYYY-MM-DD (with optional suffix after space, e.g. "2025-01-15 Wed")
-	if len(name) >= 10 {
-		candidate := name[:10]
-		if _, err := time.Parse("2006-01-02", candidate); err == nil {
-			return candidate, nil
+// SubmitImport accepts files for background import processing.
+func (h *ImportHandler) SubmitImport(ctx context.Context, req *connect.Request[blackwoodv1.SubmitImportRequest]) (*connect.Response[blackwoodv1.SubmitImportResponse], error) {
+	if len(req.Msg.Files) == 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("at least one file is required"))
+	}
+
+	var jobIDs []string
+	for _, f := range req.Msg.Files {
+		// Determine file type from extension.
+		var fileType string
+		if strings.HasSuffix(f.Filename, ".note") {
+			fileType = "viwoods"
+		} else if strings.HasSuffix(f.Filename, ".md") {
+			fileType = "obsidian"
+		} else {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unsupported file type: %s", f.Filename))
+		}
+
+		// Create staging directory and write file before inserting the job,
+		// so the job row already has the correct file_path.
+		jobID := storage.NewUUID()
+		stagingDir := filepath.Join(h.dataDir, "import-staging", jobID)
+		if err := os.MkdirAll(stagingDir, 0o755); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create staging dir: %w", err))
+		}
+		filePath := filepath.Join(stagingDir, f.Filename)
+		if err := os.WriteFile(filePath, f.Content, 0o644); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("write staging file: %w", err))
+		}
+
+		job := &storage.ImportJob{
+			ID:       jobID,
+			Status:   "pending",
+			Filename: f.Filename,
+			FileType: fileType,
+			FilePath: filePath,
+			Source:   "upload",
+		}
+		if err := h.store.CreateImportJob(ctx, job); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create import job: %w", err))
+		}
+
+		jobIDs = append(jobIDs, job.ID)
+	}
+
+	// Wake the worker.
+	h.worker.Enqueue()
+
+	return connect.NewResponse(&blackwoodv1.SubmitImportResponse{
+		JobIds: jobIDs,
+	}), nil
+}
+
+// GetImportJobs returns the status of import jobs.
+func (h *ImportHandler) GetImportJobs(ctx context.Context, req *connect.Request[blackwoodv1.GetImportJobsRequest]) (*connect.Response[blackwoodv1.GetImportJobsResponse], error) {
+	jobs, err := h.store.ListImportJobs(ctx, req.Msg.Ids, req.Msg.ActiveOnly)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list import jobs: %w", err))
+	}
+
+	pbJobs := make([]*blackwoodv1.ImportJobStatus, len(jobs))
+	for i, j := range jobs {
+		pbJobs[i] = &blackwoodv1.ImportJobStatus{
+			Id:         j.ID,
+			Status:     j.Status,
+			Filename:   j.Filename,
+			FileType:   j.FileType,
+			Source:     j.Source,
+			Progress:   int32(j.Progress),
+			TotalSteps: int32(j.TotalSteps),
+			ResultJson: j.Result,
+			CreatedAt:  j.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:  j.UpdatedAt.Format(time.RFC3339),
 		}
 	}
 
-	// Try YYYY_MM_DD
-	if len(name) >= 10 {
-		candidate := strings.ReplaceAll(name[:10], "_", "-")
-		if _, err := time.Parse("2006-01-02", candidate); err == nil {
-			return candidate, nil
-		}
-	}
-
-	// Try DD-MM-YYYY
-	if len(name) >= 10 {
-		parts := strings.SplitN(name[:10], "-", 3)
-		if len(parts) == 3 {
-			candidate := parts[2] + "-" + parts[1] + "-" + parts[0]
-			if _, err := time.Parse("2006-01-02", candidate); err == nil {
-				return candidate, nil
-			}
-		}
-	}
-
-	return "", fmt.Errorf("cannot parse date from filename: %s", filename)
+	return connect.NewResponse(&blackwoodv1.GetImportJobsResponse{
+		Jobs: pbJobs,
+	}), nil
 }

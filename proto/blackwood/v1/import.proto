@@ -7,6 +7,8 @@ option go_package = "github.com/csweichel/blackwood/gen/blackwood/v1;blackwoodv1
 service ImportService {
   rpc ImportViwoods(ImportViwoodsRequest) returns (ImportViwoodsResponse);
   rpc ImportObsidian(ImportObsidianRequest) returns (ImportObsidianResponse);
+  rpc SubmitImport(SubmitImportRequest) returns (SubmitImportResponse);
+  rpc GetImportJobs(GetImportJobsRequest) returns (GetImportJobsResponse);
 }
 
 message ImportViwoodsRequest {
@@ -33,4 +35,39 @@ message ImportObsidianResponse {
   int32 imported = 1;
   int32 skipped = 2;
   repeated string errors = 3;
+}
+
+message ImportFile {
+  string filename = 1;
+  bytes content = 2;
+}
+
+message SubmitImportRequest {
+  repeated ImportFile files = 1;
+}
+
+message SubmitImportResponse {
+  repeated string job_ids = 1;
+}
+
+message ImportJobStatus {
+  string id = 1;
+  string status = 2;
+  string filename = 3;
+  string file_type = 4;
+  string source = 5;
+  int32 progress = 6;
+  int32 total_steps = 7;
+  string result_json = 8;
+  string created_at = 9;
+  string updated_at = 10;
+}
+
+message GetImportJobsRequest {
+  repeated string ids = 1;
+  bool active_only = 2;
+}
+
+message GetImportJobsResponse {
+  repeated ImportJobStatus jobs = 1;
 }

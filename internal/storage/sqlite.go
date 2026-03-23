@@ -76,6 +76,11 @@ type Message struct {
 	CreatedAt      time.Time
 }
 
+// NewUUID generates a random UUID v4 string.
+func NewUUID() string {
+	return newUUID()
+}
+
 func newUUID() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
@@ -590,6 +595,258 @@ func (s *Store) UpdateConversationTitle(ctx context.Context, id, title string) e
 	n, _ := res.RowsAffected()
 	if n == 0 {
 		return fmt.Errorf("update conversation title: not found")
+	}
+	return nil
+}
+
+// ImportJob represents a background import job.
+type ImportJob struct {
+	ID         string
+	Status     string // pending, processing, done, error
+	Filename   string
+	FileType   string // viwoods, obsidian
+	FilePath   string
+	Source     string // upload, watcher
+	Progress   int
+	TotalSteps int
+	Result     string // JSON
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+// CreateImportJob inserts a new import job into the database.
+func (s *Store) CreateImportJob(ctx context.Context, job *ImportJob) error {
+	if job.ID == "" {
+		job.ID = newUUID()
+	}
+	now := time.Now().UTC()
+	job.CreatedAt = now
+	job.UpdatedAt = now
+	if job.Result == "" {
+		job.Result = "{}"
+	}
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO import_jobs (id, status, filename, file_type, file_path, source, progress, total_steps, result, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		job.ID, job.Status, job.Filename, job.FileType, job.FilePath, job.Source,
+		job.Progress, job.TotalSteps, job.Result, job.CreatedAt, job.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("create import job: %w", err)
+	}
+	return nil
+}
+
+// GetImportJob retrieves a single import job by ID.
+func (s *Store) GetImportJob(ctx context.Context, id string) (*ImportJob, error) {
+	row := s.db.QueryRowContext(ctx,
+		`SELECT id, status, filename, file_type, file_path, source, progress, total_steps, result, created_at, updated_at
+		 FROM import_jobs WHERE id = ?`, id)
+	return scanImportJob(row)
+}
+
+// ListImportJobs returns import jobs filtered by IDs and/or active status.
+// If ids is non-empty, only those jobs are returned.
+// If activeOnly is true, only pending/processing jobs are returned.
+// Otherwise returns the most recent 50 jobs.
+func (s *Store) ListImportJobs(ctx context.Context, ids []string, activeOnly bool) ([]*ImportJob, error) {
+	var query strings.Builder
+	var args []any
+
+	query.WriteString(`SELECT id, status, filename, file_type, file_path, source, progress, total_steps, result, created_at, updated_at FROM import_jobs`)
+
+	var conditions []string
+	if len(ids) > 0 {
+		placeholders := make([]string, len(ids))
+		for i, id := range ids {
+			placeholders[i] = "?"
+			args = append(args, id)
+		}
+		conditions = append(conditions, "id IN ("+strings.Join(placeholders, ",")+")")
+	}
+	if activeOnly {
+		conditions = append(conditions, "status IN ('pending', 'processing')")
+	}
+	if len(conditions) > 0 {
+		query.WriteString(" WHERE ")
+		query.WriteString(strings.Join(conditions, " AND "))
+	}
+	query.WriteString(" ORDER BY created_at DESC")
+	if len(ids) == 0 && !activeOnly {
+		query.WriteString(" LIMIT 50")
+	}
+
+	rows, err := s.db.QueryContext(ctx, query.String(), args...)
+	if err != nil {
+		return nil, fmt.Errorf("list import jobs: %w", err)
+	}
+	defer rows.Close()
+
+	var jobs []*ImportJob
+	for rows.Next() {
+		var j ImportJob
+		if err := rows.Scan(&j.ID, &j.Status, &j.Filename, &j.FileType, &j.FilePath, &j.Source,
+			&j.Progress, &j.TotalSteps, &j.Result, &j.CreatedAt, &j.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan import job: %w", err)
+		}
+		jobs = append(jobs, &j)
+	}
+	return jobs, rows.Err()
+}
+
+// UpdateImportJobStatus sets the status of an import job.
+func (s *Store) UpdateImportJobStatus(ctx context.Context, id, status string) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE import_jobs SET status = ?, updated_at = ? WHERE id = ?`,
+		status, time.Now().UTC(), id,
+	)
+	if err != nil {
+		return fmt.Errorf("update import job status: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("update import job status: not found")
+	}
+	return nil
+}
+
+// UpdateImportJobProgress updates the progress counters of an import job.
+func (s *Store) UpdateImportJobProgress(ctx context.Context, id string, progress, totalSteps int) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE import_jobs SET progress = ?, total_steps = ?, updated_at = ? WHERE id = ?`,
+		progress, totalSteps, time.Now().UTC(), id,
+	)
+	if err != nil {
+		return fmt.Errorf("update import job progress: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("update import job progress: not found")
+	}
+	return nil
+}
+
+// UpdateImportJobResult sets the result JSON of an import job.
+func (s *Store) UpdateImportJobResult(ctx context.Context, id, result string) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE import_jobs SET result = ?, updated_at = ? WHERE id = ?`,
+		result, time.Now().UTC(), id,
+	)
+	if err != nil {
+		return fmt.Errorf("update import job result: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("update import job result: not found")
+	}
+	return nil
+}
+
+// ClaimNextPendingJob atomically transitions the oldest pending job to processing and returns it.
+// Returns nil, nil if no pending jobs exist.
+func (s *Store) ClaimNextPendingJob(ctx context.Context) (*ImportJob, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	// Find the oldest pending job.
+	row := tx.QueryRowContext(ctx,
+		`SELECT id FROM import_jobs WHERE status = 'pending' ORDER BY created_at LIMIT 1`)
+	var id string
+	if err := row.Scan(&id); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("find pending job: %w", err)
+	}
+
+	// Transition to processing.
+	now := time.Now().UTC()
+	_, err = tx.ExecContext(ctx,
+		`UPDATE import_jobs SET status = 'processing', updated_at = ? WHERE id = ?`, now, id)
+	if err != nil {
+		return nil, fmt.Errorf("claim job: %w", err)
+	}
+
+	// Read back the full row.
+	jobRow := tx.QueryRowContext(ctx,
+		`SELECT id, status, filename, file_type, file_path, source, progress, total_steps, result, created_at, updated_at
+		 FROM import_jobs WHERE id = ?`, id)
+	job, err := scanImportJob(jobRow)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit claim: %w", err)
+	}
+	return job, nil
+}
+
+// ResetProcessingJobs transitions any processing jobs back to pending.
+// Call on startup to recover from crashes.
+func (s *Store) ResetProcessingJobs(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE import_jobs SET status = 'pending', updated_at = ? WHERE status = 'processing'`,
+		time.Now().UTC(),
+	)
+	if err != nil {
+		return fmt.Errorf("reset processing jobs: %w", err)
+	}
+	return nil
+}
+
+// scanImportJob scans an ImportJob from a *sql.Row.
+func scanImportJob(row *sql.Row) (*ImportJob, error) {
+	var j ImportJob
+	if err := row.Scan(&j.ID, &j.Status, &j.Filename, &j.FileType, &j.FilePath, &j.Source,
+		&j.Progress, &j.TotalSteps, &j.Result, &j.CreatedAt, &j.UpdatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("import job not found")
+		}
+		return nil, fmt.Errorf("scan import job: %w", err)
+	}
+	return &j, nil
+}
+
+// WatchedFile tracks a file that has been processed by the watcher.
+type WatchedFile struct {
+	Path        string
+	Hash        string
+	JobID       string
+	ProcessedAt time.Time
+}
+
+// GetWatchedFile retrieves a watched file record by path.
+func (s *Store) GetWatchedFile(ctx context.Context, path string) (*WatchedFile, error) {
+	var wf WatchedFile
+	err := s.db.QueryRowContext(ctx,
+		`SELECT path, hash, job_id, processed_at FROM watched_files WHERE path = ?`, path,
+	).Scan(&wf.Path, &wf.Hash, &wf.JobID, &wf.ProcessedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get watched file: %w", err)
+	}
+	return &wf, nil
+}
+
+// UpsertWatchedFile inserts or updates a watched file record.
+func (s *Store) UpsertWatchedFile(ctx context.Context, wf *WatchedFile) error {
+	if wf.ProcessedAt.IsZero() {
+		wf.ProcessedAt = time.Now().UTC()
+	}
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO watched_files (path, hash, job_id, processed_at)
+		 VALUES (?, ?, ?, ?)
+		 ON CONFLICT(path) DO UPDATE SET hash = excluded.hash, job_id = excluded.job_id, processed_at = excluded.processed_at`,
+		wf.Path, wf.Hash, wf.JobID, wf.ProcessedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("upsert watched file: %w", err)
 	}
 	return nil
 }
