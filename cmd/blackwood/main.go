@@ -165,6 +165,9 @@ func main() {
 	// Serve attachment files.
 	srv.Handle("GET /api/attachments/{id}", api.ServeAttachment(store))
 
+	// PDF export for daily notes.
+	srv.Handle("GET /api/daily-notes/{date}/pdf", api.ServePDF(store))
+
 	// Serve web UI: filesystem first (development), then embedded (release binary).
 	if info, err := os.Stat("web/dist"); err == nil && info.IsDir() {
 		srv.Handle("/", http.FileServer(http.Dir("web/dist")))
