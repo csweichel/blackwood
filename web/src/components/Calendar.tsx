@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { listDatesWithContent } from "../api/client";
 
 interface CalendarProps {
@@ -23,56 +23,37 @@ function daysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
 }
 
-// Returns 0=Sun..6=Sat for the first day of the month
-function firstDayOfWeek(year: number, month: number): number {
-  return new Date(year, month, 1).getDay();
-}
-
 function dateStr(year: number, month: number, day: number): string {
   return `${year}-${pad(month + 1)}-${pad(day)}`;
 }
 
-interface DayCell {
+const WEEKDAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
+
+interface DayItem {
   date: string;
   day: number;
-  inMonth: boolean;
+  weekday: number; // 0=Sun..6=Sat
 }
 
-function buildGrid(year: number, month: number): DayCell[] {
-  const cells: DayCell[] = [];
-  const startDow = firstDayOfWeek(year, month);
-  const totalDays = daysInMonth(year, month);
-
-  // Previous month fill
-  const prevMonth = month === 0 ? 11 : month - 1;
-  const prevYear = month === 0 ? year - 1 : year;
-  const prevDays = daysInMonth(prevYear, prevMonth);
-  for (let i = startDow - 1; i >= 0; i--) {
-    const d = prevDays - i;
-    cells.push({ date: dateStr(prevYear, prevMonth, d), day: d, inMonth: false });
+function buildDays(year: number, month: number): DayItem[] {
+  const total = daysInMonth(year, month);
+  const days: DayItem[] = [];
+  for (let d = 1; d <= total; d++) {
+    const dt = new Date(year, month, d);
+    days.push({
+      date: dateStr(year, month, d),
+      day: d,
+      weekday: dt.getDay(),
+    });
   }
-
-  // Current month
-  for (let d = 1; d <= totalDays; d++) {
-    cells.push({ date: dateStr(year, month, d), day: d, inMonth: true });
-  }
-
-  // Next month fill (up to 42 cells = 6 rows)
-  const nextMonth = month === 11 ? 0 : month + 1;
-  const nextYear = month === 11 ? year + 1 : year;
-  let nextDay = 1;
-  while (cells.length < 42) {
-    cells.push({ date: dateStr(nextYear, nextMonth, nextDay), day: nextDay, inMonth: false });
-    nextDay++;
-  }
-
-  return cells;
+  return days;
 }
-
-const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
 export default function Calendar({ selectedDate, onSelectDate }: CalendarProps) {
   const today = todayStr();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const selectedRef = useRef<HTMLButtonElement>(null);
+
   const [year, setYear] = useState(() => {
     const d = new Date(selectedDate + "T00:00:00");
     return d.getFullYear();
@@ -84,7 +65,6 @@ export default function Calendar({ selectedDate, onSelectDate }: CalendarProps) 
   const [contentDates, setContentDates] = useState<Set<string>>(new Set());
 
   const fetchContentDates = useCallback(async (y: number, m: number) => {
-    // Fetch a range covering the visible grid (prev month tail to next month head)
     const start = dateStr(y, m, 1);
     const endDays = daysInMonth(y, m);
     const end = dateStr(y, m, endDays);
@@ -99,6 +79,17 @@ export default function Calendar({ selectedDate, onSelectDate }: CalendarProps) 
   useEffect(() => {
     fetchContentDates(year, month);
   }, [year, month, fetchContentDates]);
+
+  // Scroll selected day into view
+  useEffect(() => {
+    if (selectedRef.current && scrollRef.current) {
+      selectedRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "center",
+      });
+    }
+  }, [selectedDate, month, year]);
 
   function prevMonth() {
     if (month === 0) {
@@ -125,79 +116,84 @@ export default function Calendar({ selectedDate, onSelectDate }: CalendarProps) 
     onSelectDate(todayStr());
   }
 
-  const grid = buildGrid(year, month);
+  const days = buildDays(year, month);
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Month navigation */}
-      <div className="p-3 border-b border-gray-200">
-        <div className="flex items-center justify-between mb-2">
+    <div className="border-b border-border bg-card">
+      <div className="max-w-3xl mx-auto px-4 md:px-6 py-3">
+        {/* Month nav row */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={prevMonth}
+              className="w-7 h-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <span className="text-sm font-medium min-w-[140px] text-center text-foreground">
+              {formatMonth(year, month)}
+            </span>
+            <button
+              onClick={nextMonth}
+              className="w-7 h-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
           <button
-            onClick={prevMonth}
-            className="w-7 h-7 flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+            onClick={goToday}
+            className="text-xs text-muted-foreground hover:text-accent transition-colors"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <span className="text-sm font-semibold text-gray-900">
-            {formatMonth(year, month)}
-          </span>
-          <button
-            onClick={nextMonth}
-            className="w-7 h-7 flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
+            Today
           </button>
         </div>
-        <button
-          onClick={goToday}
-          className="w-full px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+
+        {/* Days row */}
+        <div
+          ref={scrollRef}
+          className="flex items-end gap-1 overflow-x-auto scrollbar-hide pb-1"
         >
-          Today
-        </button>
-      </div>
+          {days.map((day) => {
+            const isToday = day.date === today;
+            const isSelected = day.date === selectedDate;
+            const hasContent = contentDates.has(day.date);
 
-      {/* Calendar grid */}
-      <div className="p-3">
-        {/* Weekday headers */}
-        <div className="grid grid-cols-7 mb-1">
-          {WEEKDAYS.map((d) => (
-            <div key={d} className="text-center text-xs font-medium text-gray-400 py-1">
-              {d}
-            </div>
-          ))}
-        </div>
-
-        {/* Day cells */}
-        <div className="grid grid-cols-7">
-          {grid.map((cell) => {
-            const isToday = cell.date === today;
-            const isSelected = cell.date === selectedDate;
-            const hasContent = contentDates.has(cell.date);
+            let btnClass =
+              "flex flex-col items-center min-w-[32px] py-1.5 px-1 rounded-md transition-colors cursor-pointer ";
+            if (isSelected) {
+              btnClass += "bg-primary text-primary-foreground";
+            } else if (isToday) {
+              btnClass += "text-accent hover:bg-muted";
+            } else {
+              btnClass += "text-foreground hover:bg-muted";
+            }
 
             return (
               <button
-                key={cell.date}
-                onClick={() => onSelectDate(cell.date)}
-                className={`
-                  relative w-full aspect-square flex flex-col items-center justify-center rounded-md text-xs transition-colors
-                  ${!cell.inMonth ? "text-gray-300" : "text-gray-700"}
-                  ${isSelected ? "bg-blue-600 text-white" : ""}
-                  ${isToday && !isSelected ? "ring-1 ring-blue-500 text-blue-600 font-semibold" : ""}
-                  ${!isSelected ? "hover:bg-gray-100" : ""}
-                `}
+                key={day.date}
+                ref={isSelected ? selectedRef : undefined}
+                onClick={() => onSelectDate(day.date)}
+                className={btnClass}
               >
-                <span>{cell.day}</span>
-                {hasContent && (
-                  <span
-                    className={`absolute bottom-0.5 w-1 h-1 rounded-full ${
-                      isSelected ? "bg-white" : "bg-blue-500"
-                    }`}
-                  />
-                )}
+                <span className="text-[10px] uppercase leading-none mb-0.5">
+                  {WEEKDAY_LETTERS[day.weekday]}
+                </span>
+                <span className="text-sm font-medium leading-none">
+                  {day.day}
+                </span>
+                <div className="h-1.5 mt-0.5 flex items-center justify-center">
+                  {hasContent && (
+                    <div
+                      className={`w-1 h-1 rounded-full ${
+                        isSelected ? "bg-primary-foreground" : "bg-accent"
+                      }`}
+                    />
+                  )}
+                </div>
               </button>
             );
           })}

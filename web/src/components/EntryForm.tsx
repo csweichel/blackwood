@@ -46,7 +46,7 @@ export default function EntryForm({ date, onCreated }: EntryFormProps) {
 
   return (
     <div className="space-y-2">
-      <form onSubmit={handleSubmit} className="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-2 py-1.5 shadow-sm">
+      <form onSubmit={handleSubmit} className="flex items-center gap-2 bg-card border border-border rounded-full px-2 py-1.5 shadow-sm">
         <div className="flex items-center gap-1 pl-1">
           <button
             type="button"
@@ -55,8 +55,8 @@ export default function EntryForm({ date, onCreated }: EntryFormProps) {
             className={`
               w-8 h-8 flex items-center justify-center rounded-full transition-colors
               ${activePanel === "audio"
-                ? "bg-red-100 text-red-600"
-                : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"}
+                ? "bg-destructive/10 text-destructive"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"}
             `}
           >
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -71,8 +71,8 @@ export default function EntryForm({ date, onCreated }: EntryFormProps) {
             className={`
               w-8 h-8 flex items-center justify-center rounded-full transition-colors
               ${activePanel === "photo"
-                ? "bg-blue-100 text-blue-600"
-                : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"}
+                ? "bg-muted text-accent"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"}
             `}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -87,12 +87,12 @@ export default function EntryForm({ date, onCreated }: EntryFormProps) {
           value={content}
           onChange={(e) => setContent(e.target.value)}
           placeholder="Add an entry..."
-          className="flex-1 text-sm bg-transparent border-none outline-none placeholder:text-gray-400 py-1"
+          className="flex-1 text-sm bg-transparent border-none outline-none placeholder:text-muted-foreground py-1 text-foreground"
         />
         <button
           type="submit"
           disabled={submitting || !content.trim()}
-          className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors shrink-0"
+          className="w-8 h-8 flex items-center justify-center rounded-full bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition-colors shrink-0"
         >
           {submitting ? (
             <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

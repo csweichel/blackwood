@@ -153,14 +153,14 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="text-gray-400 text-sm">Loading...</div>
+        <div className="text-muted-foreground text-sm">Loading...</div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">
+      <div className="bg-muted border border-destructive/30 rounded-lg p-4 text-destructive text-sm">
         {error}
       </div>
     );
@@ -169,7 +169,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-3 md:mb-4">
-        <h2 className="text-lg md:text-xl font-semibold text-gray-900">
+        <h2 className="text-lg md:text-xl font-semibold text-foreground">
           {formatDateHeading(date)}
         </h2>
         <div className="flex items-center gap-3">
@@ -178,11 +178,11 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
               saveStatus === "idle" ? "opacity-0" : "opacity-100"
             } ${
               saveStatus === "saving"
-                ? "text-gray-400"
+                ? "text-muted-foreground"
                 : saveStatus === "saved"
-                ? "text-green-500"
+                ? "text-accent"
                 : saveStatus === "error"
-                ? "text-red-500"
+                ? "text-destructive"
                 : ""
             }`}
           >
@@ -197,7 +197,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
           {!editing ? (
             <button
               onClick={startEditing}
-              className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+              className="px-3 py-1.5 text-xs font-medium text-muted-foreground bg-muted rounded-md hover:bg-border transition-colors"
             >
               Edit
             </button>
@@ -205,13 +205,13 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
             <div className="flex items-center gap-2">
               <button
                 onClick={handleCancel}
-                className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                className="px-3 py-1.5 text-xs font-medium text-muted-foreground bg-muted rounded-md hover:bg-border transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
-                className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+                className="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:opacity-90 transition-colors"
               >
                 Done
               </button>
@@ -239,7 +239,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
           </div>
         ) : (
           <div className="note-empty" onClick={startEditing}>
-            <p className="text-gray-400 text-sm">
+            <p className="text-muted-foreground text-sm">
               No entries yet. Click to start writing, or add an entry below.
             </p>
           </div>
@@ -247,6 +247,14 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
       </div>
 
       <EntryForm date={date} onCreated={handleEntryCreated} />
+
+      <div className="mt-12 pt-6 border-t border-border">
+        <p className="text-xs text-muted-foreground">
+          <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Cmd+T</kbd> insert time
+          <span className="mx-2">&middot;</span>
+          <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Esc</kbd> exit edit
+        </p>
+      </div>
     </div>
   );
 }

@@ -9,10 +9,10 @@ export default function ImportBanner({ activeCount, onClick }: ImportBannerProps
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-full transition-colors"
+      className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-accent bg-muted hover:bg-border rounded-full transition-colors"
     >
       <svg
-        className="w-3.5 h-3.5 animate-spin text-blue-500"
+        className="w-3.5 h-3.5 animate-spin text-accent"
         viewBox="0 0 24 24"
         fill="none"
       >

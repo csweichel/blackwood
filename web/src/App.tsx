@@ -15,7 +15,6 @@ function todayStr(): string {
 
 export default function App() {
   const [selectedDate, setSelectedDate] = useState(todayStr());
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeView, setActiveView] = useState<View>("notes");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -32,7 +31,6 @@ export default function App() {
 
   function handleSelectDate(date: string) {
     setSelectedDate(date);
-    setSidebarOpen(false);
   }
 
   const handleNavigateToDate = useCallback((date: string) => {
@@ -41,96 +39,70 @@ export default function App() {
   }, []);
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div className="h-screen flex flex-col bg-background">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          {activeView === "notes" && (
+      <header className="border-b border-border bg-card shrink-0">
+        <div className="max-w-3xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
+          <h1 className="text-lg font-medium tracking-tight text-foreground">Blackwood</h1>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".md,.note"
+              multiple
+              className="hidden"
+              onChange={handleImportFiles}
+            />
             <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="md:hidden text-gray-500 hover:text-gray-700"
+              onClick={() => fileInputRef.current?.click()}
+              className="px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground bg-muted hover:bg-border rounded-lg transition-colors"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
+              Import
             </button>
-          )}
-          <h1 className="text-lg font-semibold text-gray-900">Blackwood</h1>
-        </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".md,.note"
-            multiple
-            className="hidden"
-            onChange={handleImportFiles}
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-          >
-            Import
-          </button>
+            <ImportBanner
+              activeCount={activeCount}
+              onClick={() => setImportModalOpen(true)}
+            />
 
-          <ImportBanner
-            activeCount={activeCount}
-            onClick={() => setImportModalOpen(true)}
-          />
-
-        {/* View toggle */}
-        <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
-          <button
-            onClick={() => setActiveView("notes")}
-            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              activeView === "notes"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            Notes
-          </button>
-          <button
-            onClick={() => setActiveView("chat")}
-            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              activeView === "chat"
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            Chat
-          </button>
-        </div>
+            {/* View toggle */}
+            <div className="flex items-center bg-muted rounded-lg p-0.5">
+              <button
+                onClick={() => setActiveView("notes")}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  activeView === "notes"
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Notes
+              </button>
+              <button
+                onClick={() => setActiveView("chat")}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  activeView === "chat"
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Chat
+              </button>
+            </div>
+          </div>
         </div>
       </header>
 
       {/* Body */}
       {activeView === "notes" ? (
-        <div className="flex flex-1 overflow-hidden relative">
-          {/* Sidebar overlay on mobile */}
-          {sidebarOpen && (
-            <div
-              className="fixed inset-0 bg-black/30 z-10 md:hidden"
-              onClick={() => setSidebarOpen(false)}
-            />
-          )}
-
-          {/* Sidebar */}
-          <aside
-            className={`
-              bg-white border-r border-gray-200 w-64 shrink-0 flex flex-col
-              fixed inset-y-0 left-0 z-20 pt-14 transition-transform md:relative md:pt-0 md:translate-x-0
-              ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
-            `}
-          >
-            <Calendar selectedDate={selectedDate} onSelectDate={handleSelectDate} />
-          </aside>
+        <div className="flex flex-col flex-1 overflow-hidden">
+          {/* Horizontal calendar timeline */}
+          <Calendar selectedDate={selectedDate} onSelectDate={handleSelectDate} />
 
           {/* Main content */}
-          <main className="flex-1 overflow-y-auto px-3 py-4 md:p-6">
-            <div className="max-w-none md:max-w-2xl md:mx-auto">
+          <main className="flex-1 overflow-y-auto">
+            <div className="max-w-3xl mx-auto px-4 md:px-6 py-6">
               <DailyNoteView key={selectedDate} date={selectedDate} />
             </div>
           </main>

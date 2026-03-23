@@ -20,12 +20,12 @@ function StatusIcon({ status }: { status: ImportFileResult["status"] }) {
   switch (status) {
     case "pending":
       return (
-        <span className="inline-block w-4 h-4 rounded-full bg-gray-300 shrink-0" />
+        <span className="inline-block w-4 h-4 rounded-full bg-muted shrink-0" />
       );
     case "processing":
       return (
         <svg
-          className="w-4 h-4 shrink-0 animate-spin text-blue-500"
+          className="w-4 h-4 shrink-0 animate-spin text-accent"
           viewBox="0 0 24 24"
           fill="none"
         >
@@ -47,7 +47,7 @@ function StatusIcon({ status }: { status: ImportFileResult["status"] }) {
     case "done":
       return (
         <svg
-          className="w-4 h-4 shrink-0 text-green-500"
+          className="w-4 h-4 shrink-0 text-accent"
           viewBox="0 0 20 20"
           fill="currentColor"
         >
@@ -61,7 +61,7 @@ function StatusIcon({ status }: { status: ImportFileResult["status"] }) {
     case "error":
       return (
         <svg
-          className="w-4 h-4 shrink-0 text-red-500"
+          className="w-4 h-4 shrink-0 text-destructive"
           viewBox="0 0 20 20"
           fill="currentColor"
         >
@@ -113,14 +113,14 @@ export default function ImportModal({
         if (!isProcessing && e.target === backdropRef.current) onClose();
       }}
     >
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden animate-in fade-in">
+      <div className="bg-card rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden animate-in fade-in">
         {/* Header */}
         <div className="px-5 pt-5 pb-3">
-          <h2 className="text-lg font-semibold text-gray-900">
+          <h2 className="text-lg font-semibold text-foreground">
             {isProcessing ? "Importing files..." : "Import complete"}
           </h2>
           {isProcessing && files.length > 1 && (
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-muted-foreground mt-1">
               {doneCount} of {files.length} files
             </p>
           )}
@@ -136,25 +136,25 @@ export default function ImportModal({
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <p className="text-sm font-medium text-gray-900 truncate">
+                    <p className="text-sm font-medium text-foreground truncate">
                       {file.filename}
                     </p>
                     {file.source === "watcher" && (
-                      <span className="shrink-0 text-[10px] font-medium text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+                      <span className="shrink-0 text-[10px] font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                         auto-imported
                       </span>
                     )}
                   </div>
                   {file.status === "processing" && (
-                    <p className="text-xs text-blue-500">
+                    <p className="text-xs text-accent">
                       {file.message || "Processing..."}
                     </p>
                   )}
                   {file.status === "done" && file.message && (
-                    <p className="text-xs text-gray-500">{file.message}</p>
+                    <p className="text-xs text-muted-foreground">{file.message}</p>
                   )}
                   {file.status === "error" && file.message && (
-                    <p className="text-xs text-red-600">{file.message}</p>
+                    <p className="text-xs text-destructive">{file.message}</p>
                   )}
                 </div>
               </li>
@@ -164,18 +164,18 @@ export default function ImportModal({
 
         {/* Footer */}
         {!isProcessing && (
-          <div className="px-5 py-3 bg-gray-50 border-t border-gray-200 flex justify-end gap-2">
+          <div className="px-5 py-3 bg-muted border-t border-border flex justify-end gap-2">
             {navigableDate && onNavigateToDate && (
               <button
                 onClick={() => onNavigateToDate(navigableDate)}
-                className="px-3 py-1.5 text-sm font-medium text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors"
+                className="px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary hover:opacity-90 rounded-lg transition-colors"
               >
                 View notes
               </button>
             )}
             <button
               onClick={onClose}
-              className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
+              className="px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground bg-card border border-border hover:bg-muted rounded-lg transition-colors"
             >
               Close
             </button>

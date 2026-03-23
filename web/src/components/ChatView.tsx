@@ -59,7 +59,7 @@ export default function ChatView({ onNavigateToDate }: ChatViewProps) {
       {/* Conversation sidebar */}
       <aside
         className={`
-          bg-white border-r border-gray-200 w-64 shrink-0 flex flex-col
+          bg-card border-r border-border w-64 shrink-0 flex flex-col
           fixed inset-y-0 left-0 z-20 pt-14 transition-transform md:relative md:pt-0 md:translate-x-0
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
         `}
@@ -75,10 +75,10 @@ export default function ChatView({ onNavigateToDate }: ChatViewProps) {
       {/* Chat area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile toggle for conversation list */}
-        <div className="md:hidden border-b border-gray-200 px-3 py-2">
+        <div className="md:hidden border-b border-border px-3 py-2">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
+            className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />

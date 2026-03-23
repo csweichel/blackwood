@@ -1,28 +1,72 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+:root {
+  --background: #FAF8F5;
+  --foreground: #2C2416;
+  --card: #FFFFFF;
+  --card-foreground: #2C2416;
+  --muted: #F0EBE3;
+  --muted-foreground: #6B5D4D;
+  --accent: #B8860B;
+  --accent-foreground: #FFFFFF;
+  --border: #E5DFD5;
+  --destructive: #B54343;
+  --primary: #2C2416;
+  --primary-foreground: #FAF8F5;
+}
+
+@theme inline {
+  --font-sans: 'Source Serif 4', Georgia, serif;
+  --font-mono: 'JetBrains Mono', Menlo, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+}
+
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Source Serif 4', Georgia, serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* --- Scrollbar hide utility --- */
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
 /* --- Prose overrides for clean, minimal note rendering --- */
 
 .note-prose {
-  --tw-prose-body: #374151;
-  --tw-prose-headings: #111827;
-  --tw-prose-links: #2563eb;
-  --tw-prose-bold: #1f2937;
-  --tw-prose-counters: #6b7280;
-  --tw-prose-bullets: #9ca3af;
-  --tw-prose-hr: #e5e7eb;
-  --tw-prose-quotes: #6b7280;
-  --tw-prose-quote-borders: #d1d5db;
-  --tw-prose-code: #1f2937;
-  --tw-prose-pre-code: #1f2937;
-  --tw-prose-pre-bg: #f9fafb;
+  --tw-prose-body: var(--foreground);
+  --tw-prose-headings: var(--foreground);
+  --tw-prose-links: var(--accent);
+  --tw-prose-bold: var(--foreground);
+  --tw-prose-counters: var(--muted-foreground);
+  --tw-prose-bullets: var(--muted-foreground);
+  --tw-prose-hr: var(--border);
+  --tw-prose-quotes: var(--muted-foreground);
+  --tw-prose-quote-borders: var(--accent);
+  --tw-prose-code: var(--foreground);
+  --tw-prose-pre-code: var(--foreground);
+  --tw-prose-pre-bg: var(--muted);
   line-height: 1.75;
   font-size: 0.9375rem;
 }
@@ -33,6 +77,7 @@ body {
   margin-top: 1.5em;
   margin-bottom: 0.5em;
   line-height: 1.3;
+  color: var(--foreground);
 }
 
 .note-prose h2 {
@@ -41,6 +86,7 @@ body {
   margin-top: 1.4em;
   margin-bottom: 0.4em;
   line-height: 1.35;
+  color: var(--foreground);
 }
 
 .note-prose h3 {
@@ -49,6 +95,7 @@ body {
   margin-top: 1.25em;
   margin-bottom: 0.35em;
   line-height: 1.4;
+  color: var(--foreground);
 }
 
 .note-prose h1:first-child,
@@ -63,12 +110,12 @@ body {
 }
 
 .note-prose blockquote {
-  border-left: 2px solid var(--tw-prose-quote-borders);
+  border-left: 2px solid var(--accent);
   padding-left: 1em;
   margin-left: 0;
   margin-top: 0.75em;
   margin-bottom: 0.75em;
-  color: var(--tw-prose-quotes);
+  color: var(--muted-foreground);
   font-style: normal;
   background: none;
 }
@@ -79,11 +126,12 @@ body {
 }
 
 .note-prose code:not(pre code) {
-  background: #f3f4f6;
+  background: var(--muted);
   padding: 0.15em 0.35em;
   border-radius: 0.25rem;
   font-size: 0.85em;
   font-weight: 400;
+  font-family: 'JetBrains Mono', Menlo, monospace;
 }
 
 .note-prose code::before,
@@ -92,8 +140,8 @@ body {
 }
 
 .note-prose pre {
-  background: var(--tw-prose-pre-bg);
-  border: 1px solid #e5e7eb;
+  background: var(--muted);
+  border: 1px solid var(--border);
   border-radius: 0.5rem;
   padding: 0.875em 1em;
   overflow-x: auto;
@@ -101,10 +149,11 @@ body {
   line-height: 1.6;
   margin-top: 0.75em;
   margin-bottom: 0.75em;
+  font-family: 'JetBrains Mono', Menlo, monospace;
 }
 
 .note-prose a {
-  color: var(--tw-prose-links);
+  color: var(--accent);
   text-decoration: none;
 }
 
@@ -128,7 +177,7 @@ body {
 .note-prose hr {
   margin-top: 1.25em;
   margin-bottom: 1.25em;
-  border-color: var(--tw-prose-hr);
+  border-color: var(--border);
 }
 
 .note-prose img {
@@ -142,8 +191,8 @@ body {
 .wikilink {
   display: inline-flex;
   align-items: center;
-  background: #eff6ff;
-  color: #2563eb;
+  background: var(--muted);
+  color: var(--accent);
   padding: 0.05em 0.5em;
   border-radius: 9999px;
   font-size: 0.875em;
@@ -155,15 +204,15 @@ body {
 }
 
 .wikilink:hover {
-  background: #dbeafe;
+  background: var(--border);
 }
 
 /* --- Note container responsive --- */
 
 .note-container {
   cursor: text;
-  background: white;
-  border: 1px solid #f3f4f6;
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 0.5rem;
   padding: 1rem;
 }
@@ -173,16 +222,16 @@ body {
   align-items: center;
   justify-content: center;
   cursor: text;
-  background: white;
-  border: 1px solid #f3f4f6;
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 0.5rem;
   padding: 3rem 1rem;
 }
 
 .note-editor {
   width: 100%;
-  background: white;
-  border: 1px solid #f3f4f6;
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 0.5rem;
   padding: 1rem;
   min-height: 300px;
@@ -193,7 +242,7 @@ body {
 }
 
 .note-editor .cm-scroller {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Source Serif 4', Georgia, serif;
 }
 
 @media (max-width: 767px) {

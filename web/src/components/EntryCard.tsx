@@ -32,7 +32,7 @@ export default function EntryCard({ entry, onDeleted }: EntryCardProps) {
   }
 
   function renderContent() {
-    const textBlock = (text: string, color = "text-gray-800") => (
+    const textBlock = (text: string, color = "text-foreground") => (
       <div className={`whitespace-pre-wrap font-sans text-sm ${color}`} style={{ lineHeight: "1.7" }}>
         {text}
       </div>
@@ -45,7 +45,7 @@ export default function EntryCard({ entry, onDeleted }: EntryCardProps) {
       case EntryType.AUDIO:
         return (
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
               </svg>
@@ -81,7 +81,7 @@ export default function EntryCard({ entry, onDeleted }: EntryCardProps) {
                 className="max-w-full rounded-lg max-h-64 object-contain"
               />
             ))}
-            {entry.content && textBlock(entry.content, "text-gray-700")}
+            {entry.content && textBlock(entry.content, "text-muted-foreground")}
           </div>
         );
 
@@ -100,7 +100,7 @@ export default function EntryCard({ entry, onDeleted }: EntryCardProps) {
                 href={url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 hover:underline text-sm break-all"
+                className="text-accent hover:underline text-sm break-all"
               >
                 {url}
               </a>
@@ -116,23 +116,23 @@ export default function EntryCard({ entry, onDeleted }: EntryCardProps) {
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+    <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-foreground">
             {entryTypeLabel[entry.type] ?? "Unknown"}
           </span>
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-accent">
             {entrySourceLabel[entry.source] ?? "Unknown"}
           </span>
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-muted-foreground">
             {formatTime(entry.createdAt)}
           </span>
         </div>
         <button
           onClick={handleDelete}
           disabled={deleting}
-          className="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
+          className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
           title="Delete entry"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
