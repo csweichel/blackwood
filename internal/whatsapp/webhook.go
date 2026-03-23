@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/csweichel/blackwood/internal/describe"
+	"github.com/csweichel/blackwood/internal/index"
 	"github.com/csweichel/blackwood/internal/storage"
 	"github.com/csweichel/blackwood/internal/transcribe"
 )
@@ -26,6 +27,7 @@ type WebhookHandler struct {
 	store       *storage.Store
 	transcriber transcribe.Transcriber // may be nil
 	describer   describe.Describer     // may be nil
+	indexer     *index.Index           // may be nil
 }
 
 // WebhookConfig holds the configuration for the WhatsApp webhook.
@@ -36,7 +38,7 @@ type WebhookConfig struct {
 	PhoneNumberID string
 }
 
-func NewWebhookHandler(cfg WebhookConfig, store *storage.Store, transcriber transcribe.Transcriber, describer describe.Describer) *WebhookHandler {
+func NewWebhookHandler(cfg WebhookConfig, store *storage.Store, transcriber transcribe.Transcriber, describer describe.Describer, indexer *index.Index) *WebhookHandler {
 	return &WebhookHandler{
 		verifyToken: cfg.VerifyToken,
 		appSecret:   cfg.AppSecret,
@@ -44,6 +46,7 @@ func NewWebhookHandler(cfg WebhookConfig, store *storage.Store, transcriber tran
 		store:       store,
 		transcriber: transcriber,
 		describer:   describer,
+		indexer:     indexer,
 	}
 }
 
@@ -204,14 +207,21 @@ func (h *WebhookHandler) handleText(ctx context.Context, from, text string) {
 		return
 	}
 
-	if err := h.store.CreateEntry(ctx, &storage.Entry{
+	entry := &storage.Entry{
 		DailyNoteID: note.ID,
 		Type:        "text",
 		Content:     text,
 		Source:      "whatsapp",
-	}); err != nil {
+	}
+	if err := h.store.CreateEntry(ctx, entry); err != nil {
 		slog.Error("whatsapp: create text entry", "error", err)
 		return
+	}
+
+	if h.indexer != nil && text != "" {
+		if err := h.indexer.IndexEntry(ctx, entry.ID, text); err != nil {
+			slog.Warn("whatsapp: failed to index text entry", "entry_id", entry.ID, "error", err)
+		}
 	}
 
 	if err := h.client.SendTextMessage(ctx, from, "✓ Added to your daily notes"); err != nil {
@@ -256,19 +266,25 @@ func (h *WebhookHandler) handleAudio(ctx context.Context, from, mediaID, mimeTyp
 		return
 	}
 
-	entry := &storage.Entry{
+	audioEntry := &storage.Entry{
 		DailyNoteID: note.ID,
 		Type:        "audio",
 		Content:     text,
 		Source:      "whatsapp",
 	}
-	if err := h.store.CreateEntry(ctx, entry); err != nil {
+	if err := h.store.CreateEntry(ctx, audioEntry); err != nil {
 		slog.Error("whatsapp: create audio entry", "error", err)
 		return
 	}
 
+	if h.indexer != nil && text != "" {
+		if err := h.indexer.IndexEntry(ctx, audioEntry.ID, text); err != nil {
+			slog.Warn("whatsapp: failed to index audio entry", "entry_id", audioEntry.ID, "error", err)
+		}
+	}
+
 	if err := h.store.CreateAttachment(ctx, &storage.Attachment{
-		EntryID:     entry.ID,
+		EntryID:     audioEntry.ID,
 		Filename:    "voice." + format,
 		ContentType: contentType,
 	}, data, date); err != nil {
@@ -317,15 +333,21 @@ func (h *WebhookHandler) handleImage(ctx context.Context, from, mediaID, mimeTyp
 		return
 	}
 
-	entry := &storage.Entry{
+	imgEntry := &storage.Entry{
 		DailyNoteID: note.ID,
 		Type:        "photo",
 		Content:     description,
 		Source:      "whatsapp",
 	}
-	if err := h.store.CreateEntry(ctx, entry); err != nil {
+	if err := h.store.CreateEntry(ctx, imgEntry); err != nil {
 		slog.Error("whatsapp: create image entry", "error", err)
 		return
+	}
+
+	if h.indexer != nil && description != "" {
+		if err := h.indexer.IndexEntry(ctx, imgEntry.ID, description); err != nil {
+			slog.Warn("whatsapp: failed to index image entry", "entry_id", imgEntry.ID, "error", err)
+		}
 	}
 
 	ext := "jpg"
@@ -333,7 +355,7 @@ func (h *WebhookHandler) handleImage(ctx context.Context, from, mediaID, mimeTyp
 		ext = "png"
 	}
 	if err := h.store.CreateAttachment(ctx, &storage.Attachment{
-		EntryID:     entry.ID,
+		EntryID:     imgEntry.ID,
 		Filename:    "photo." + ext,
 		ContentType: contentType,
 	}, data, date); err != nil {

@@ -28,6 +28,8 @@ func corsMiddleware(next http.Handler, allowedOrigins []string) http.Handler {
 }
 
 // responseRecorder captures the status code written by downstream handlers.
+// It also implements http.Flusher so that streaming (e.g. Connect server-streaming)
+// works through the middleware chain.
 type responseRecorder struct {
 	http.ResponseWriter
 	statusCode int
@@ -36,6 +38,18 @@ type responseRecorder struct {
 func (rr *responseRecorder) WriteHeader(code int) {
 	rr.statusCode = code
 	rr.ResponseWriter.WriteHeader(code)
+}
+
+func (rr *responseRecorder) Flush() {
+	if f, ok := rr.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// Unwrap returns the underlying ResponseWriter, allowing http.ResponseController
+// and similar helpers to discover interfaces on the original writer.
+func (rr *responseRecorder) Unwrap() http.ResponseWriter {
+	return rr.ResponseWriter
 }
 
 // loggingMiddleware logs each request with method, path, status, and duration.

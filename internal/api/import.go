@@ -11,6 +11,7 @@ import (
 	"connectrpc.com/connect"
 
 	blackwoodv1 "github.com/csweichel/blackwood/gen/blackwood/v1"
+	"github.com/csweichel/blackwood/internal/index"
 	"github.com/csweichel/blackwood/internal/noteparser"
 	"github.com/csweichel/blackwood/internal/ocr"
 	"github.com/csweichel/blackwood/internal/storage"
@@ -20,11 +21,12 @@ import (
 type ImportHandler struct {
 	store      *storage.Store
 	recognizer ocr.Recognizer // may be nil if no LLM config
+	indexer    *index.Index   // may be nil if not configured
 }
 
 // NewImportHandler creates a new ImportHandler backed by the given store and optional OCR recognizer.
-func NewImportHandler(store *storage.Store, recognizer ocr.Recognizer) *ImportHandler {
-	return &ImportHandler{store: store, recognizer: recognizer}
+func NewImportHandler(store *storage.Store, recognizer ocr.Recognizer, indexer *index.Index) *ImportHandler {
+	return &ImportHandler{store: store, recognizer: recognizer, indexer: indexer}
 }
 
 // ImportViwoods parses an uploaded .note file, runs OCR on each page, and stores the result.
@@ -95,6 +97,12 @@ func (h *ImportHandler) ImportViwoods(ctx context.Context, req *connect.Request[
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create entry: %w", err))
 	}
 
+	if h.indexer != nil && entry.Content != "" {
+		if err := h.indexer.IndexEntry(ctx, entry.ID, entry.Content); err != nil {
+			slog.Warn("failed to index viwoods entry", "entry_id", entry.ID, "error", err)
+		}
+	}
+
 	// Store each page PNG as an attachment.
 	for i, page := range note.Pages {
 		att := &storage.Attachment{
@@ -161,6 +169,10 @@ func (h *ImportHandler) ImportObsidian(ctx context.Context, req *connect.Request
 		}
 		if err := h.store.CreateEntry(ctx, entry); err != nil {
 			slog.Warn("failed to create audit entry for obsidian import", "file", f.Filename, "error", err)
+		} else if h.indexer != nil && content != "" {
+			if err := h.indexer.IndexEntry(ctx, entry.ID, content); err != nil {
+				slog.Warn("failed to index obsidian entry", "entry_id", entry.ID, "error", err)
+			}
 		}
 
 		imported++

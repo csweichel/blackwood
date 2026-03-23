@@ -11,6 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	blackwoodv1 "github.com/csweichel/blackwood/gen/blackwood/v1"
+	"github.com/csweichel/blackwood/internal/index"
 	"github.com/csweichel/blackwood/internal/storage"
 	"github.com/csweichel/blackwood/internal/transcribe"
 )
@@ -51,11 +52,12 @@ var protoToEntrySource = map[blackwoodv1.EntrySource]string{
 type DailyNotesHandler struct {
 	store       *storage.Store
 	transcriber transcribe.Transcriber // may be nil if not configured
+	indexer     *index.Index           // may be nil if not configured
 }
 
 // NewDailyNotesHandler creates a new DailyNotesHandler backed by the given store.
-func NewDailyNotesHandler(store *storage.Store, transcriber transcribe.Transcriber) *DailyNotesHandler {
-	return &DailyNotesHandler{store: store, transcriber: transcriber}
+func NewDailyNotesHandler(store *storage.Store, transcriber transcribe.Transcriber, indexer *index.Index) *DailyNotesHandler {
+	return &DailyNotesHandler{store: store, transcriber: transcriber, indexer: indexer}
 }
 
 // GetDailyNote returns the daily note for the given date, including entries and attachments.
@@ -156,6 +158,13 @@ func (h *DailyNotesHandler) CreateEntry(ctx context.Context, req *connect.Reques
 			if err := h.store.UpdateEntryContent(ctx, entry.ID, text); err != nil {
 				slog.Warn("failed to update entry with transcription", "error", err)
 			}
+		}
+	}
+
+	// Index the entry for semantic search.
+	if h.indexer != nil && entry.Content != "" {
+		if err := h.indexer.IndexEntry(ctx, entry.ID, entry.Content); err != nil {
+			slog.Warn("failed to index entry", "entry_id", entry.ID, "error", err)
 		}
 	}
 

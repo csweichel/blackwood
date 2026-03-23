@@ -99,31 +99,34 @@ func main() {
 		slog.Info("audio transcriber enabled")
 	}
 
-	// Register the daily notes service.
-	dnPath, dnHandler := blackwoodv1connect.NewDailyNotesServiceHandler(api.NewDailyNotesHandler(store, audioTranscriber))
-	srv.Handle(dnPath, dnHandler)
-
-	// Register the import service.
-	importPath, importHandler := blackwoodv1connect.NewImportServiceHandler(api.NewImportHandler(store, recognizer))
-	srv.Handle(importPath, importHandler)
-
-	// Set up the RAG chat service. When the OpenAI API key is missing the
-	// route still exists but returns a proper error instead of a 404.
+	// Set up the semantic index and RAG engine if OpenAI API key is configured.
+	var semanticIndex *index.Index
 	var ragEngine *rag.Engine
 	if apiKey := cfg.APIKey(); apiKey != "" {
 		embClient := index.NewOpenAIEmbeddingClient(apiKey)
 
-		idx, err := index.New(store.DB(), embClient)
+		var err error
+		semanticIndex, err = index.New(store.DB(), embClient)
 		if err != nil {
 			slog.Error("create index", "error", err)
 			os.Exit(1)
 		}
 
-		ragEngine = rag.New(idx, store, apiKey, cfg.OpenAI.ChatModel)
+		ragEngine = rag.New(semanticIndex, store, apiKey, cfg.OpenAI.ChatModel)
 		slog.Info("chat service enabled", "model", cfg.OpenAI.ChatModel)
 	} else {
-		slog.Warn("chat service registered but disabled: no OpenAI API key configured")
+		slog.Warn("chat and indexing disabled: no OpenAI API key configured")
 	}
+
+	// Register the daily notes service.
+	dnPath, dnHandler := blackwoodv1connect.NewDailyNotesServiceHandler(api.NewDailyNotesHandler(store, audioTranscriber, semanticIndex))
+	srv.Handle(dnPath, dnHandler)
+
+	// Register the import service.
+	importPath, importHandler := blackwoodv1connect.NewImportServiceHandler(api.NewImportHandler(store, recognizer, semanticIndex))
+	srv.Handle(importPath, importHandler)
+
+	// Register the chat service.
 	chatPath, chatHandler := blackwoodv1connect.NewChatServiceHandler(api.NewChatHandler(ragEngine, store))
 	srv.Handle(chatPath, chatHandler)
 
@@ -143,7 +146,7 @@ func main() {
 			d = describe.NewVision(apiKey, cfg.OpenAI.Model)
 		}
 
-		waHandler := whatsapp.NewWebhookHandler(waCfg, store, t, d)
+		waHandler := whatsapp.NewWebhookHandler(waCfg, store, t, d, semanticIndex)
 		srv.Handle("/api/webhooks/whatsapp", waHandler)
 		slog.Info("WhatsApp webhook enabled")
 	}

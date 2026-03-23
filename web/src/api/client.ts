@@ -113,15 +113,27 @@ export async function getConversation(id: string): Promise<Conversation> {
   return rpc<{ id: string }, Conversation>("GetConversation", { id }, CHAT_SERVICE);
 }
 
-// Streaming chat - reads NDJSON response from Connect-go server streaming
+// Connect protocol envelope: 1 byte flags + 4 byte big-endian length + payload.
+function envelopeRequest(payload: object): Blob {
+  const json = new TextEncoder().encode(JSON.stringify(payload));
+  const header = new Uint8Array(5);
+  header[0] = 0; // flags: uncompressed
+  new DataView(header.buffer).setUint32(1, json.length, false);
+  return new Blob([header, json]);
+}
+
+// Streaming chat using Connect server-streaming protocol.
 export async function* streamChat(
   conversationId: string,
   message: string
 ): AsyncGenerator<{ content: string; done: boolean; conversationId: string; sources: SourceReference[] }> {
   const resp = await fetch(`${CHAT_SERVICE}/Chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/connect+json" },
-    body: JSON.stringify({ conversationId, message }),
+    headers: {
+      "Content-Type": "application/connect+json",
+      "Connect-Protocol-Version": "1",
+    },
+    body: envelopeRequest({ conversationId, message }),
   });
   if (!resp.ok) {
     const text = await resp.text();
@@ -130,22 +142,31 @@ export async function* streamChat(
 
   const reader = resp.body!.getReader();
   const decoder = new TextDecoder();
-  let buffer = "";
+  let pending = new Uint8Array(0);
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop()!;
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      const parsed = JSON.parse(line);
-      yield parsed.result;
+
+    const next = new Uint8Array(pending.length + value.length);
+    next.set(pending);
+    next.set(value, pending.length);
+    pending = next;
+
+    // Parse complete envelopes from the buffer.
+    while (pending.length >= 5) {
+      const flags = pending[0];
+      const len = new DataView(pending.buffer, pending.byteOffset).getUint32(1, false);
+      if (pending.length < 5 + len) break;
+
+      const payload = pending.slice(5, 5 + len);
+      pending = pending.slice(5 + len);
+
+      // Flags 0x02 = end-of-stream trailers; skip.
+      if (flags & 0x02) continue;
+
+      const parsed = JSON.parse(decoder.decode(payload));
+      yield parsed;
     }
-  }
-  if (buffer.trim()) {
-    const parsed = JSON.parse(buffer);
-    yield parsed.result;
   }
 }

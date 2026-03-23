@@ -15,7 +15,7 @@ import (
 func TestVerification_Success(t *testing.T) {
 	h := NewWebhookHandler(WebhookConfig{
 		VerifyToken: "my-secret",
-	}, nil, nil, nil)
+	}, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/api/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=my-secret&hub.challenge=challenge123",
@@ -36,7 +36,7 @@ func TestVerification_Success(t *testing.T) {
 func TestVerification_WrongToken(t *testing.T) {
 	h := NewWebhookHandler(WebhookConfig{
 		VerifyToken: "my-secret",
-	}, nil, nil, nil)
+	}, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/api/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=wrong-token&hub.challenge=challenge123",
@@ -53,7 +53,7 @@ func TestVerification_WrongToken(t *testing.T) {
 func TestVerification_WrongMode(t *testing.T) {
 	h := NewWebhookHandler(WebhookConfig{
 		VerifyToken: "my-secret",
-	}, nil, nil, nil)
+	}, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/api/webhooks/whatsapp?hub.mode=unsubscribe&hub.verify_token=my-secret&hub.challenge=challenge123",
@@ -148,7 +148,7 @@ func TestIncomingPost_InvalidSignature(t *testing.T) {
 	h := NewWebhookHandler(WebhookConfig{
 		VerifyToken: "token",
 		AppSecret:   "secret",
-	}, nil, nil, nil)
+	}, nil, nil, nil, nil)
 
 	body := `{"object":"whatsapp_business_account","entry":[]}`
 	req := httptest.NewRequest(http.MethodPost, "/api/webhooks/whatsapp", strings.NewReader(body))
@@ -167,7 +167,7 @@ func TestIncomingPost_ValidSignature(t *testing.T) {
 	h := NewWebhookHandler(WebhookConfig{
 		VerifyToken: "token",
 		AppSecret:   secret,
-	}, nil, nil, nil)
+	}, nil, nil, nil, nil)
 
 	body := `{"object":"whatsapp_business_account","entry":[]}`
 	mac := hmac.New(sha256.New, []byte(secret))
@@ -189,7 +189,7 @@ func TestIncomingPost_NoSignatureCheck(t *testing.T) {
 	// When appSecret is empty, signature verification is skipped.
 	h := NewWebhookHandler(WebhookConfig{
 		VerifyToken: "token",
-	}, nil, nil, nil)
+	}, nil, nil, nil, nil)
 
 	body := `{"object":"whatsapp_business_account","entry":[]}`
 	req := httptest.NewRequest(http.MethodPost, "/api/webhooks/whatsapp", strings.NewReader(body))
@@ -203,7 +203,7 @@ func TestIncomingPost_NoSignatureCheck(t *testing.T) {
 }
 
 func TestMethodNotAllowed(t *testing.T) {
-	h := NewWebhookHandler(WebhookConfig{}, nil, nil, nil)
+	h := NewWebhookHandler(WebhookConfig{}, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodPut, "/api/webhooks/whatsapp", nil)
 	w := httptest.NewRecorder()
@@ -261,7 +261,7 @@ func TestTextMessageProcessing(t *testing.T) {
 		VerifyToken:   "token",
 		AccessToken:   "test-token",
 		PhoneNumberID: "phone123",
-	}, store, nil, nil)
+	}, store, nil, nil, nil)
 	// Override the client's base URL to point to our test server.
 	h.client.baseURL = apiSrv.URL
 
