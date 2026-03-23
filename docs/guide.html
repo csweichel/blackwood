@@ -361,7 +361,15 @@
       <!-- Configure -->
       <h2 id="configure">3. Configure</h2>
 
-      <p>Blackwood uses a YAML config file. Create the data directory and config:</p>
+      <h3>Interactive setup (recommended)</h3>
+      <p>The quickest way to configure Blackwood is the interactive setup command. It creates directories, stores your secrets, and generates a config file:</p>
+
+<pre><code><span class="command">./blackwood setup</span></code></pre>
+
+      <p>Once complete, skip ahead to <a href="#run">Run the Server</a>.</p>
+
+      <h3>Manual setup</h3>
+      <p>Alternatively, create the data directory and config by hand:</p>
 
 <pre><code><span class="command">mkdir -p ~/.blackwood/secrets</span></code></pre>
 
