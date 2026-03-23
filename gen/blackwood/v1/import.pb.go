@@ -641,6 +641,86 @@ func (x *GetImportJobsResponse) GetJobs() []*ImportJobStatus {
 	return nil
 }
 
+type DeleteImportJobRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteImportJobRequest) Reset() {
+	*x = DeleteImportJobRequest{}
+	mi := &file_blackwood_v1_import_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteImportJobRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteImportJobRequest) ProtoMessage() {}
+
+func (x *DeleteImportJobRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blackwood_v1_import_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteImportJobRequest.ProtoReflect.Descriptor instead.
+func (*DeleteImportJobRequest) Descriptor() ([]byte, []int) {
+	return file_blackwood_v1_import_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *DeleteImportJobRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type DeleteImportJobResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteImportJobResponse) Reset() {
+	*x = DeleteImportJobResponse{}
+	mi := &file_blackwood_v1_import_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteImportJobResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteImportJobResponse) ProtoMessage() {}
+
+func (x *DeleteImportJobResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blackwood_v1_import_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteImportJobResponse.ProtoReflect.Descriptor instead.
+func (*DeleteImportJobResponse) Descriptor() ([]byte, []int) {
+	return file_blackwood_v1_import_proto_rawDescGZIP(), []int{12}
+}
+
 var File_blackwood_v1_import_proto protoreflect.FileDescriptor
 
 const file_blackwood_v1_import_proto_rawDesc = "" +
@@ -691,12 +771,16 @@ const file_blackwood_v1_import_proto_rawDesc = "" +
 	"\vactive_only\x18\x02 \x01(\bR\n" +
 	"activeOnly\"J\n" +
 	"\x15GetImportJobsResponse\x121\n" +
-	"\x04jobs\x18\x01 \x03(\v2\x1d.blackwood.v1.ImportJobStatusR\x04jobs2\xf7\x02\n" +
+	"\x04jobs\x18\x01 \x03(\v2\x1d.blackwood.v1.ImportJobStatusR\x04jobs\"(\n" +
+	"\x16DeleteImportJobRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x19\n" +
+	"\x17DeleteImportJobResponse2\xd7\x03\n" +
 	"\rImportService\x12X\n" +
 	"\rImportViwoods\x12\".blackwood.v1.ImportViwoodsRequest\x1a#.blackwood.v1.ImportViwoodsResponse\x12[\n" +
 	"\x0eImportObsidian\x12#.blackwood.v1.ImportObsidianRequest\x1a$.blackwood.v1.ImportObsidianResponse\x12U\n" +
 	"\fSubmitImport\x12!.blackwood.v1.SubmitImportRequest\x1a\".blackwood.v1.SubmitImportResponse\x12X\n" +
-	"\rGetImportJobs\x12\".blackwood.v1.GetImportJobsRequest\x1a#.blackwood.v1.GetImportJobsResponseB=Z;github.com/csweichel/blackwood/gen/blackwood/v1;blackwoodv1b\x06proto3"
+	"\rGetImportJobs\x12\".blackwood.v1.GetImportJobsRequest\x1a#.blackwood.v1.GetImportJobsResponse\x12^\n" +
+	"\x0fDeleteImportJob\x12$.blackwood.v1.DeleteImportJobRequest\x1a%.blackwood.v1.DeleteImportJobResponseB=Z;github.com/csweichel/blackwood/gen/blackwood/v1;blackwoodv1b\x06proto3"
 
 var (
 	file_blackwood_v1_import_proto_rawDescOnce sync.Once
@@ -710,19 +794,21 @@ func file_blackwood_v1_import_proto_rawDescGZIP() []byte {
 	return file_blackwood_v1_import_proto_rawDescData
 }
 
-var file_blackwood_v1_import_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_blackwood_v1_import_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_blackwood_v1_import_proto_goTypes = []any{
-	(*ImportViwoodsRequest)(nil),   // 0: blackwood.v1.ImportViwoodsRequest
-	(*ImportViwoodsResponse)(nil),  // 1: blackwood.v1.ImportViwoodsResponse
-	(*ObsidianFile)(nil),           // 2: blackwood.v1.ObsidianFile
-	(*ImportObsidianRequest)(nil),  // 3: blackwood.v1.ImportObsidianRequest
-	(*ImportObsidianResponse)(nil), // 4: blackwood.v1.ImportObsidianResponse
-	(*ImportFile)(nil),             // 5: blackwood.v1.ImportFile
-	(*SubmitImportRequest)(nil),    // 6: blackwood.v1.SubmitImportRequest
-	(*SubmitImportResponse)(nil),   // 7: blackwood.v1.SubmitImportResponse
-	(*ImportJobStatus)(nil),        // 8: blackwood.v1.ImportJobStatus
-	(*GetImportJobsRequest)(nil),   // 9: blackwood.v1.GetImportJobsRequest
-	(*GetImportJobsResponse)(nil),  // 10: blackwood.v1.GetImportJobsResponse
+	(*ImportViwoodsRequest)(nil),    // 0: blackwood.v1.ImportViwoodsRequest
+	(*ImportViwoodsResponse)(nil),   // 1: blackwood.v1.ImportViwoodsResponse
+	(*ObsidianFile)(nil),            // 2: blackwood.v1.ObsidianFile
+	(*ImportObsidianRequest)(nil),   // 3: blackwood.v1.ImportObsidianRequest
+	(*ImportObsidianResponse)(nil),  // 4: blackwood.v1.ImportObsidianResponse
+	(*ImportFile)(nil),              // 5: blackwood.v1.ImportFile
+	(*SubmitImportRequest)(nil),     // 6: blackwood.v1.SubmitImportRequest
+	(*SubmitImportResponse)(nil),    // 7: blackwood.v1.SubmitImportResponse
+	(*ImportJobStatus)(nil),         // 8: blackwood.v1.ImportJobStatus
+	(*GetImportJobsRequest)(nil),    // 9: blackwood.v1.GetImportJobsRequest
+	(*GetImportJobsResponse)(nil),   // 10: blackwood.v1.GetImportJobsResponse
+	(*DeleteImportJobRequest)(nil),  // 11: blackwood.v1.DeleteImportJobRequest
+	(*DeleteImportJobResponse)(nil), // 12: blackwood.v1.DeleteImportJobResponse
 }
 var file_blackwood_v1_import_proto_depIdxs = []int32{
 	2,  // 0: blackwood.v1.ImportObsidianRequest.files:type_name -> blackwood.v1.ObsidianFile
@@ -732,12 +818,14 @@ var file_blackwood_v1_import_proto_depIdxs = []int32{
 	3,  // 4: blackwood.v1.ImportService.ImportObsidian:input_type -> blackwood.v1.ImportObsidianRequest
 	6,  // 5: blackwood.v1.ImportService.SubmitImport:input_type -> blackwood.v1.SubmitImportRequest
 	9,  // 6: blackwood.v1.ImportService.GetImportJobs:input_type -> blackwood.v1.GetImportJobsRequest
-	1,  // 7: blackwood.v1.ImportService.ImportViwoods:output_type -> blackwood.v1.ImportViwoodsResponse
-	4,  // 8: blackwood.v1.ImportService.ImportObsidian:output_type -> blackwood.v1.ImportObsidianResponse
-	7,  // 9: blackwood.v1.ImportService.SubmitImport:output_type -> blackwood.v1.SubmitImportResponse
-	10, // 10: blackwood.v1.ImportService.GetImportJobs:output_type -> blackwood.v1.GetImportJobsResponse
-	7,  // [7:11] is the sub-list for method output_type
-	3,  // [3:7] is the sub-list for method input_type
+	11, // 7: blackwood.v1.ImportService.DeleteImportJob:input_type -> blackwood.v1.DeleteImportJobRequest
+	1,  // 8: blackwood.v1.ImportService.ImportViwoods:output_type -> blackwood.v1.ImportViwoodsResponse
+	4,  // 9: blackwood.v1.ImportService.ImportObsidian:output_type -> blackwood.v1.ImportObsidianResponse
+	7,  // 10: blackwood.v1.ImportService.SubmitImport:output_type -> blackwood.v1.SubmitImportResponse
+	10, // 11: blackwood.v1.ImportService.GetImportJobs:output_type -> blackwood.v1.GetImportJobsResponse
+	12, // 12: blackwood.v1.ImportService.DeleteImportJob:output_type -> blackwood.v1.DeleteImportJobResponse
+	8,  // [8:13] is the sub-list for method output_type
+	3,  // [3:8] is the sub-list for method input_type
 	3,  // [3:3] is the sub-list for extension type_name
 	3,  // [3:3] is the sub-list for extension extendee
 	0,  // [0:3] is the sub-list for field type_name
@@ -754,7 +842,7 @@ func file_blackwood_v1_import_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_blackwood_v1_import_proto_rawDesc), len(file_blackwood_v1_import_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -303,3 +303,14 @@ func (h *ImportHandler) GetImportJobs(ctx context.Context, req *connect.Request[
 		Jobs: pbJobs,
 	}), nil
 }
+
+// DeleteImportJob removes an import job and its staging file.
+func (h *ImportHandler) DeleteImportJob(ctx context.Context, req *connect.Request[blackwoodv1.DeleteImportJobRequest]) (*connect.Response[blackwoodv1.DeleteImportJobResponse], error) {
+	if req.Msg.Id == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("id is required"))
+	}
+	if err := h.store.DeleteImportJob(ctx, req.Msg.Id); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("delete import job: %w", err))
+	}
+	return connect.NewResponse(&blackwoodv1.DeleteImportJobResponse{}), nil
+}

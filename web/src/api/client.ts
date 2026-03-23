@@ -138,6 +138,12 @@ export async function getImportJobs(
   );
 }
 
+export async function deleteImportJob(id: string): Promise<void> {
+  await rpc<{id: string}, Record<string, never>>(
+    "DeleteImportJob", { id }, IMPORT_SERVICE
+  );
+}
+
 // Chat API
 
 export async function listConversations(limit = 50, offset = 0): Promise<ListConversationsResponse> {

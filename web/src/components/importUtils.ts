@@ -31,6 +31,7 @@ export function jobToFileResult(job: ImportJobStatus): ImportFileResult {
   }
 
   return {
+    id: job.id,
     filename: job.filename,
     status: job.status === "processing" ? "processing" : (job.status as ImportFileResult["status"]),
     message,

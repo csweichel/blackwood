@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getImportJobs, submitImport } from "../api/client";
+import { getImportJobs, submitImport, deleteImportJob } from "../api/client";
 import type { ImportJobStatus } from "../api/types";
 
 interface UseImportJobsReturn {
@@ -7,6 +7,7 @@ interface UseImportJobsReturn {
   activeCount: number;
   submit: (files: File[]) => Promise<void>;
   refresh: () => Promise<void>;
+  deleteJob: (id: string) => Promise<void>;
 }
 
 function isActive(job: ImportJobStatus): boolean {
@@ -107,11 +108,24 @@ export function useImportJobs(): UseImportJobsReturn {
     [poll, startPolling]
   );
 
+  const deleteJob = useCallback(
+    async (id: string) => {
+      try {
+        await deleteImportJob(id);
+      } catch {
+        // Ignore errors — remove from local state regardless
+      }
+      trackedIds.current.delete(id);
+      setJobs((prev) => prev.filter((j) => j.id !== id));
+    },
+    []
+  );
+
   const refresh = useCallback(async () => {
     await poll();
   }, [poll]);
 
   const activeCount = jobs.filter(isActive).length;
 
-  return { jobs, activeCount, submit, refresh };
+  return { jobs, activeCount, submit, refresh, deleteJob };
 }

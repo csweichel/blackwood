@@ -45,6 +45,9 @@ const (
 	// ImportServiceGetImportJobsProcedure is the fully-qualified name of the ImportService's
 	// GetImportJobs RPC.
 	ImportServiceGetImportJobsProcedure = "/blackwood.v1.ImportService/GetImportJobs"
+	// ImportServiceDeleteImportJobProcedure is the fully-qualified name of the ImportService's
+	// DeleteImportJob RPC.
+	ImportServiceDeleteImportJobProcedure = "/blackwood.v1.ImportService/DeleteImportJob"
 )
 
 // ImportServiceClient is a client for the blackwood.v1.ImportService service.
@@ -53,6 +56,7 @@ type ImportServiceClient interface {
 	ImportObsidian(context.Context, *connect.Request[v1.ImportObsidianRequest]) (*connect.Response[v1.ImportObsidianResponse], error)
 	SubmitImport(context.Context, *connect.Request[v1.SubmitImportRequest]) (*connect.Response[v1.SubmitImportResponse], error)
 	GetImportJobs(context.Context, *connect.Request[v1.GetImportJobsRequest]) (*connect.Response[v1.GetImportJobsResponse], error)
+	DeleteImportJob(context.Context, *connect.Request[v1.DeleteImportJobRequest]) (*connect.Response[v1.DeleteImportJobResponse], error)
 }
 
 // NewImportServiceClient constructs a client for the blackwood.v1.ImportService service. By
@@ -90,15 +94,22 @@ func NewImportServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(importServiceMethods.ByName("GetImportJobs")),
 			connect.WithClientOptions(opts...),
 		),
+		deleteImportJob: connect.NewClient[v1.DeleteImportJobRequest, v1.DeleteImportJobResponse](
+			httpClient,
+			baseURL+ImportServiceDeleteImportJobProcedure,
+			connect.WithSchema(importServiceMethods.ByName("DeleteImportJob")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // importServiceClient implements ImportServiceClient.
 type importServiceClient struct {
-	importViwoods  *connect.Client[v1.ImportViwoodsRequest, v1.ImportViwoodsResponse]
-	importObsidian *connect.Client[v1.ImportObsidianRequest, v1.ImportObsidianResponse]
-	submitImport   *connect.Client[v1.SubmitImportRequest, v1.SubmitImportResponse]
-	getImportJobs  *connect.Client[v1.GetImportJobsRequest, v1.GetImportJobsResponse]
+	importViwoods   *connect.Client[v1.ImportViwoodsRequest, v1.ImportViwoodsResponse]
+	importObsidian  *connect.Client[v1.ImportObsidianRequest, v1.ImportObsidianResponse]
+	submitImport    *connect.Client[v1.SubmitImportRequest, v1.SubmitImportResponse]
+	getImportJobs   *connect.Client[v1.GetImportJobsRequest, v1.GetImportJobsResponse]
+	deleteImportJob *connect.Client[v1.DeleteImportJobRequest, v1.DeleteImportJobResponse]
 }
 
 // ImportViwoods calls blackwood.v1.ImportService.ImportViwoods.
@@ -121,12 +132,18 @@ func (c *importServiceClient) GetImportJobs(ctx context.Context, req *connect.Re
 	return c.getImportJobs.CallUnary(ctx, req)
 }
 
+// DeleteImportJob calls blackwood.v1.ImportService.DeleteImportJob.
+func (c *importServiceClient) DeleteImportJob(ctx context.Context, req *connect.Request[v1.DeleteImportJobRequest]) (*connect.Response[v1.DeleteImportJobResponse], error) {
+	return c.deleteImportJob.CallUnary(ctx, req)
+}
+
 // ImportServiceHandler is an implementation of the blackwood.v1.ImportService service.
 type ImportServiceHandler interface {
 	ImportViwoods(context.Context, *connect.Request[v1.ImportViwoodsRequest]) (*connect.Response[v1.ImportViwoodsResponse], error)
 	ImportObsidian(context.Context, *connect.Request[v1.ImportObsidianRequest]) (*connect.Response[v1.ImportObsidianResponse], error)
 	SubmitImport(context.Context, *connect.Request[v1.SubmitImportRequest]) (*connect.Response[v1.SubmitImportResponse], error)
 	GetImportJobs(context.Context, *connect.Request[v1.GetImportJobsRequest]) (*connect.Response[v1.GetImportJobsResponse], error)
+	DeleteImportJob(context.Context, *connect.Request[v1.DeleteImportJobRequest]) (*connect.Response[v1.DeleteImportJobResponse], error)
 }
 
 // NewImportServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -160,6 +177,12 @@ func NewImportServiceHandler(svc ImportServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(importServiceMethods.ByName("GetImportJobs")),
 		connect.WithHandlerOptions(opts...),
 	)
+	importServiceDeleteImportJobHandler := connect.NewUnaryHandler(
+		ImportServiceDeleteImportJobProcedure,
+		svc.DeleteImportJob,
+		connect.WithSchema(importServiceMethods.ByName("DeleteImportJob")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/blackwood.v1.ImportService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ImportServiceImportViwoodsProcedure:
@@ -170,6 +193,8 @@ func NewImportServiceHandler(svc ImportServiceHandler, opts ...connect.HandlerOp
 			importServiceSubmitImportHandler.ServeHTTP(w, r)
 		case ImportServiceGetImportJobsProcedure:
 			importServiceGetImportJobsHandler.ServeHTTP(w, r)
+		case ImportServiceDeleteImportJobProcedure:
+			importServiceDeleteImportJobHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -193,4 +218,8 @@ func (UnimplementedImportServiceHandler) SubmitImport(context.Context, *connect.
 
 func (UnimplementedImportServiceHandler) GetImportJobs(context.Context, *connect.Request[v1.GetImportJobsRequest]) (*connect.Response[v1.GetImportJobsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blackwood.v1.ImportService.GetImportJobs is not implemented"))
+}
+
+func (UnimplementedImportServiceHandler) DeleteImportJob(context.Context, *connect.Request[v1.DeleteImportJobRequest]) (*connect.Response[v1.DeleteImportJobResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blackwood.v1.ImportService.DeleteImportJob is not implemented"))
 }
