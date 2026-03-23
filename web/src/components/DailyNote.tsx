@@ -90,6 +90,127 @@ function rehypeYoutubeEmbed() {
 }
 
 /**
+ * Rehype plugin that makes headings and nested list items collapsible
+ * by wrapping them in <details open> / <summary> elements.
+ */
+function rehypeCollapsible() {
+  const HEADING_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6"]);
+
+  function headingLevel(tagName: string): number {
+    return parseInt(tagName.charAt(1), 10);
+  }
+
+  function isHeading(node: any): boolean {
+    return node.type === "element" && HEADING_TAGS.has(node.tagName);
+  }
+
+  function wrapHeadingSections(parent: any) {
+    const newChildren: any[] = [];
+    let i = 0;
+
+    while (i < parent.children.length) {
+      const node = parent.children[i];
+
+      if (!isHeading(node)) {
+        newChildren.push(node);
+        i++;
+        continue;
+      }
+
+      const level = headingLevel(node.tagName);
+      const sectionContent: any[] = [];
+      let j = i + 1;
+
+      // Collect siblings until the next heading of equal or higher level
+      while (j < parent.children.length) {
+        const sibling = parent.children[j];
+        if (isHeading(sibling) && headingLevel(sibling.tagName) <= level) {
+          break;
+        }
+        sectionContent.push(sibling);
+        j++;
+      }
+
+      const detailsNode = {
+        type: "element",
+        tagName: "details",
+        properties: { open: true },
+        children: [
+          {
+            type: "element",
+            tagName: "summary",
+            properties: {},
+            children: [
+              {
+                type: "element",
+                tagName: node.tagName,
+                properties: { ...(node.properties || {}) },
+                children: [...(node.children || [])],
+              },
+            ],
+          },
+          ...sectionContent,
+        ],
+      };
+
+      newChildren.push(detailsNode);
+      i = j;
+    }
+
+    parent.children = newChildren;
+  }
+
+  function wrapListItems(tree: any) {
+    visit(tree, "element", (node: any) => {
+      if (node.tagName !== "li") return;
+
+      const hasNestedList = node.children?.some(
+        (c: any) =>
+          c.type === "element" && (c.tagName === "ul" || c.tagName === "ol")
+      );
+      if (!hasNestedList) return;
+
+      const summaryContent: any[] = [];
+      const detailsBody: any[] = [];
+
+      for (const child of node.children) {
+        if (
+          child.type === "element" &&
+          (child.tagName === "ul" || child.tagName === "ol")
+        ) {
+          detailsBody.push(child);
+        } else {
+          summaryContent.push(child);
+        }
+      }
+
+      node.children = [
+        {
+          type: "element",
+          tagName: "details",
+          properties: { open: true },
+          children: [
+            {
+              type: "element",
+              tagName: "summary",
+              properties: {},
+              children: summaryContent,
+            },
+            ...detailsBody,
+          ],
+        },
+      ];
+    });
+  }
+
+  return (tree: any) => {
+    // Process list items first (deeper in the tree), then headings at the top level
+    wrapListItems(tree);
+    wrapHeadingSections(tree);
+  };
+}
+
+/**
  * Remark plugin that converts Obsidian-style [[wikilinks]] into
  * <span class="wikilink"> elements for styled rendering.
  */
@@ -389,7 +510,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
             className="prose prose-sm max-w-none note-prose note-container"
             onClick={startEditing}
           >
-            <Markdown remarkPlugins={[remarkWikilinks]} rehypePlugins={[rehypeRaw, rehypeYoutubeEmbed]}>
+            <Markdown remarkPlugins={[remarkWikilinks]} rehypePlugins={[rehypeRaw, rehypeYoutubeEmbed, rehypeCollapsible]}>
               {content}
             </Markdown>
           </div>
