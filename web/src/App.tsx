@@ -199,8 +199,8 @@ export default function App() {
           </aside>
 
           {/* Main content */}
-          <main className="flex-1 overflow-y-auto p-4 md:p-6">
-            <div className="max-w-2xl mx-auto">
+          <main className="flex-1 overflow-y-auto px-3 py-4 md:p-6">
+            <div className="max-w-none md:max-w-2xl md:mx-auto">
               <DailyNoteView key={selectedDate} date={selectedDate} />
             </div>
           </main>

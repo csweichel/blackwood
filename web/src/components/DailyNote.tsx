@@ -1,8 +1,50 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import Markdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
+import { visit } from "unist-util-visit";
 import { getDailyNote, updateDailyNoteContent } from "../api/client";
 import EntryForm from "./EntryForm";
+
+/**
+ * Remark plugin that converts Obsidian-style [[wikilinks]] into
+ * <span class="wikilink"> elements for styled rendering.
+ */
+function remarkWikilinks() {
+  return (tree: any) => {
+    visit(tree, "text", (node: any, index: number | undefined, parent: any) => {
+      if (index === undefined || !parent) return;
+      const regex = /\[\[([^\]]+)\]\]/g;
+      const value: string = node.value;
+      if (!regex.test(value)) return;
+
+      // Reset regex after test
+      regex.lastIndex = 0;
+      const children: any[] = [];
+      let lastIndex = 0;
+      let match: RegExpExecArray | null;
+
+      while ((match = regex.exec(value)) !== null) {
+        // Text before the match
+        if (match.index > lastIndex) {
+          children.push({ type: "text", value: value.slice(lastIndex, match.index) });
+        }
+        // The wikilink as an inline HTML node
+        children.push({
+          type: "html",
+          value: `<span class="wikilink">${match[1]}</span>`,
+        });
+        lastIndex = regex.lastIndex;
+      }
+
+      // Remaining text after last match
+      if (lastIndex < value.length) {
+        children.push({ type: "text", value: value.slice(lastIndex) });
+      }
+
+      parent.children.splice(index, 1, ...children);
+    });
+  };
+}
 
 interface DailyNoteViewProps {
   date: string;
@@ -125,8 +167,8 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold text-gray-900">
+      <div className="flex items-center justify-between mb-3 md:mb-4">
+        <h2 className="text-lg md:text-xl font-semibold text-gray-900">
           {formatDateHeading(date)}
         </h2>
         <div className="flex items-center gap-3">
@@ -183,22 +225,23 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
             value={editContent}
             onChange={handleEditChange}
             placeholder="Start writing..."
-            className="w-full h-full min-h-[300px] border border-gray-200 rounded-lg p-4 text-sm font-mono leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+            className="note-textarea"
             autoFocus
           />
         ) : content.trim() ? (
           <div
-            className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-hr:border-gray-200 prose-strong:text-gray-900 cursor-text rounded-lg p-4 bg-white border border-gray-100 min-h-[300px]"
+            className="prose prose-sm max-w-none note-prose note-container"
             onClick={startEditing}
           >
-            <Markdown rehypePlugins={[rehypeRaw]}>{content}</Markdown>
+            <Markdown remarkPlugins={[remarkWikilinks]} rehypePlugins={[rehypeRaw]}>
+              {content}
+            </Markdown>
           </div>
         ) : (
-          <div
-            className="rounded-lg p-4 bg-white border border-gray-100 min-h-[300px] flex items-center justify-center cursor-text"
-            onClick={startEditing}
-          >
-            <p className="text-gray-400 text-sm">No entries yet. Click to start writing, or add an entry below.</p>
+          <div className="note-empty" onClick={startEditing}>
+            <p className="text-gray-400 text-sm">
+              No entries yet. Click to start writing, or add an entry below.
+            </p>
           </div>
         )}
       </div>

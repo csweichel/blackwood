@@ -32,13 +32,15 @@ export default function EntryCard({ entry, onDeleted }: EntryCardProps) {
   }
 
   function renderContent() {
+    const textBlock = (text: string, color = "text-gray-800") => (
+      <div className={`whitespace-pre-wrap font-sans text-sm ${color}`} style={{ lineHeight: "1.7" }}>
+        {text}
+      </div>
+    );
+
     switch (entry.type) {
       case EntryType.TEXT:
-        return (
-          <pre className="whitespace-pre-wrap font-sans text-sm text-gray-800 leading-relaxed">
-            {entry.content}
-          </pre>
-        );
+        return textBlock(entry.content);
 
       case EntryType.AUDIO:
         return (
@@ -49,9 +51,7 @@ export default function EntryCard({ entry, onDeleted }: EntryCardProps) {
               </svg>
               <span>Audio transcription</span>
             </div>
-            <pre className="whitespace-pre-wrap font-sans text-sm text-gray-800 leading-relaxed">
-              {entry.content}
-            </pre>
+            {textBlock(entry.content)}
           </div>
         );
 
@@ -66,11 +66,7 @@ export default function EntryCard({ entry, onDeleted }: EntryCardProps) {
                 className="max-w-full rounded-lg max-h-64 object-contain"
               />
             ))}
-            {entry.content && (
-              <pre className="whitespace-pre-wrap font-sans text-sm text-gray-800 leading-relaxed">
-                {entry.content}
-              </pre>
-            )}
+            {entry.content && textBlock(entry.content)}
           </div>
         );
 
@@ -85,11 +81,7 @@ export default function EntryCard({ entry, onDeleted }: EntryCardProps) {
                 className="max-w-full rounded-lg max-h-64 object-contain"
               />
             ))}
-            {entry.content && (
-              <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 leading-relaxed">
-                {entry.content}
-              </pre>
-            )}
+            {entry.content && textBlock(entry.content, "text-gray-700")}
           </div>
         );
 
@@ -113,19 +105,13 @@ export default function EntryCard({ entry, onDeleted }: EntryCardProps) {
                 {url}
               </a>
             )}
-            <pre className="whitespace-pre-wrap font-sans text-sm text-gray-800 leading-relaxed">
-              {entry.content}
-            </pre>
+            {textBlock(entry.content)}
           </div>
         );
       }
 
       default:
-        return (
-          <pre className="whitespace-pre-wrap font-sans text-sm text-gray-800 leading-relaxed">
-            {entry.content}
-          </pre>
-        );
+        return textBlock(entry.content);
     }
   }
 
