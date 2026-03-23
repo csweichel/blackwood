@@ -83,7 +83,7 @@ export default function AudioRecorder({ date, onCreated, onClose, autoStart }: A
       ctx!.clearRect(0, 0, w, h);
 
       ctx!.lineWidth = 2;
-      ctx!.strokeStyle = getComputedStyle(canvasRef.current!).getPropertyValue("--accent").trim() || "#C4973B";
+      ctx!.strokeStyle = getComputedStyle(canvasRef.current!).getPropertyValue("--accent").trim() || "#4A6FA5";
       ctx!.beginPath();
 
       const sliceWidth = w / bufferLength;

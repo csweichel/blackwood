@@ -1,37 +1,49 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
-/* Light mode */
+/* Light mode — ink & parchment */
 :root {
-  --background: #F8FAFC;
-  --foreground: #0F172A;
-  --card: #FFFFFF;
-  --card-foreground: #0F172A;
-  --muted: #E2E8F0;
-  --muted-foreground: #64748B;
-  --accent: #FBBF24;
-  --accent-foreground: #0F172A;
-  --border: #CBD5E1;
-  --destructive: #DC2626;
-  --primary: #0F172A;
-  --primary-foreground: #F8FAFC;
+  --background: #FAF8F3;
+  --foreground: #1C2433;
+  --card: #FAF8F3;
+  --card-foreground: #1C2433;
+  --muted: #EFE9DC;
+  --muted-foreground: #6A7489;
+  --tertiary: #9199A8;
+  --accent: #4A6FA5;
+  --accent-foreground: #FAF8F3;
+  --accent-hover: #3D5E8E;
+  --accent-subtle: #E2EAF4;
+  --border: #D6CEBC;
+  --border-strong: #B8AE9A;
+  --destructive: #B8453A;
+  --success: #4A8B5C;
+  --warning: #C4882D;
+  --primary: #4A6FA5;
+  --primary-foreground: #FAF8F3;
 }
 
-/* Dark mode (midnight scholar) */
+/* Dark mode — ink & parchment */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0F1419;
-    --foreground: #E8E2D6;
-    --card: #1A1F26;
-    --card-foreground: #E8E2D6;
-    --muted: #242A33;
-    --muted-foreground: #8B9AAF;
-    --accent: #C4973B;
-    --accent-foreground: #0F1419;
-    --border: #2A3140;
-    --destructive: #C45454;
-    --primary: #C4973B;
-    --primary-foreground: #0F1419;
+    --background: #141A24;
+    --foreground: #E8E2D5;
+    --card: #1C2433;
+    --card-foreground: #E8E2D5;
+    --muted: #1C2433;
+    --muted-foreground: #6A7489;
+    --tertiary: #4D566A;
+    --accent: #6B9BD2;
+    --accent-foreground: #141A24;
+    --accent-hover: #85ADE0;
+    --accent-subtle: #1E2D42;
+    --border: #2A3448;
+    --border-strong: #3A4660;
+    --destructive: #D4594C;
+    --success: #5EAD72;
+    --warning: #E8A93E;
+    --primary: #6B9BD2;
+    --primary-foreground: #141A24;
   }
 }
 
@@ -44,10 +56,16 @@
   --color-card-foreground: var(--card-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-tertiary: var(--tertiary);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-subtle: var(--accent-subtle);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
 }
