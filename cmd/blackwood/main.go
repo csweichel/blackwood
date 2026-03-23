@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -19,7 +18,6 @@ import (
 	"github.com/csweichel/blackwood/internal/describe"
 	"github.com/csweichel/blackwood/internal/importqueue"
 	"github.com/csweichel/blackwood/internal/index"
-	"github.com/csweichel/blackwood/internal/noteparser"
 	"github.com/csweichel/blackwood/internal/ocr"
 	"github.com/csweichel/blackwood/internal/rag"
 	"github.com/csweichel/blackwood/internal/state"
@@ -174,20 +172,14 @@ func main() {
 	// Start the background import worker.
 	go worker.Start(ctx)
 
-	// Start the Viwoods file watcher if configured.
-	if cfg.Watcher.WatchDir != "" {
+	// Start the file watcher if configured.
+	if len(cfg.Watcher.WatchDirs) > 0 {
 		pollInterval, err := time.ParseDuration(cfg.Watcher.PollInterval)
 		if err != nil {
 			pollInterval = 30 * time.Second
 		}
 
-		stateTracker, err := state.Load(filepath.Join(dataDir, "watcher-state.json"))
-		if err != nil {
-			slog.Error("create watcher state", "error", err)
-			os.Exit(1)
-		}
-
-		w := watcher.New(cfg.Watcher.WatchDir, pollInterval)
+		w := watcher.New(cfg.Watcher.WatchDirs, pollInterval)
 		watchCh, err := w.Start(ctx)
 		if err != nil {
 			slog.Error("start watcher", "error", err)
@@ -195,61 +187,60 @@ func main() {
 		}
 
 		go func() {
-			slog.Info("starting file watcher", "dir", cfg.Watcher.WatchDir, "interval", pollInterval)
-			for f := range watchCh {
-				if stateTracker.IsProcessed(f) {
-					continue
-				}
-
-				note, err := noteparser.Parse(f)
+			slog.Info("starting file watcher", "dirs", cfg.Watcher.WatchDirs, "interval", pollInterval)
+			for filePath := range watchCh {
+				// Compute hash for deduplication.
+				hash, err := state.ComputeHash(filePath)
 				if err != nil {
-					slog.Error("parse note", "file", f, "error", err)
+					slog.Warn("hash file", "file", filePath, "error", err)
 					continue
 				}
 
-				// Build markdown from OCR.
-				var md strings.Builder
-				md.WriteString("## " + note.Name + "\n")
-				for i, page := range note.Pages {
-					fmt.Fprintf(&md, "\n### Page %d\n", i+1)
-					if recognizer != nil {
-						text, err := recognizer.Recognize(context.Background(), page.Image)
-						if err != nil {
-							slog.Warn("OCR failed", "page", i+1, "error", err)
-						} else {
-							md.WriteString(text + "\n")
-						}
-					}
-				}
-
-				// Get or create today's daily note and append.
-				today := time.Now().Format("2006-01-02")
-				dn, err := store.GetOrCreateDailyNote(context.Background(), today)
-				if err != nil {
-					slog.Error("get daily note", "error", err)
+				// Check if already processed with same hash.
+				existing, _ := store.GetWatchedFile(context.Background(), filePath)
+				if existing != nil && existing.Hash == hash {
 					continue
 				}
 
-				entry := &storage.Entry{
-					DailyNoteID: dn.ID,
-					Type:        "viwoods",
-					Content:     md.String(),
-					Source:      "watcher",
-				}
-				if err := store.CreateEntry(context.Background(), entry); err != nil {
-					slog.Error("create entry", "error", err)
+				// Determine file type.
+				var fileType string
+				lower := strings.ToLower(filePath)
+				if strings.HasSuffix(lower, ".note") {
+					fileType = "viwoods"
+				} else if strings.HasSuffix(lower, ".md") {
+					fileType = "obsidian"
+				} else {
 					continue
 				}
 
-				hash, err := state.ComputeHash(f)
-				if err != nil {
-					slog.Warn("hash file", "file", f, "error", err)
+				// Create import job.
+				jobID := storage.NewUUID()
+				job := &storage.ImportJob{
+					ID:       jobID,
+					Status:   "pending",
+					Filename: filepath.Base(filePath),
+					FileType: fileType,
+					FilePath: filePath,
+					Source:   "watcher",
 				}
-				stateTracker.MarkProcessed(f, hash)
-				if err := stateTracker.Save(); err != nil {
-					slog.Error("save watcher state", "error", err)
+				if err := store.CreateImportJob(context.Background(), job); err != nil {
+					slog.Error("create watcher import job", "file", filePath, "error", err)
+					continue
 				}
-				slog.Info("processed note", "file", f, "note", note.Name)
+
+				// Record in watched_files.
+				wf := &storage.WatchedFile{
+					Path:  filePath,
+					Hash:  hash,
+					JobID: jobID,
+				}
+				if err := store.UpsertWatchedFile(context.Background(), wf); err != nil {
+					slog.Warn("upsert watched file", "file", filePath, "error", err)
+				}
+
+				// Signal the worker.
+				worker.Enqueue()
+				slog.Info("enqueued watched file", "file", filePath, "type", fileType)
 			}
 		}()
 	}

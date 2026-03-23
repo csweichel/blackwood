@@ -3,44 +3,46 @@ package watcher
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 )
 
-// Watcher polls a directory for new .note files.
+// Watcher polls directories for .note and .md files.
 type Watcher struct {
-	watchDir     string
+	dirs         []string
 	pollInterval time.Duration
-	seen         map[string]struct{}
 }
 
-// New creates a Watcher that polls watchDir every pollInterval.
-func New(watchDir string, pollInterval time.Duration) *Watcher {
+// New creates a Watcher that polls the given directories every pollInterval.
+func New(dirs []string, pollInterval time.Duration) *Watcher {
 	return &Watcher{
-		watchDir:     watchDir,
+		dirs:         dirs,
 		pollInterval: pollInterval,
-		seen:         make(map[string]struct{}),
 	}
 }
 
-// Start begins polling and returns a channel that emits paths of newly
-// discovered .note files. The channel is closed when ctx is cancelled.
+// Start begins polling and returns a channel that emits paths of discovered
+// .note and .md files. Scans recursively. The channel is closed when ctx is
+// cancelled.
 func (w *Watcher) Start(ctx context.Context) (<-chan string, error) {
-	info, err := os.Stat(w.watchDir)
-	if err != nil {
-		return nil, fmt.Errorf("watch directory: %w", err)
-	}
-	if !info.IsDir() {
-		return nil, fmt.Errorf("watch directory %s is not a directory", w.watchDir)
+	for _, dir := range w.dirs {
+		info, err := os.Stat(dir)
+		if err != nil {
+			return nil, fmt.Errorf("watch directory %s: %w", dir, err)
+		}
+		if !info.IsDir() {
+			return nil, fmt.Errorf("watch path %s is not a directory", dir)
+		}
 	}
 
 	ch := make(chan string)
 	go func() {
 		defer close(ch)
 
-		// Do an initial scan before waiting for the first tick.
+		// Initial scan before the first tick.
 		w.scan(ctx, ch)
 
 		ticker := time.NewTicker(w.pollInterval)
@@ -59,31 +61,34 @@ func (w *Watcher) Start(ctx context.Context) (<-chan string, error) {
 	return ch, nil
 }
 
-// scan lists the watch directory and sends any unseen .note files on ch.
+// scan walks each directory recursively, emitting .note and .md files.
 func (w *Watcher) scan(ctx context.Context, ch chan<- string) {
-	entries, err := os.ReadDir(w.watchDir)
-	if err != nil {
-		return
-	}
+	for _, dir := range w.dirs {
+		err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return nil // skip inaccessible entries
+			}
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if d.IsDir() {
+				return nil
+			}
 
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		if !strings.HasSuffix(strings.ToLower(e.Name()), ".note") {
-			continue
-		}
+			lower := strings.ToLower(d.Name())
+			if !strings.HasSuffix(lower, ".note") && !strings.HasSuffix(lower, ".md") {
+				return nil
+			}
 
-		fullPath := filepath.Join(w.watchDir, e.Name())
-		if _, ok := w.seen[fullPath]; ok {
-			continue
-		}
-		w.seen[fullPath] = struct{}{}
-
-		select {
-		case ch <- fullPath:
-		case <-ctx.Done():
-			return
+			select {
+			case ch <- path:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+			return nil
+		})
+		if err != nil && ctx.Err() == nil {
+			slog.Warn("scan directory", "dir", dir, "error", err)
 		}
 	}
 }

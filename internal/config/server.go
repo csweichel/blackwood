@@ -22,10 +22,11 @@ type ServerConfig struct {
 	whatsappAccessToken string
 }
 
-// WatcherSettings holds configuration for the Viwoods file watcher.
+// WatcherSettings holds configuration for the file watcher.
 type WatcherSettings struct {
-	WatchDir     string `yaml:"watch_dir"`
-	PollInterval string `yaml:"poll_interval"` // e.g. "30s"
+	WatchDir     string   `yaml:"watch_dir"`      // backward compat (singular)
+	WatchDirs    []string `yaml:"watch_dirs"`      // list of directories to watch
+	PollInterval string   `yaml:"poll_interval"`   // e.g. "30s"
 }
 
 // ServerSettings holds general server settings.
@@ -92,10 +93,25 @@ func (c *ServerConfig) Resolve() error {
 	if c.Watcher.PollInterval == "" {
 		c.Watcher.PollInterval = "30s"
 	}
-	if strings.HasPrefix(c.Watcher.WatchDir, "~/") {
-		home, err := os.UserHomeDir()
-		if err == nil {
-			c.Watcher.WatchDir = filepath.Join(home, c.Watcher.WatchDir[2:])
+	// Backward compat: merge singular watch_dir into watch_dirs.
+	if c.Watcher.WatchDir != "" {
+		found := false
+		for _, d := range c.Watcher.WatchDirs {
+			if d == c.Watcher.WatchDir {
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.Watcher.WatchDirs = append(c.Watcher.WatchDirs, c.Watcher.WatchDir)
+		}
+	}
+	// Expand ~ in all watch dirs.
+	for i, d := range c.Watcher.WatchDirs {
+		if strings.HasPrefix(d, "~/") {
+			if home, err := os.UserHomeDir(); err == nil {
+				c.Watcher.WatchDirs[i] = filepath.Join(home, d[2:])
+			}
 		}
 	}
 

@@ -20,7 +20,9 @@ openai:
 #   access_token_file: ~/.blackwood/secrets/whatsapp-access-token
 #   phone_number_id: "123456789"
 
-# Viwoods file watcher (optional)
+# File watcher (optional)
 # watcher:
-#   watch_dir: /path/to/viwoods/notes
+#   watch_dirs:
+#     - /path/to/viwoods/notes
+#     - /path/to/obsidian/vault
 #   poll_interval: 30s
