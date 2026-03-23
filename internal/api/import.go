@@ -126,6 +126,7 @@ func (h *ImportHandler) ImportViwoods(ctx context.Context, req *connect.Request[
 func (h *ImportHandler) ImportObsidian(ctx context.Context, req *connect.Request[blackwoodv1.ImportObsidianRequest]) (*connect.Response[blackwoodv1.ImportObsidianResponse], error) {
 	var imported, skipped int32
 	var errors []string
+	var dates []string
 
 	for _, f := range req.Msg.Files {
 		date, err := parseDateFromFilename(f.Filename)
@@ -176,12 +177,14 @@ func (h *ImportHandler) ImportObsidian(ctx context.Context, req *connect.Request
 		}
 
 		imported++
+		dates = append(dates, date)
 	}
 
 	return connect.NewResponse(&blackwoodv1.ImportObsidianResponse{
 		Imported: imported,
 		Skipped:  skipped,
 		Errors:   errors,
+		Dates:    dates,
 	}), nil
 }
 

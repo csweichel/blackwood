@@ -33,4 +33,5 @@ message ImportObsidianResponse {
   int32 imported = 1;
   int32 skipped = 2;
   repeated string errors = 3;
+  repeated string dates = 4;
 }
