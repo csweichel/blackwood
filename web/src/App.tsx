@@ -11,6 +11,7 @@ import {
 import Calendar from "./components/Calendar";
 import DailyNoteView from "./components/DailyNote";
 import ChatView from "./components/ChatView";
+import ClipPage from "./components/ClipPage";
 import ImportModal from "./components/ImportModal";
 import ImportBanner from "./components/ImportBanner";
 import OfflineBanner from "./components/OfflineBanner";
@@ -153,6 +154,7 @@ function AppLayout() {
         <Route path="/day/:date" element={<DailyNotePage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/chat/:slug" element={<ChatPage />} />
+        <Route path="/clip" element={<ClipPage />} />
         <Route path="*" element={<Navigate to={`/day/${todayStr()}`} replace />} />
       </Routes>
 
