@@ -228,28 +228,60 @@ body {
 /* --- Section labels (# Summary, # Notes, # Links) --- */
 
 .note-section-label {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
   font-family: var(--font-sans);
-  font-size: 0.6875rem;
+  font-size: 0.6875rem !important;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted-foreground);
-  margin-top: 1.5rem;
-  margin-bottom: 0.75rem;
   line-height: 1;
 }
 
-.note-section-label::after {
+/* Bare section labels (not inside summary) get flex + trailing line */
+.note-prose > h1.note-section-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+.note-prose > h1.note-section-label::after {
   content: "";
   flex: 1;
   height: 1px;
   background: var(--border);
 }
 
-.note-prose > .note-section-label:first-child {
+.note-prose > h1.note-section-label:first-child {
+  margin-top: 0;
+}
+
+/* Collapsible section labels: summary becomes flex row with line */
+.note-prose summary:has(> .note-section-label) {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.note-prose summary:has(> .note-section-label)::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.note-prose summary > .note-section-label {
+  display: inline;
+  margin: 0;
+}
+
+/* Details containing section labels get spacing */
+.note-prose > details:has(> summary .note-section-label) {
+  margin-top: 2rem;
+}
+
+.note-prose > details:first-child {
   margin-top: 0;
 }
 
@@ -290,6 +322,8 @@ body {
 .note-prose summary > h6 {
   display: inline;
 }
+
+
 
 /* --- Wikilink pill style --- */
 

@@ -123,7 +123,9 @@ function rehypeCollapsible() {
       const sectionContent: any[] = [];
       let j = i + 1;
 
-      // Collect siblings until the next heading of equal or higher level
+      // Collect siblings until the next heading of equal or higher level.
+      // An h2 section stops at the next h1 or h2 — it never swallows
+      // a heading at a higher (lower-numbered) level.
       while (j < parent.children.length) {
         const sibling = parent.children[j];
         if (isHeading(sibling) && headingLevel(sibling.tagName) <= level) {
@@ -132,6 +134,17 @@ function rehypeCollapsible() {
         sectionContent.push(sibling);
         j++;
       }
+
+      // Only wrap if there's content to fold.
+      if (sectionContent.length === 0) {
+        newChildren.push(node);
+        i = j;
+        continue;
+      }
+
+      // Recursively wrap nested headings within this section's content.
+      const wrapper = { type: "root", children: sectionContent };
+      wrapHeadingSections(wrapper);
 
       const detailsNode = {
         type: "element",
@@ -151,7 +164,7 @@ function rehypeCollapsible() {
               },
             ],
           },
-          ...sectionContent,
+          ...wrapper.children,
         ],
       };
 
@@ -256,31 +269,52 @@ function remarkWikilinks() {
 const SECTION_HEADINGS = new Set(["Summary", "Notes", "Links"]);
 
 /**
- * Rehype plugin that transforms known section headings (# Summary, # Notes,
- * # Links) into small uppercase label dividers. Also marks the content
- * immediately after # Summary with a special class.
+ * Rehype plugin that styles known section headings (# Summary, # Notes,
+ * # Links) as small uppercase label dividers by adding CSS classes.
+ * Works on bare h1 elements and h1 elements inside <summary> (collapsible).
+ * Also marks the paragraph after # Summary with a special class.
  */
 function rehypeSectionLabels() {
   return (tree: any) => {
     visit(tree, "element", (node: any, index: number | undefined, parent: any) => {
-      if (node.tagName !== "h1" || index === undefined || !parent) return;
-      // Extract text content of the heading.
-      const text = getTextContent(node).trim();
+      if (index === undefined || !parent) return;
+
+      // Case 1: bare h1 (not wrapped by collapsible — e.g. empty section)
+      if (node.tagName === "h1" && parent.tagName !== "summary") {
+        const text = getTextContent(node).trim();
+        if (!SECTION_HEADINGS.has(text)) return;
+        const cls = text === "Summary" ? "note-section-label note-section-summary-label" : "note-section-label";
+        node.properties = { ...(node.properties || {}), className: cls };
+        node.children = [{ type: "text", value: text }];
+        // Mark next sibling paragraph for Summary.
+        if (text === "Summary" && parent.children[index + 1]?.tagName === "p") {
+          const p = parent.children[index + 1];
+          const existing = p.properties?.className || "";
+          p.properties = { ...p.properties, className: (existing + " note-summary").trim() };
+        }
+        return;
+      }
+
+      // Case 2: h1 inside <summary> (wrapped by collapsible)
+      if (node.tagName !== "summary") return;
+      const h1 = node.children?.find((c: any) => c.type === "element" && c.tagName === "h1");
+      if (!h1) return;
+      const text = getTextContent(h1).trim();
       if (!SECTION_HEADINGS.has(text)) return;
 
-      // Replace h1 with a styled div label.
-      node.tagName = "div";
-      node.properties = {
-        className: text === "Summary" ? "note-section-label note-section-summary-label" : "note-section-label",
-      };
-      node.children = [{ type: "text", value: text }];
+      // Add the label class to the h1 but keep it as h1 so collapsible CSS works.
+      const cls = text === "Summary" ? "note-section-label note-section-summary-label" : "note-section-label";
+      h1.properties = { ...(h1.properties || {}), className: cls };
+      h1.children = [{ type: "text", value: text }];
 
-      // If this is the Summary label, mark the next sibling paragraph.
-      if (text === "Summary" && parent.children[index + 1]) {
-        const next = parent.children[index + 1];
-        if (next.tagName === "p") {
-          const existing = next.properties?.className || "";
-          next.properties = { ...next.properties, className: (existing + " note-summary").trim() };
+      // Mark the first paragraph inside the <details> as summary text.
+      if (text === "Summary" && parent.tagName === "details") {
+        const p = parent.children.find(
+          (c: any) => c.type === "element" && c.tagName === "p"
+        );
+        if (p) {
+          const existing = p.properties?.className || "";
+          p.properties = { ...p.properties, className: (existing + " note-summary").trim() };
         }
       }
     });
@@ -720,7 +754,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
               startEditing();
             }}
           >
-            <Markdown remarkPlugins={[remarkGfm, remarkWikilinks]} rehypePlugins={[rehypeRaw, rehypeYoutubeEmbed, rehypeSectionLabels, rehypeAttachmentUrls(date), rehypeCollapsible]}>
+            <Markdown remarkPlugins={[remarkGfm, remarkWikilinks]} rehypePlugins={[rehypeRaw, rehypeYoutubeEmbed, rehypeCollapsible, rehypeSectionLabels, rehypeAttachmentUrls(date)]}>
               {content}
             </Markdown>
           </div>
