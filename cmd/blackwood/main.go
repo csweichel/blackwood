@@ -168,6 +168,9 @@ func main() {
 	// PDF export for daily notes.
 	srv.Handle("GET /api/daily-notes/{date}/pdf", api.ServePDF(store))
 
+	// Range summaries for weekly/monthly views.
+	srv.Handle("GET /api/daily-notes/range", api.ServeRangeSummaries(store))
+
 	// Web clipping endpoint.
 	srv.Handle("POST /api/clip", api.NewClipHandler(store))
 

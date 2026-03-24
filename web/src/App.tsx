@@ -12,11 +12,14 @@ import Calendar from "./components/Calendar";
 import DailyNoteView from "./components/DailyNote";
 import ChatView from "./components/ChatView";
 import ClipPage from "./components/ClipPage";
+import WeekView from "./components/WeekView";
+import MonthView from "./components/MonthView";
 import ImportModal from "./components/ImportModal";
 import ImportBanner from "./components/ImportBanner";
 import OfflineBanner from "./components/OfflineBanner";
 import { useImportJobs } from "./hooks/useImportJobs";
 import { jobToFileResult } from "./components/importUtils";
+import { getCurrentWeekId, getCurrentMonthId } from "./lib/dateUtils";
 
 function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
@@ -73,6 +76,9 @@ function AppLayout() {
   }
 
   const isChat = location.pathname.startsWith("/chat");
+  const isWeek = location.pathname.startsWith("/week");
+  const isMonth = location.pathname.startsWith("/month");
+  const isDay = !isChat && !isWeek && !isMonth;
 
   // Cmd+D → today, Cmd+/ → toggle chat/notes
   useEffect(() => {
@@ -126,12 +132,32 @@ function AppLayout() {
               <button
                 onClick={() => navigate(`/day/${todayStr()}`)}
                 className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  !isChat
+                  isDay
                     ? "bg-card text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                Notes
+                Day
+              </button>
+              <button
+                onClick={() => navigate(`/week/${getCurrentWeekId()}`)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  isWeek
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Week
+              </button>
+              <button
+                onClick={() => navigate(`/month/${getCurrentMonthId()}`)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  isMonth
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Month
               </button>
               <button
                 onClick={() => navigate("/chat")}
@@ -152,6 +178,10 @@ function AppLayout() {
       <Routes>
         <Route path="/" element={<Navigate to={`/day/${todayStr()}`} replace />} />
         <Route path="/day/:date" element={<DailyNotePage />} />
+        <Route path="/week" element={<WeekView />} />
+        <Route path="/week/:weekId" element={<WeekView />} />
+        <Route path="/month" element={<MonthView />} />
+        <Route path="/month/:monthId" element={<MonthView />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/chat/:slug" element={<ChatPage />} />
         <Route path="/clip" element={<ClipPage />} />
