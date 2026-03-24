@@ -32,6 +32,16 @@ archives:
       - README.md
       - blackwood.example.yaml
       - extras/blackwood.service
+  - id: blackwood-latest
+    builds:
+      - blackwood
+    name_template: "blackwood_{{ .Os }}_{{ .Arch }}"
+    format: tar.gz
+    files:
+      - LICENSE
+      - README.md
+      - blackwood.example.yaml
+      - extras/blackwood.service
 
 checksum:
   name_template: "checksums.txt"
