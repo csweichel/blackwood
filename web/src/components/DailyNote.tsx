@@ -305,6 +305,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
   const [showRecorder, setShowRecorder] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [summarizing, setSummarizing] = useState(false);
 
   // Reset editing state when date changes
   useEffect(() => {
@@ -348,6 +349,21 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
       setPdfLoading(false);
     }
   }, [date]);
+
+  const generateSummary = useCallback(async () => {
+    setSummarizing(true);
+    try {
+      const resp = await fetch(`/api/daily-notes/${date}/summarize`, {
+        method: "POST",
+      });
+      if (!resp.ok) throw new Error("Summarize failed");
+      await load();
+    } catch (err) {
+      console.error("Summary generation failed:", err);
+    } finally {
+      setSummarizing(false);
+    }
+  }, [date, load]);
 
   function handleEditChange(text: string) {
     setEditContent(text);
@@ -426,6 +442,16 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
               ? "Save failed"
               : ""}
           </span>
+          {content.trim() && (
+            <button
+              onClick={generateSummary}
+              disabled={summarizing}
+              className={`p-1.5 rounded-md transition-colors ${summarizing ? "text-muted-foreground opacity-50 cursor-wait" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+              title="Generate summary"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z"/></svg>
+            </button>
+          )}
           {content.trim() && (
             <button
               onClick={downloadPdf}
