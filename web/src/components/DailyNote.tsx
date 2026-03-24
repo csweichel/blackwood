@@ -528,9 +528,11 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
         )}
       </div>
 
-      <div className="mt-12 pt-6 border-t border-border">
+      <div className="hidden md:block mt-12 pt-6 border-t border-border">
         <p className="text-xs text-muted-foreground">
           <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Cmd+D</kbd> today
+          <span className="mx-2">&middot;</span>
+          <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Cmd+/</kbd> chat
           <span className="mx-2">&middot;</span>
           <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Cmd+T</kbd> insert time
           <span className="mx-2">&middot;</span>

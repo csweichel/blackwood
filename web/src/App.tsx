@@ -73,20 +73,24 @@ function AppLayout() {
 
   const isChat = location.pathname.startsWith("/chat");
 
-  // Cmd+D / Ctrl+D jumps to today
+  // Cmd+D → today, Cmd+/ → toggle chat/notes
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === "d") {
         e.preventDefault();
         navigate(`/day/${todayStr()}`);
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === "/") {
+        e.preventDefault();
+        navigate(isChat ? `/day/${todayStr()}` : "/chat");
+      }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [navigate]);
+  }, [navigate, isChat]);
 
   return (
-    <div className="h-screen flex flex-col bg-background">
+    <div className="flex flex-col bg-background" style={{ height: "100dvh" }}>
       {/* Header */}
       <header className="border-b border-border bg-card shrink-0">
         <div className="max-w-4xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
