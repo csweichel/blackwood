@@ -168,6 +168,9 @@ func main() {
 	// PDF export for daily notes.
 	srv.Handle("GET /api/daily-notes/{date}/pdf", api.ServePDF(store))
 
+	// Location tagging endpoint.
+	srv.Handle("POST /api/entries/location", api.ServeSetLocation(store))
+
 	// Web clipping endpoint.
 	srv.Handle("POST /api/clip", api.NewClipHandler(store))
 
