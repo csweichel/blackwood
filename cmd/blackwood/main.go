@@ -164,6 +164,7 @@ func main() {
 
 	// Serve attachment files.
 	srv.Handle("GET /api/attachments/{id}", api.ServeAttachment(store))
+	srv.Handle("GET /api/daily-notes/{date}/attachments/{filename}", api.ServeAttachmentByFilename(store))
 
 	// PDF export for daily notes.
 	srv.Handle("GET /api/daily-notes/{date}/pdf", api.ServePDF(store))

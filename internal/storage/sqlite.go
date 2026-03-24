@@ -124,6 +124,20 @@ func (s *Store) dayDir(date string) string {
 	return filepath.Join(s.dataDir, "notes", parts[0], parts[1], parts[2])
 }
 
+// AttachmentPath returns the absolute path to an attachment file within the
+// day directory for the given date. It rejects filenames that could escape the
+// directory (path separators, "..", null bytes).
+func (s *Store) AttachmentPath(date, filename string) (string, error) {
+	if strings.ContainsAny(filename, "/\\") || strings.Contains(filename, "..") || strings.ContainsRune(filename, 0) {
+		return "", fmt.Errorf("invalid attachment filename")
+	}
+	clean := filepath.Base(filename)
+	if clean == "." || clean == string(filepath.Separator) {
+		return "", fmt.Errorf("invalid attachment filename")
+	}
+	return filepath.Join(s.dayDir(date), clean), nil
+}
+
 // notePath returns the filesystem path for a daily note's markdown file.
 // Date format is "YYYY-MM-DD", stored as notes/YYYY/MM/DD/index.md.
 func (s *Store) notePath(date string) string {

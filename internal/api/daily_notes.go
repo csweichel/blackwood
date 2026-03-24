@@ -4,7 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"mime"
 	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
 	"time"
 
 	"connectrpc.com/connect"
@@ -338,6 +342,43 @@ func ServeAttachment(store *storage.Store) http.HandlerFunc {
 		if _, err := w.Write(data); err != nil {
 			slog.Error("write attachment response", "error", err)
 		}
+	}
+}
+
+var dateRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+
+// ServeAttachmentByFilename serves an attachment file for a given date by its
+// on-disk filename. The route pattern is
+// GET /api/daily-notes/{date}/attachments/{filename}.
+func ServeAttachmentByFilename(store *storage.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		date := r.PathValue("date")
+		filename := r.PathValue("filename")
+
+		if !dateRe.MatchString(date) {
+			http.Error(w, "invalid date format", http.StatusBadRequest)
+			return
+		}
+
+		filePath, err := store.AttachmentPath(date, filename)
+		if err != nil {
+			http.Error(w, "invalid filename", http.StatusBadRequest)
+			return
+		}
+
+		info, err := os.Stat(filePath)
+		if err != nil || info.IsDir() {
+			http.Error(w, "attachment not found", http.StatusNotFound)
+			return
+		}
+
+		// Detect content type from extension, fall back to reading file header.
+		ct := mime.TypeByExtension(filepath.Ext(filePath))
+		if ct == "" {
+			ct = "application/octet-stream"
+		}
+		w.Header().Set("Content-Type", ct)
+		http.ServeFile(w, r, filePath)
 	}
 }
 
