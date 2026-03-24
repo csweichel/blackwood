@@ -181,6 +181,9 @@ func main() {
 		srv.Handle("GET /api/search", api.ServeSearch(store, semanticIndex))
 	}
 
+	// Location tagging endpoint.
+	srv.Handle("POST /api/entries/location", api.ServeSetLocation(store))
+
 	// Web clipping endpoint.
 	srv.Handle("POST /api/clip", api.NewClipHandler(store))
 

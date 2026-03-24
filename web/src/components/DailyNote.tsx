@@ -4,6 +4,7 @@ import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
 import { visit } from "unist-util-visit";
 import { getDailyNote, updateDailyNoteContent } from "../api/client";
+import { useGeolocation } from "../hooks/useGeolocation";
 
 import MarkdownEditor from "./MarkdownEditor";
 import AudioRecorder from "./AudioRecorder";
@@ -306,6 +307,8 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
   const [showCamera, setShowCamera] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
+  const { position: geoPosition, loading: geoLoading, requestLocation } = useGeolocation();
+  const [locationTagged, setLocationTagged] = useState(false);
 
   // Reset editing state when date changes
   useEffect(() => {
@@ -364,6 +367,19 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
       setSummarizing(false);
     }
   }, [date, load]);
+
+  // Tag the note with the current location when geolocation resolves.
+  useEffect(() => {
+    if (!geoPosition || locationTagged) return;
+    setLocationTagged(true);
+    const { latitude, longitude } = geoPosition;
+    const ts = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const mapUrl = `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=15/${latitude}/${longitude}`;
+    const snippet = `\n\n---\n*${ts} — 📍 [${latitude.toFixed(4)}, ${longitude.toFixed(4)}](${mapUrl})*\n`;
+    const newContent = content + snippet;
+    setContent(newContent);
+    doSave(newContent);
+  }, [geoPosition, locationTagged, content, doSave]);
 
   function handleEditChange(text: string) {
     setEditContent(text);
@@ -475,6 +491,14 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
             title="Take photo"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+          </button>
+          <button
+            onClick={requestLocation}
+            disabled={geoLoading || locationTagged}
+            className={`p-1.5 rounded-md transition-colors ${locationTagged ? "text-accent bg-muted" : geoLoading ? "text-muted-foreground opacity-50 cursor-wait" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+            title={locationTagged ? "Location tagged" : "Tag location"}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
           </button>
           {!editing ? (
             <button
