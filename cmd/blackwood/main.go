@@ -335,7 +335,7 @@ func spaHandler(fsys http.FileSystem) http.Handler {
 		path := r.URL.Path
 		f, err := fsys.Open(path)
 		if err == nil {
-			f.Close()
+			_ = f.Close()
 			fileServer.ServeHTTP(w, r)
 			return
 		}
@@ -549,12 +549,12 @@ func runSetup() {
 
 	var cfgBuf strings.Builder
 	cfgBuf.WriteString("server:\n")
-	cfgBuf.WriteString(fmt.Sprintf("  addr: %q\n", listenAddr))
-	cfgBuf.WriteString(fmt.Sprintf("  data_dir: %s\n", displayDir))
+	fmt.Fprintf(&cfgBuf, "  addr: %q\n", listenAddr)
+	fmt.Fprintf(&cfgBuf, "  data_dir: %s\n", displayDir)
 	if setupTLS {
 		cfgBuf.WriteString("  tls:\n")
-		cfgBuf.WriteString(fmt.Sprintf("    cert_file: %s\n", tlsCertFile))
-		cfgBuf.WriteString(fmt.Sprintf("    key_file: %s\n", tlsKeyFile))
+		fmt.Fprintf(&cfgBuf, "    cert_file: %s\n", tlsCertFile)
+		fmt.Fprintf(&cfgBuf, "    key_file: %s\n", tlsKeyFile)
 	} else {
 		cfgBuf.WriteString("  # tls:\n")
 		cfgBuf.WriteString("  #   cert_file: /path/to/cert.pem\n")
@@ -562,15 +562,15 @@ func runSetup() {
 	}
 	cfgBuf.WriteString("\n")
 	cfgBuf.WriteString("openai:\n")
-	cfgBuf.WriteString(fmt.Sprintf("  api_key_file: %s/secrets/openai-api-key\n", displayDir))
+	fmt.Fprintf(&cfgBuf, "  api_key_file: %s/secrets/openai-api-key\n", displayDir)
 	cfgBuf.WriteString("\n")
 
 	if setupTG {
 		cfgBuf.WriteString("telegram:\n")
-		cfgBuf.WriteString(fmt.Sprintf("  bot_token_file: %s/secrets/telegram-bot-token\n", displayDir))
+		fmt.Fprintf(&cfgBuf, "  bot_token_file: %s/secrets/telegram-bot-token\n", displayDir)
 	} else {
 		cfgBuf.WriteString("# telegram:\n")
-		cfgBuf.WriteString(fmt.Sprintf("#   bot_token_file: %s/secrets/telegram-bot-token\n", displayDir))
+		fmt.Fprintf(&cfgBuf, "#   bot_token_file: %s/secrets/telegram-bot-token\n", displayDir)
 	}
 
 	// Resolve configPath relative to dataDir (in case user changed it).
