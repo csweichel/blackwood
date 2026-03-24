@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import Calendar from "./components/Calendar";
 import DailyNoteView from "./components/DailyNote";
 import ChatView from "./components/ChatView";
@@ -36,6 +36,19 @@ export default function App() {
   const handleNavigateToDate = useCallback((date: string) => {
     setSelectedDate(date);
     setActiveView("notes");
+  }, []);
+
+  // Cmd+D / Ctrl+D jumps to today
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "d") {
+        e.preventDefault();
+        setSelectedDate(todayStr());
+        setActiveView("notes");
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   return (
