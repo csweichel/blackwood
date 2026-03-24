@@ -17,7 +17,12 @@ Blackwood runs entirely on your machine. Your data stays local.
 - **Telegram bot** — send text, voice, and photos from Telegram; uses long polling so no public URL is needed
 - **Semantic search & RAG chat** — ask questions about your notes in natural language; get answers with source citations
 - **Calendar view** — monthly grid showing which days have content; click to navigate
-- **Rendered markdown view** — rendered display with edit toggle for switching between reading and editing
+- **Collapsible sections** — headings and nested list items are collapsible (expanded by default) for easier scanning of long notes
+- **PDF export** — download any daily note as a PDF from the note header
+- **Offline support** — service worker caches the app shell; entries created offline are queued and synced when the server is reachable
+- **Bookmarkable URLs** — `/day/2025-01-15` for daily notes, `/chat/2025-01-15-my-question` for conversations; browser back/forward works
+- **Keyboard shortcuts** — `Cmd+D` jump to today, `Cmd+/` toggle chat, `Cmd+T` insert timestamp, `Cmd+Enter` save edit
+- **HTTPS/TLS** — optional TLS with configurable cert/key paths; plain HTTP remains the default
 - **File watcher** — optionally watches a directory for new Viwoods `.note` files and auto-imports them
 - **Local-first** — runs on your machine, no cloud dependency
 
@@ -154,6 +159,9 @@ Priority: **config file > environment variable > default**.
 server:
   addr: ":8080"
   data_dir: ~/.blackwood
+  # tls:
+  #   cert_file: /path/to/cert.pem
+  #   key_file: /path/to/key.pem
 
 openai:
   api_key_file: ~/.blackwood/secrets/openai-api-key
@@ -288,13 +296,30 @@ Daily notes are stored as markdown files on disk:
 
 Attachments (photos, audio recordings) are stored alongside the daily note in the same per-day folder and embedded in the rendered markdown.
 
+## Keyboard shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd+D` | Jump to today's note |
+| `Cmd+/` | Toggle between notes and chat |
+| `Cmd+T` | Insert current time (in edit mode) |
+| `Cmd+Enter` | Save and exit edit mode |
+| `Esc` | Exit edit mode without saving |
+
+On Windows/Linux, use `Ctrl` instead of `Cmd`.
+
 ## Roadmap
 
 - [x] Telegram bot integration
+- [x] Offline sync (service worker + IndexedDB)
+- [x] PDF export
+- [x] HTTPS/TLS support
+- [x] Client-side routing with bookmarkable URLs
+- [x] Collapsible sections
+- [x] Keyboard shortcuts
 - [ ] Chrome extension (web clipper)
 - [ ] iOS app
 - [ ] Mac app (menu bar quick capture)
-- [ ] Offline sync (service worker + IndexedDB)
 
 ## License
 

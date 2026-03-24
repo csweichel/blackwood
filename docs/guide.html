@@ -307,6 +307,7 @@
           <li><a href="#install">Install</a></li>
           <li><a href="#configure">Configure</a></li>
           <li><a href="#run">Run the Server</a></li>
+          <li><a href="#shortcuts">Keyboard Shortcuts</a></li>
           <li><a href="#whatsapp">WhatsApp Integration</a></li>
           <li><a href="#telegram">Telegram Bot</a></li>
           <li><a href="#daemon">Viwoods File Watcher</a></li>
@@ -417,6 +418,16 @@
             <td style="padding:8px 12px;">SQLite database and attachments</td>
           </tr>
           <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;"><code>server.tls.cert_file</code></td>
+            <td style="padding:8px 12px;">&mdash;</td>
+            <td style="padding:8px 12px;">Path to TLS certificate (enables HTTPS when both cert and key are set)</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;"><code>server.tls.key_file</code></td>
+            <td style="padding:8px 12px;">&mdash;</td>
+            <td style="padding:8px 12px;">Path to TLS private key</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
             <td style="padding:8px 12px;"><code>openai.api_key_file</code></td>
             <td style="padding:8px 12px;">&mdash;</td>
             <td style="padding:8px 12px;">Path to file containing your OpenAI API key</td>
@@ -493,8 +504,42 @@
         <p style="margin-top:8px;">This uses all defaults: listens on <code>:8080</code>, stores data in <code>~/.blackwood</code>.</p>
       </div>
 
+      <!-- Keyboard shortcuts -->
+      <h2 id="shortcuts">5. Keyboard Shortcuts</h2>
+      <table style="width:100%; border-collapse:collapse; margin-bottom:20px; font-size:0.92rem;">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border); text-align:left;">
+            <th style="padding:8px 12px;">Shortcut</th>
+            <th style="padding:8px 12px;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;"><code>Cmd+D</code></td>
+            <td style="padding:8px 12px;">Jump to today's note</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;"><code>Cmd+/</code></td>
+            <td style="padding:8px 12px;">Toggle between notes and chat</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;"><code>Cmd+T</code></td>
+            <td style="padding:8px 12px;">Insert current time (in edit mode)</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;"><code>Cmd+Enter</code></td>
+            <td style="padding:8px 12px;">Save and exit edit mode</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 12px;"><code>Esc</code></td>
+            <td style="padding:8px 12px;">Exit edit mode</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>On Windows/Linux, use <code>Ctrl</code> instead of <code>Cmd</code>.</p>
+
       <!-- WhatsApp -->
-      <h2 id="whatsapp">5. WhatsApp Integration (Optional)</h2>
+      <h2 id="whatsapp">6. WhatsApp Integration (Optional)</h2>
       <p>Blackwood can receive text, voice, and photo messages via WhatsApp. Messages are appended to today's daily note.</p>
 
       <h3>Setup</h3>
@@ -525,7 +570,7 @@
       </div>
 
       <!-- Telegram -->
-      <h2 id="telegram">6. Telegram Bot (Optional)</h2>
+      <h2 id="telegram">7. Telegram Bot (Optional)</h2>
       <p>Send text, voice messages, and photos from Telegram to your daily notes. The bot uses long polling &mdash; no public URL or webhook setup is needed.</p>
 
       <h3>Create a bot with @BotFather</h3>
@@ -593,7 +638,7 @@
       </div>
 
       <!-- Watcher -->
-      <h2 id="daemon">7. Viwoods File Watcher (Optional)</h2>
+      <h2 id="daemon">8. Viwoods File Watcher (Optional)</h2>
       <p>Blackwood can watch a directory for Viwoods <code>.note</code> files, run OCR on each page, and append the results to your daily notes. Add the <code>watcher</code> section to your config:</p>
 
 <pre><code><span class="key">watcher</span>:
@@ -603,7 +648,7 @@
       <p>The watcher runs inside the main <code>blackwood</code> process. No separate binary is needed.</p>
 
       <!-- Systemd -->
-      <h2 id="systemd">8. Running as a Service</h2>
+      <h2 id="systemd">9. Running as a Service</h2>
       <p>To run Blackwood on startup, create a systemd user service:</p>
 <pre><code><span class="command">mkdir -p ~/.config/systemd/user</span></code></pre>
 
