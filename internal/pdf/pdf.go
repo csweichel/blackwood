@@ -18,12 +18,18 @@ import (
 // Returns an error if the attachment cannot be found.
 type AttachmentResolver func(id string) (data []byte, contentType string, err error)
 
+// FileResolver returns the raw bytes and content type for a filename
+// relative to the note's day directory.
+type FileResolver func(filename string) (data []byte, contentType string, err error)
+
 // Options configures PDF generation.
 type Options struct {
 	// Date is the YYYY-MM-DD date string shown as the document title.
 	Date string
-	// ResolveAttachment resolves inline attachment images. May be nil.
+	// ResolveAttachment resolves inline attachment images by DB ID. May be nil.
 	ResolveAttachment AttachmentResolver
+	// ResolveFile resolves inline attachment images by relative filename. May be nil.
+	ResolveFile FileResolver
 }
 
 const (
@@ -312,16 +318,27 @@ func (r *renderer) styleStr() string {
 var attachmentRe = regexp.MustCompile(`/api/attachments/([a-zA-Z0-9_-]+)`)
 
 func (r *renderer) handleImage(src string) {
-	if r.opts.ResolveAttachment == nil {
-		return
-	}
-	m := attachmentRe.FindStringSubmatch(src)
-	if m == nil {
-		return
-	}
-	id := m[1]
-	data, contentType, err := r.opts.ResolveAttachment(id)
-	if err != nil {
+	var data []byte
+	var contentType string
+	var id string
+
+	// Try old-style /api/attachments/{id} first.
+	if m := attachmentRe.FindStringSubmatch(src); m != nil && r.opts.ResolveAttachment != nil {
+		id = m[1]
+		var err error
+		data, contentType, err = r.opts.ResolveAttachment(id)
+		if err != nil {
+			return
+		}
+	} else if r.opts.ResolveFile != nil && !strings.HasPrefix(src, "/") && !strings.HasPrefix(src, "http") {
+		// Relative filename — resolve from day directory.
+		id = src
+		var err error
+		data, contentType, err = r.opts.ResolveFile(src)
+		if err != nil {
+			return
+		}
+	} else {
 		return
 	}
 

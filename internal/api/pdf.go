@@ -3,7 +3,10 @@ package api
 import (
 	"fmt"
 	"log/slog"
+	"mime"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	pdfgen "github.com/csweichel/blackwood/internal/pdf"
 	"github.com/csweichel/blackwood/internal/storage"
@@ -41,6 +44,21 @@ func ServePDF(store *storage.Store) http.HandlerFunc {
 					return nil, "", err
 				}
 				return data, att.ContentType, nil
+			},
+			ResolveFile: func(filename string) ([]byte, string, error) {
+				path, err := store.AttachmentPath(date, filename)
+				if err != nil {
+					return nil, "", err
+				}
+				data, err := os.ReadFile(path)
+				if err != nil {
+					return nil, "", err
+				}
+				ct := mime.TypeByExtension(filepath.Ext(filename))
+				if ct == "" {
+					ct = http.DetectContentType(data)
+				}
+				return data, ct, nil
 			},
 		}
 
