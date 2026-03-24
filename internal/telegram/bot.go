@@ -143,7 +143,12 @@ func (b *Bot) Start(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
-			slog.Error("telegram: getUpdates", "error", err)
+			// Network timeouts are expected during long-polling.
+			if isTimeout(err) {
+				slog.Debug("telegram: getUpdates timeout", "error", err)
+			} else {
+				slog.Error("telegram: getUpdates", "error", err)
+			}
 			select {
 			case <-time.After(5 * time.Second):
 			case <-ctx.Done():
@@ -787,4 +792,20 @@ func formatFromMime(mime string) string {
 	default:
 		return "ogg"
 	}
+}
+
+// isTimeout reports whether err is a network timeout.
+func isTimeout(err error) bool {
+	if err == nil {
+		return false
+	}
+	// net.Error has a Timeout() method.
+	type timeouter interface {
+		Timeout() bool
+	}
+	if te, ok := err.(timeouter); ok && te.Timeout() {
+		return true
+	}
+	// Also catch wrapped timeout errors.
+	return strings.Contains(err.Error(), "timed out") || strings.Contains(err.Error(), "timeout")
 }
