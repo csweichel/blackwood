@@ -324,16 +324,36 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
 
   const [showRecorder, setShowRecorder] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [showClipForm, setShowClipForm] = useState(false);
+  const [clipUrl, setClipUrl] = useState("");
+  const [clipLoading, setClipLoading] = useState(false);
+  const attachRef = useRef<HTMLDivElement>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
   const { position: geoPosition, loading: geoLoading, requestLocation } = useGeolocation();
   const [locationTagged, setLocationTagged] = useState(false);
+
+  // Close attach menu on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (attachRef.current && !attachRef.current.contains(e.target as Node)) {
+        setShowAttachMenu(false);
+      }
+    }
+    if (showAttachMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showAttachMenu]);
 
   // Reset editing state when date changes
   useEffect(() => {
     setEditing(false);
     setShowRecorder(false);
     setShowCamera(false);
+    setShowAttachMenu(false);
+    setShowClipForm(false);
   }, [date]);
 
 
@@ -498,28 +518,48 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" x2="12" y1="18" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
             </button>
           )}
-          <button
-            onClick={() => { setShowRecorder((v) => !v); setShowCamera(false); }}
-            className={`p-1.5 rounded-md transition-colors ${showRecorder ? "text-accent bg-muted" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
-            title="Record audio"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
-          </button>
-          <button
-            onClick={() => { setShowCamera((v) => !v); setShowRecorder(false); }}
-            className={`p-1.5 rounded-md transition-colors ${showCamera ? "text-accent bg-muted" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
-            title="Take photo"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
-          </button>
-          <button
-            onClick={requestLocation}
-            disabled={geoLoading || locationTagged}
-            className={`p-1.5 rounded-md transition-colors ${locationTagged ? "text-accent bg-muted" : geoLoading ? "text-muted-foreground opacity-50 cursor-wait" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
-            title={locationTagged ? "Location tagged" : "Tag location"}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-          </button>
+          <div className="relative" ref={attachRef}>
+            <button
+              onClick={() => setShowAttachMenu((v) => !v)}
+              className={`p-1.5 rounded-md transition-colors ${showAttachMenu ? "text-accent bg-muted" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+              title="Attach"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            </button>
+            {showAttachMenu && (
+              <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg z-50 min-w-[160px]">
+                <button
+                  onClick={() => { setShowAttachMenu(false); setShowCamera(false); setShowRecorder(true); }}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                  Voice memo
+                </button>
+                <button
+                  onClick={() => { setShowAttachMenu(false); setShowRecorder(false); setShowCamera(true); }}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+                  Photo
+                </button>
+                <button
+                  onClick={() => { setShowAttachMenu(false); requestLocation(); }}
+                  disabled={geoLoading || locationTagged}
+                  className={`flex items-center gap-2 px-3 py-2 text-sm w-full text-left ${locationTagged ? "text-accent" : geoLoading ? "text-muted-foreground opacity-50 cursor-wait" : "text-foreground hover:bg-muted"}`}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                  {locationTagged ? "Location tagged" : "Location"}
+                </button>
+                <button
+                  onClick={() => { setShowAttachMenu(false); setShowClipForm(true); }}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                  Clip page
+                </button>
+              </div>
+            )}
+          </div>
           {!editing ? (
             <button
               onClick={startEditing}
@@ -564,6 +604,60 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
             onCreated={() => { setShowCamera(false); handleEntryCreated(); }}
             onClose={() => setShowCamera(false)}
           />
+        </div>
+      )}
+
+      {showClipForm && (
+        <div className="mb-4 bg-card border border-border rounded-lg p-3">
+          <form
+            className="flex items-center gap-2"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!clipUrl.trim()) return;
+              setClipLoading(true);
+              try {
+                const resp = await fetch("/api/clip", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ url: clipUrl.trim() }),
+                });
+                if (!resp.ok) throw new Error("Clip failed");
+                setClipUrl("");
+                setShowClipForm(false);
+                await load();
+              } catch (err) {
+                console.error("Clip page failed:", err);
+              } finally {
+                setClipLoading(false);
+              }
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground shrink-0"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            <input
+              type="url"
+              value={clipUrl}
+              onChange={(e) => setClipUrl(e.target.value)}
+              placeholder="Paste URL to clip..."
+              className="flex-1 bg-transparent border border-border rounded-md px-2 py-1 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+              autoFocus
+              disabled={clipLoading}
+            />
+            <button
+              type="submit"
+              disabled={clipLoading || !clipUrl.trim()}
+              className="px-3 py-1 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:opacity-90 transition-colors disabled:opacity-50"
+            >
+              {clipLoading ? "Clipping..." : "Clip"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowClipForm(false); setClipUrl(""); }}
+              className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+              title="Cancel"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+            </button>
+          </form>
         </div>
       )}
 
