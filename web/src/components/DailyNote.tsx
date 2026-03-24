@@ -253,6 +253,46 @@ function remarkWikilinks() {
   };
 }
 
+const SECTION_HEADINGS = new Set(["Summary", "Notes", "Links"]);
+
+/**
+ * Rehype plugin that transforms known section headings (# Summary, # Notes,
+ * # Links) into small uppercase label dividers. Also marks the content
+ * immediately after # Summary with a special class.
+ */
+function rehypeSectionLabels() {
+  return (tree: any) => {
+    visit(tree, "element", (node: any, index: number | undefined, parent: any) => {
+      if (node.tagName !== "h1" || index === undefined || !parent) return;
+      // Extract text content of the heading.
+      const text = getTextContent(node).trim();
+      if (!SECTION_HEADINGS.has(text)) return;
+
+      // Replace h1 with a styled div label.
+      node.tagName = "div";
+      node.properties = {
+        className: text === "Summary" ? "note-section-label note-section-summary-label" : "note-section-label",
+      };
+      node.children = [{ type: "text", value: text }];
+
+      // If this is the Summary label, mark the next sibling paragraph.
+      if (text === "Summary" && parent.children[index + 1]) {
+        const next = parent.children[index + 1];
+        if (next.tagName === "p") {
+          const existing = next.properties?.className || "";
+          next.properties = { ...next.properties, className: (existing + " note-summary").trim() };
+        }
+      }
+    });
+  };
+}
+
+function getTextContent(node: any): string {
+  if (node.type === "text") return node.value || "";
+  if (node.children) return node.children.map(getTextContent).join("");
+  return "";
+}
+
 /**
  * Rehype plugin that rewrites relative src/href attributes on img and audio
  * elements to point to the date-based attachment API route. This makes
@@ -680,7 +720,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
               startEditing();
             }}
           >
-            <Markdown remarkPlugins={[remarkGfm, remarkWikilinks]} rehypePlugins={[rehypeRaw, rehypeYoutubeEmbed, rehypeAttachmentUrls(date), rehypeCollapsible]}>
+            <Markdown remarkPlugins={[remarkGfm, remarkWikilinks]} rehypePlugins={[rehypeRaw, rehypeYoutubeEmbed, rehypeSectionLabels, rehypeAttachmentUrls(date), rehypeCollapsible]}>
               {content}
             </Markdown>
           </div>
