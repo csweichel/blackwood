@@ -298,11 +298,23 @@ func (s *Store) AppendToSection(ctx context.Context, id string, section string, 
 		if strings.TrimSpace(content) == "" {
 			content = defaultSections
 		} else {
-			// Preserve legacy content above the new sections.
 			if !strings.HasSuffix(content, "\n") {
 				content += "\n"
 			}
-			content += "\n" + defaultSections
+			// Only add sections that don't already exist.
+			var missing string
+			if !strings.Contains(content, "# Summary") {
+				missing += "# Summary\n\n"
+			}
+			if !strings.Contains(content, "# Notes") {
+				missing += "# Notes\n\n"
+			}
+			if !strings.Contains(content, "# Links") {
+				missing += "# Links\n"
+			}
+			if missing != "" {
+				content += "\n" + missing
+			}
 		}
 	}
 
