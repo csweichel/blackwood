@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import Markdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
+import remarkGfm from "remark-gfm";
 import { visit } from "unist-util-visit";
 import { getDailyNote, updateDailyNoteContent } from "../api/client";
 
@@ -515,7 +516,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
               startEditing();
             }}
           >
-            <Markdown remarkPlugins={[remarkWikilinks]} rehypePlugins={[rehypeRaw, rehypeYoutubeEmbed, rehypeCollapsible]}>
+            <Markdown remarkPlugins={[remarkGfm, remarkWikilinks]} rehypePlugins={[rehypeRaw, rehypeYoutubeEmbed, rehypeCollapsible]}>
               {content}
             </Markdown>
           </div>
