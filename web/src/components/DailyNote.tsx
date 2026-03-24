@@ -253,6 +253,25 @@ function remarkWikilinks() {
   };
 }
 
+/**
+ * Rehype plugin that rewrites relative src/href attributes on img and audio
+ * elements to point to the date-based attachment API route. This makes
+ * relative filenames (e.g. "photo-abc12345.jpg") written into the markdown
+ * resolve correctly in the web UI.
+ */
+function rehypeAttachmentUrls(date: string) {
+  return () => (tree: any) => {
+    visit(tree, "element", (node: any) => {
+      if (node.tagName !== "img" && node.tagName !== "audio") return;
+      const src = node.properties?.src;
+      if (!src || typeof src !== "string") return;
+      // Skip absolute URLs and existing API paths.
+      if (src.startsWith("/") || src.startsWith("http://") || src.startsWith("https://") || src.startsWith("data:")) return;
+      node.properties.src = `/api/daily-notes/${date}/attachments/${encodeURIComponent(src)}`;
+    });
+  };
+}
+
 interface DailyNoteViewProps {
   date: string;
 }
@@ -567,7 +586,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
               startEditing();
             }}
           >
-            <Markdown remarkPlugins={[remarkGfm, remarkWikilinks]} rehypePlugins={[rehypeRaw, rehypeYoutubeEmbed, rehypeCollapsible]}>
+            <Markdown remarkPlugins={[remarkGfm, remarkWikilinks]} rehypePlugins={[rehypeRaw, rehypeYoutubeEmbed, rehypeAttachmentUrls(date), rehypeCollapsible]}>
               {content}
             </Markdown>
           </div>
