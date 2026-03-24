@@ -152,8 +152,8 @@ func (h *ClipHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	entry.Content = content
 	// Update the entry content in the DB (CreateEntry already inserted it).
 
-	// Append to the daily note markdown.
-	if err := h.store.AppendDailyNoteContent(ctx, note.ID, "\n---\n*Clipped*\n\n"+content+"\n"); err != nil {
+	// Append to the Links section of the daily note.
+	if err := h.store.AppendToSection(ctx, note.ID, "# Links", "\n\n---\n*Clipped*\n\n"+content+"\n"); err != nil {
 		slog.Error("append daily note content", "error", err)
 		http.Error(w, "failed to update daily note", http.StatusInternalServerError)
 		return

@@ -264,6 +264,96 @@ func (s *Store) AppendDailyNoteContent(ctx context.Context, id string, text stri
 	return err
 }
 
+// defaultSections is the initial structure for new daily notes.
+const defaultSections = "# Notes\n\n# Links\n"
+
+// AppendToSection appends text under the given markdown heading (e.g. "# Notes" or "# Links").
+// If the section doesn't exist, it creates it. Content is appended at the end of the section
+// (before the next top-level heading or end of file).
+func (s *Store) AppendToSection(ctx context.Context, id string, section string, text string) error {
+	date, err := s.getNoteDate(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	content := s.readNoteContent(date)
+
+	// If the note is empty, initialize with the default structure.
+	// If it has legacy content (no section headings), prepend it before the structure.
+	if !strings.Contains(content, "# Notes") && !strings.Contains(content, "# Links") {
+		if strings.TrimSpace(content) == "" {
+			content = defaultSections
+		} else {
+			// Preserve legacy content above the new sections.
+			if !strings.HasSuffix(content, "\n") {
+				content += "\n"
+			}
+			content += "\n" + defaultSections
+		}
+	}
+
+	content = insertIntoSection(content, section, text)
+
+	if err := s.writeNoteContent(date, content); err != nil {
+		return fmt.Errorf("write note file: %w", err)
+	}
+	_, err = s.db.ExecContext(ctx,
+		`UPDATE daily_notes SET updated_at = ? WHERE id = ?`,
+		time.Now().UTC(), id,
+	)
+	return err
+}
+
+// insertIntoSection inserts text at the end of the named section within content.
+// If the section heading is not found, it appends the heading and text at the end.
+func insertIntoSection(content, section, text string) string {
+	// Find the section heading at the start of a line.
+	sectionIdx := -1
+	if strings.HasPrefix(content, section+"\n") {
+		sectionIdx = 0
+	}
+	if sectionIdx < 0 {
+		if idx := strings.Index(content, "\n"+section+"\n"); idx >= 0 {
+			sectionIdx = idx + 1
+		}
+	}
+
+	if sectionIdx < 0 {
+		// Section not found — append it at the end.
+		if content != "" && !strings.HasSuffix(content, "\n") {
+			content += "\n"
+		}
+		return content + "\n" + section + "\n" + text
+	}
+
+	// Find the end of the heading line.
+	afterHeading := sectionIdx + len(section) + 1
+
+	// Find the next top-level heading (# ) after this section.
+	nextSection := -1
+	if idx := strings.Index(content[afterHeading:], "\n# "); idx >= 0 {
+		nextSection = afterHeading + idx + 1 // position of '#'
+	}
+
+	if nextSection >= 0 {
+		// Trim trailing blank lines between section body and next heading.
+		bodyEnd := nextSection
+		for bodyEnd > afterHeading && (content[bodyEnd-1] == '\n' || content[bodyEnd-1] == '\r') {
+			bodyEnd--
+		}
+		// If there's actual content in the section, preserve one trailing newline.
+		if bodyEnd > afterHeading && bodyEnd < nextSection {
+			bodyEnd++
+		}
+
+		after := content[nextSection:]
+		return content[:bodyEnd] + text + "\n" + after
+	}
+
+	// No next section — append at end.
+	return content + text + "\n"
+}
+
 // ListDatesWithContent returns dates that have non-empty content within the given range.
 func (s *Store) ListDatesWithContent(ctx context.Context, startDate, endDate string) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx,

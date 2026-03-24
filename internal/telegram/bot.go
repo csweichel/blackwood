@@ -281,16 +281,29 @@ func (b *Bot) handleText(ctx context.Context, client *http.Client, chatID int64,
 	// Extract URLs from entities.
 	urls := extractURLs(text, entities)
 
-	// Build the snippet content: if we have URLs, try to generate preview cards.
-	snippetBody := text
 	if len(urls) > 0 {
-		snippetBody = b.buildSnippetWithPreviews(ctx, text, urls, note.ID, date)
-	}
-
-	snippet := fmt.Sprintf("\n\n---\n*%s — Telegram*\n\n%s\n", now.Format("15:04"), snippetBody)
-	if err := b.store.AppendDailyNoteContent(ctx, note.ID, snippet); err != nil {
-		slog.Error("telegram: append text", "error", err)
-		return
+		// Split: plain text goes to Notes, link preview cards go to Links.
+		plainText, linkCards := b.splitTextAndLinks(ctx, text, urls, note.ID, date)
+		if strings.TrimSpace(plainText) != "" {
+			snippet := fmt.Sprintf("\n\n---\n*%s — Telegram*\n\n%s\n", now.Format("15:04"), plainText)
+			if err := b.store.AppendToSection(ctx, note.ID, "# Notes", snippet); err != nil {
+				slog.Error("telegram: append text", "error", err)
+				return
+			}
+		}
+		for _, card := range linkCards {
+			snippet := fmt.Sprintf("\n\n---\n*Clipped*\n\n%s\n", card)
+			if err := b.store.AppendToSection(ctx, note.ID, "# Links", snippet); err != nil {
+				slog.Error("telegram: append link", "error", err)
+				return
+			}
+		}
+	} else {
+		snippet := fmt.Sprintf("\n\n---\n*%s — Telegram*\n\n%s\n", now.Format("15:04"), text)
+		if err := b.store.AppendToSection(ctx, note.ID, "# Notes", snippet); err != nil {
+			slog.Error("telegram: append text", "error", err)
+			return
+		}
 	}
 
 	entry := &storage.Entry{
@@ -391,19 +404,16 @@ func extractURLs(text string, entities []MessageEntity) []extractedURL {
 	return urls
 }
 
-// buildSnippetWithPreviews replaces URLs in the message text with OG preview cards.
-// Non-URL text is preserved. If a fetch fails, the raw URL is kept.
-func (b *Bot) buildSnippetWithPreviews(ctx context.Context, text string, urls []extractedURL, noteID, date string) string {
-	// For "text_link" entities (Offset/Length == 0), we can't replace in-text,
-	// so we append cards at the end.
-	type replacement struct {
+// splitTextAndLinks separates a message into plain text (URLs removed) and
+// individual link preview cards. The plain text is returned with inline URLs
+// stripped out; each successfully fetched OG card is returned as a separate string.
+func (b *Bot) splitTextAndLinks(ctx context.Context, text string, urls []extractedURL, noteID, date string) (plainText string, linkCards []string) {
+	type removal struct {
 		byteOffset int
 		byteLength int
-		card       string
 	}
 
-	var replacements []replacement
-	var appendCards []string
+	var removals []removal
 
 	for _, u := range urls {
 		card, err := opengraph.Fetch(ctx, u.URL)
@@ -416,44 +426,31 @@ func (b *Bot) buildSnippetWithPreviews(ctx context.Context, text string, urls []
 		}
 
 		cardMD := b.formatCard(ctx, card, u.URL, noteID, date)
+		linkCards = append(linkCards, cardMD)
 
 		if u.Length > 0 {
-			replacements = append(replacements, replacement{
-				byteOffset: u.Offset,
-				byteLength: u.Length,
-				card:       cardMD,
-			})
-		} else {
-			appendCards = append(appendCards, cardMD)
+			removals = append(removals, removal{byteOffset: u.Offset, byteLength: u.Length})
 		}
 	}
 
-	if len(replacements) == 0 && len(appendCards) == 0 {
-		return text
-	}
-
-	// Sort replacements by offset descending so we can replace from the end
-	// without invalidating earlier offsets.
-	for i := 0; i < len(replacements); i++ {
-		for j := i + 1; j < len(replacements); j++ {
-			if replacements[j].byteOffset > replacements[i].byteOffset {
-				replacements[i], replacements[j] = replacements[j], replacements[i]
+	// Remove matched URLs from the text (process from end to preserve offsets).
+	for i := 0; i < len(removals); i++ {
+		for j := i + 1; j < len(removals); j++ {
+			if removals[j].byteOffset > removals[i].byteOffset {
+				removals[i], removals[j] = removals[j], removals[i]
 			}
 		}
 	}
 
-	result := text
-	for _, r := range replacements {
-		before := result[:r.byteOffset]
-		after := result[r.byteOffset+r.byteLength:]
-		result = before + r.card + after
+	plainText = text
+	for _, r := range removals {
+		before := plainText[:r.byteOffset]
+		after := plainText[r.byteOffset+r.byteLength:]
+		plainText = before + after
 	}
+	plainText = strings.TrimSpace(plainText)
 
-	for _, c := range appendCards {
-		result += "\n\n" + c
-	}
-
-	return result
+	return plainText, linkCards
 }
 
 // formatCard renders an OG card as a markdown blockquote.
@@ -630,7 +627,7 @@ func (b *Bot) handleVoice(ctx context.Context, client *http.Client, chatID int64
 
 	audioRef := fmt.Sprintf(`<audio controls src="/api/attachments/%s"></audio>`, att.ID)
 	snippet := fmt.Sprintf("\n\n---\n*%s — Telegram voice message*\n\n%s\n\n%s\n", now.Format("15:04"), audioRef, text)
-	if err := b.store.AppendDailyNoteContent(ctx, note.ID, snippet); err != nil {
+	if err := b.store.AppendToSection(ctx, note.ID, "# Notes", snippet); err != nil {
 		slog.Error("telegram: append voice transcription", "error", err)
 		return
 	}
@@ -669,7 +666,7 @@ func (b *Bot) handlePhoto(ctx context.Context, client *http.Client, chatID int64
 	}
 
 	snippet := fmt.Sprintf("\n\n---\n*%s — Telegram photo*\n\n%s\n", now.Format("15:04"), description)
-	if err := b.store.AppendDailyNoteContent(ctx, note.ID, snippet); err != nil {
+	if err := b.store.AppendToSection(ctx, note.ID, "# Notes", snippet); err != nil {
 		slog.Error("telegram: append photo description", "error", err)
 		return
 	}

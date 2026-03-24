@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"os"
+	"strings"
 	"path/filepath"
 	"testing"
 )
@@ -290,4 +291,160 @@ func TestDeleteEntryCascadesToAttachments(t *testing.T) {
 		t.Errorf("expected attachment file to be removed, got err: %v", err)
 	}
 }
+
+func TestInsertIntoSection(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		section string
+		text    string
+		want    string
+	}{
+		{
+			name:    "append to Notes in empty structured note",
+			content: "# Notes\n\n# Links\n",
+			section: "# Notes",
+			text:    "\n\n---\n*14:32 — Telegram*\n\nHello world\n",
+			want:    "# Notes\n\n\n---\n*14:32 — Telegram*\n\nHello world\n\n# Links\n",
+		},
+		{
+			name:    "append to Links in empty structured note",
+			content: "# Notes\n\n# Links\n",
+			section: "# Links",
+			text:    "\n\n---\n*Clipped*\n\nSome link\n",
+			want:    "# Notes\n\n# Links\n\n\n---\n*Clipped*\n\nSome link\n\n",
+		},
+		{
+			name:    "append to Notes with existing content",
+			content: "# Notes\n\n\n---\n*14:00*\n\nFirst note\n\n# Links\n",
+			section: "# Notes",
+			text:    "\n\n---\n*14:30*\n\nSecond note\n",
+			want:    "# Notes\n\n\n---\n*14:00*\n\nFirst note\n\n\n---\n*14:30*\n\nSecond note\n\n# Links\n",
+		},
+		{
+			name:    "append to Links with existing content",
+			content: "# Notes\n\n# Links\n\n\n---\n*Clipped*\n\nFirst link\n",
+			section: "# Links",
+			text:    "\n\n---\n*Clipped*\n\nSecond link\n",
+			want:    "# Notes\n\n# Links\n\n\n---\n*Clipped*\n\nFirst link\n\n\n---\n*Clipped*\n\nSecond link\n\n",
+		},
+		{
+			name:    "section not found — appended at end",
+			content: "Some legacy content\n",
+			section: "# Notes",
+			text:    "\n\n---\n*14:00*\n\nNew note\n",
+			want:    "Some legacy content\n\n# Notes\n\n\n---\n*14:00*\n\nNew note\n",
+		},
+		{
+			name:    "empty content — section appended",
+			content: "",
+			section: "# Notes",
+			text:    "\n\n---\n*14:00*\n\nNew note\n",
+			want:    "\n# Notes\n\n\n---\n*14:00*\n\nNew note\n",
+		},
+		{
+			name:    "only Notes section exists, append to Links",
+			content: "# Notes\n\nSome note\n",
+			section: "# Links",
+			text:    "\n\n---\n*Clipped*\n\nA link\n",
+			want:    "# Notes\n\nSome note\n\n# Links\n\n\n---\n*Clipped*\n\nA link\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := insertIntoSection(tt.content, tt.section, tt.text)
+			if got != tt.want {
+				t.Errorf("insertIntoSection():\ngot:\n%q\nwant:\n%q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAppendToSection(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	note, err := s.CreateDailyNote(ctx, "2025-06-01")
+	if err != nil {
+		t.Fatalf("create note: %v", err)
+	}
+
+	// First append to Notes — should initialize the section structure.
+	if err := s.AppendToSection(ctx, note.ID, "# Notes", "\n\n---\n*10:00*\n\nMorning note\n"); err != nil {
+		t.Fatalf("append to Notes: %v", err)
+	}
+
+	content := s.readNoteContent("2025-06-01")
+	if !strings.Contains(content, "# Notes") {
+		t.Error("expected # Notes heading")
+	}
+	if !strings.Contains(content, "# Links") {
+		t.Error("expected # Links heading")
+	}
+	if !strings.Contains(content, "Morning note") {
+		t.Error("expected note content")
+	}
+
+	// Append to Links.
+	if err := s.AppendToSection(ctx, note.ID, "# Links", "\n\n---\n*Clipped*\n\nA link\n"); err != nil {
+		t.Fatalf("append to Links: %v", err)
+	}
+
+	content = s.readNoteContent("2025-06-01")
+	if !strings.Contains(content, "A link") {
+		t.Error("expected link content")
+	}
+
+	// Verify ordering: Notes section comes before Links section.
+	notesIdx := strings.Index(content, "# Notes")
+	linksIdx := strings.Index(content, "# Links")
+	if notesIdx >= linksIdx {
+		t.Errorf("expected # Notes (%d) before # Links (%d)", notesIdx, linksIdx)
+	}
+
+	// Verify note content is in Notes section (before Links).
+	morningIdx := strings.Index(content, "Morning note")
+	if morningIdx >= linksIdx {
+		t.Errorf("expected 'Morning note' (%d) before # Links (%d)", morningIdx, linksIdx)
+	}
+
+	// Verify link content is after Links heading.
+	linkContentIdx := strings.Index(content, "A link")
+	if linkContentIdx <= linksIdx {
+		t.Errorf("expected 'A link' (%d) after # Links (%d)", linkContentIdx, linksIdx)
+	}
+}
+
+func TestAppendToSectionLegacyNote(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	note, err := s.CreateDailyNote(ctx, "2025-06-02")
+	if err != nil {
+		t.Fatalf("create note: %v", err)
+	}
+
+	// Write legacy content without sections.
+	if err := s.writeNoteContent("2025-06-02", "Some old content\n"); err != nil {
+		t.Fatalf("write legacy content: %v", err)
+	}
+
+	// Appending to a section should add the heading at the end.
+	if err := s.AppendToSection(ctx, note.ID, "# Notes", "\n\n---\n*10:00*\n\nNew note\n"); err != nil {
+		t.Fatalf("append to Notes: %v", err)
+	}
+
+	content := s.readNoteContent("2025-06-02")
+	if !strings.Contains(content, "Some old content") {
+		t.Error("expected legacy content preserved")
+	}
+	if !strings.Contains(content, "# Notes") {
+		t.Error("expected # Notes heading added")
+	}
+	if !strings.Contains(content, "New note") {
+		t.Error("expected new note content")
+	}
+}
+
 

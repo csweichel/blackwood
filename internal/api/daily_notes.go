@@ -198,7 +198,7 @@ func (h *DailyNotesHandler) CreateEntry(ctx context.Context, req *connect.Reques
 	default:
 		snippet = fmt.Sprintf("\n\n---\n*%s*\n\n%s\n", ts, entry.Content)
 	}
-	if err := h.store.AppendDailyNoteContent(ctx, note.ID, snippet); err != nil {
+	if err := h.store.AppendToSection(ctx, note.ID, "# Notes", snippet); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("append daily note content: %w", err))
 	}
 
