@@ -12,6 +12,13 @@ import type {
   ImportJobStatus,
 } from "./types";
 import { type EntryType, type EntrySource } from "./types";
+import {
+  cacheDailyNote,
+  getCachedDailyNote,
+  queueEntry,
+  queueContentUpdate,
+} from "../lib/offlineStore";
+import { notifyPendingChange } from "../lib/syncEngine";
 
 const DAILY_NOTES_SERVICE = "/blackwood.v1.DailyNotesService";
 const CHAT_SERVICE = "/blackwood.v1.ChatService";
@@ -33,16 +40,72 @@ async function rpc<Req, Res>(method: string, request: Req, service: string = DAI
   return resp.json();
 }
 
+// --- Offline-aware API functions ---
+
 export async function getDailyNote(req: GetDailyNoteRequest): Promise<DailyNote> {
-  return rpc<GetDailyNoteRequest, DailyNote>("GetDailyNote", req);
+  try {
+    const data = await rpc<GetDailyNoteRequest, DailyNote>("GetDailyNote", req);
+    // Cache on success.
+    await cacheDailyNote(req.date, data.content ?? "");
+    return data;
+  } catch (err) {
+    if (!navigator.onLine) {
+      const cached = await getCachedDailyNote(req.date);
+      if (cached) {
+        return {
+          id: "",
+          date: cached.date,
+          content: cached.content,
+          entries: [],
+          createdAt: "",
+          updatedAt: new Date(cached.updatedAt).toISOString(),
+        };
+      }
+    }
+    throw err;
+  }
 }
 
 export async function listDailyNotes(req: ListDailyNotesRequest): Promise<ListDailyNotesResponse> {
-  return rpc<ListDailyNotesRequest, ListDailyNotesResponse>("ListDailyNotes", req);
+  try {
+    return await rpc<ListDailyNotesRequest, ListDailyNotesResponse>("ListDailyNotes", req);
+  } catch {
+    if (!navigator.onLine) {
+      return { dailyNotes: [] };
+    }
+    throw new Error("Failed to list daily notes");
+  }
 }
 
 export async function createEntry(req: CreateEntryRequest): Promise<Entry> {
-  return rpc<CreateEntryRequest, Entry>("CreateEntry", req);
+  if (navigator.onLine) {
+    try {
+      return await rpc<CreateEntryRequest, Entry>("CreateEntry", req);
+    } catch {
+      // Network error despite onLine — fall through to queue.
+    }
+  }
+  // Offline: queue for later sync.
+  const id = await queueEntry({
+    date: req.date,
+    type: req.type,
+    content: req.content,
+    source: req.source,
+    createdAt: Date.now(),
+  });
+  await notifyPendingChange();
+  return {
+    id: `pending-${id}`,
+    dailyNoteId: "",
+    type: req.type,
+    content: req.content,
+    rawContent: req.content,
+    source: req.source,
+    metadata: "",
+    attachments: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 export async function deleteEntry(req: DeleteEntryRequest): Promise<void> {
@@ -50,11 +113,35 @@ export async function deleteEntry(req: DeleteEntryRequest): Promise<void> {
 }
 
 export async function updateDailyNoteContent(date: string, content: string): Promise<DailyNote> {
-  return rpc<{ date: string; content: string }, DailyNote>("UpdateDailyNoteContent", { date, content });
+  // Always update the local cache optimistically.
+  await cacheDailyNote(date, content);
+
+  if (navigator.onLine) {
+    try {
+      return await rpc<{ date: string; content: string }, DailyNote>("UpdateDailyNoteContent", { date, content });
+    } catch {
+      // Network error despite onLine — queue it.
+      await queueContentUpdate(date, content);
+      await notifyPendingChange();
+      return { id: "", date, content, entries: [], createdAt: "", updatedAt: new Date().toISOString() };
+    }
+  }
+
+  // Offline: queue for later sync.
+  await queueContentUpdate(date, content);
+  await notifyPendingChange();
+  return { id: "", date, content, entries: [], createdAt: "", updatedAt: new Date().toISOString() };
 }
 
 export async function listDatesWithContent(startDate: string, endDate: string): Promise<{ dates: string[] }> {
-  return rpc<{ startDate: string; endDate: string }, { dates: string[] }>("ListDatesWithContent", { startDate, endDate });
+  try {
+    return await rpc<{ startDate: string; endDate: string }, { dates: string[] }>("ListDatesWithContent", { startDate, endDate });
+  } catch {
+    if (!navigator.onLine) {
+      return { dates: [] };
+    }
+    throw new Error("Failed to list dates with content");
+  }
 }
 
 export async function createEntryWithAttachment(
@@ -72,18 +159,40 @@ export async function createEntryWithAttachment(
   }
   const base64 = btoa(binary);
 
-  return rpc<Record<string, unknown>, Entry>("CreateEntry", {
-    date,
-    type,
-    content,
-    source,
+  if (navigator.onLine) {
+    try {
+      return await rpc<Record<string, unknown>, Entry>("CreateEntry", {
+        date, type, content, source,
+        attachmentData: [base64],
+        attachmentFilenames: [file.name],
+        attachmentContentTypes: [file.type],
+      });
+    } catch {
+      // Fall through to queue.
+    }
+  }
+
+  // Offline: queue with attachment data.
+  const id = await queueEntry({
+    date, type, content, source,
     attachmentData: [base64],
     attachmentFilenames: [file.name],
     attachmentContentTypes: [file.type],
+    createdAt: Date.now(),
   });
+  await notifyPendingChange();
+  return {
+    id: `pending-${id}`,
+    dailyNoteId: "",
+    type, content, rawContent: content, source,
+    metadata: "",
+    attachments: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
 }
 
-// Import API
+// --- Import API (no offline support — imports require the server) ---
 
 export async function importObsidian(files: File[]): Promise<{imported: number, skipped: number, errors: string[]}> {
   const obsidianFiles = await Promise.all(files.map(async (f) => {

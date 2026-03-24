@@ -4,6 +4,7 @@ import DailyNoteView from "./components/DailyNote";
 import ChatView from "./components/ChatView";
 import ImportModal from "./components/ImportModal";
 import ImportBanner from "./components/ImportBanner";
+import OfflineBanner from "./components/OfflineBanner";
 import { useImportJobs } from "./hooks/useImportJobs";
 import { jobToFileResult } from "./components/importUtils";
 
@@ -61,6 +62,8 @@ export default function App() {
             >
               Import
             </button>
+
+            <OfflineBanner />
 
             <ImportBanner
               activeCount={activeCount}
