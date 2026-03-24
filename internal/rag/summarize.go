@@ -13,7 +13,7 @@ import (
 
 const summarizeTimeout = 60 * time.Second
 
-const summarizeSystemPrompt = `Summarize this daily note in one sentence, max 160 characters. Third person past tense. No bullet points, no headings, no labels. Just the summary text.`
+const summarizeSystemPrompt = `Summarize this daily note in one sentence, max 160 characters. Write in a neutral, impersonal style — do not start with "They" or any pronoun. Focus on topics and activities. No bullet points, no headings, no labels. Just the summary text.`
 
 type nonStreamingResponse struct {
 	Choices []struct {
