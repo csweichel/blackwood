@@ -173,6 +173,9 @@ func main() {
 		srv.Handle("POST /api/daily-notes/{date}/summarize", api.ServeSummarize(store, ragEngine))
 	}
 
+	// Range summaries for weekly/monthly views.
+	srv.Handle("GET /api/daily-notes/range", api.ServeRangeSummaries(store))
+
 	// Web clipping endpoint.
 	srv.Handle("POST /api/clip", api.NewClipHandler(store))
 

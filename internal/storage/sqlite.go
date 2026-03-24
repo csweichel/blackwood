@@ -458,6 +458,71 @@ func (s *Store) ListDatesWithContent(ctx context.Context, startDate, endDate str
 	return dates, rows.Err()
 }
 
+// DailyNoteSummary holds a date and its extracted summary text.
+type DailyNoteSummary struct {
+	Date    string
+	Summary string
+}
+
+// ListSummariesInRange returns daily note summaries for dates in [startDate, endDate].
+// It extracts the "# Summary" section from each note's content.
+func (s *Store) ListSummariesInRange(ctx context.Context, startDate, endDate string) ([]DailyNoteSummary, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT date FROM daily_notes WHERE date >= ? AND date <= ? ORDER BY date`,
+		startDate, endDate,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list summaries in range: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var summaries []DailyNoteSummary
+	for rows.Next() {
+		var d string
+		if err := rows.Scan(&d); err != nil {
+			return nil, fmt.Errorf("scan date: %w", err)
+		}
+		content := s.readNoteContent(d)
+		if content == "" {
+			continue
+		}
+		summary := extractSection(content, "# Summary")
+		summaries = append(summaries, DailyNoteSummary{Date: d, Summary: summary})
+	}
+	return summaries, rows.Err()
+}
+
+// extractSection returns the body text under a markdown heading, or empty string
+// if the heading is not found. The body extends until the next "# " heading or EOF.
+func extractSection(content, heading string) string {
+	sectionIdx := -1
+	if strings.HasPrefix(content, heading+"\n") {
+		sectionIdx = 0
+	}
+	if sectionIdx < 0 {
+		if idx := strings.Index(content, "\n"+heading+"\n"); idx >= 0 {
+			sectionIdx = idx + 1
+		}
+	}
+	if sectionIdx < 0 {
+		return ""
+	}
+
+	afterHeading := sectionIdx + len(heading) + 1
+	nextSection := -1
+	if idx := strings.Index(content[afterHeading:], "\n# "); idx >= 0 {
+		nextSection = afterHeading + idx
+	}
+
+	var body string
+	if nextSection >= 0 {
+		body = content[afterHeading:nextSection]
+	} else {
+		body = content[afterHeading:]
+	}
+	return strings.TrimSpace(body)
+}
+
 // --- Entries ---
 
 // CreateEntry inserts a new entry, generating a UUID for its ID.

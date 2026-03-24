@@ -192,6 +192,14 @@ export async function createEntryWithAttachment(
   };
 }
 
+// --- Range summaries (plain HTTP, not Connect-go RPC) ---
+
+export async function fetchSummariesInRange(start: string, end: string): Promise<{ date: string; summary: string }[]> {
+  const resp = await fetch(`/api/daily-notes/range?start=${start}&end=${end}`);
+  if (!resp.ok) throw new Error("Failed to fetch summaries");
+  return resp.json();
+}
+
 // --- Import API (no offline support — imports require the server) ---
 
 export async function importObsidian(files: File[]): Promise<{imported: number, skipped: number, errors: string[]}> {
