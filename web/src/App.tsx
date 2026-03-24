@@ -1,4 +1,13 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+  useParams,
+  useLocation,
+} from "react-router-dom";
 import Calendar from "./components/Calendar";
 import DailyNoteView from "./components/DailyNote";
 import ChatView from "./components/ChatView";
@@ -8,18 +17,50 @@ import OfflineBanner from "./components/OfflineBanner";
 import { useImportJobs } from "./hooks/useImportJobs";
 import { jobToFileResult } from "./components/importUtils";
 
-type View = "notes" | "chat";
-
 function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export default function App() {
-  const [selectedDate, setSelectedDate] = useState(todayStr());
-  const [activeView, setActiveView] = useState<View>("notes");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [importModalOpen, setImportModalOpen] = useState(false);
+function DailyNotePage() {
+  const { date } = useParams<{ date: string }>();
+  const navigate = useNavigate();
+  const selectedDate = date || todayStr();
 
+  function handleSelectDate(d: string) {
+    navigate(`/day/${d}`);
+  }
+
+  return (
+    <div className="flex flex-col flex-1 overflow-hidden">
+      <Calendar selectedDate={selectedDate} onSelectDate={handleSelectDate} />
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-4xl mx-auto px-4 md:px-6 py-6">
+          <DailyNoteView key={selectedDate} date={selectedDate} />
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function ChatPage() {
+  const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
+
+  const handleNavigateToDate = useCallback(
+    (date: string) => {
+      navigate(`/day/${date}`);
+    },
+    [navigate]
+  );
+
+  return <ChatView slug={slug} onNavigateToDate={handleNavigateToDate} />;
+}
+
+function AppLayout() {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [importModalOpen, setImportModalOpen] = useState(false);
   const { jobs, activeCount, submit, deleteJob } = useImportJobs();
 
   async function handleImportFiles(e: React.ChangeEvent<HTMLInputElement>) {
@@ -30,27 +71,19 @@ export default function App() {
     e.target.value = "";
   }
 
-  function handleSelectDate(date: string) {
-    setSelectedDate(date);
-  }
-
-  const handleNavigateToDate = useCallback((date: string) => {
-    setSelectedDate(date);
-    setActiveView("notes");
-  }, []);
+  const isChat = location.pathname.startsWith("/chat");
 
   // Cmd+D / Ctrl+D jumps to today
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === "d") {
         e.preventDefault();
-        setSelectedDate(todayStr());
-        setActiveView("notes");
+        navigate(`/day/${todayStr()}`);
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [navigate]);
 
   return (
     <div className="h-screen flex flex-col bg-background">
@@ -86,9 +119,9 @@ export default function App() {
             {/* View toggle */}
             <div className="flex items-center bg-muted rounded-lg p-0.5">
               <button
-                onClick={() => setActiveView("notes")}
+                onClick={() => navigate(`/day/${todayStr()}`)}
                 className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  activeView === "notes"
+                  !isChat
                     ? "bg-card text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
@@ -96,9 +129,9 @@ export default function App() {
                 Notes
               </button>
               <button
-                onClick={() => setActiveView("chat")}
+                onClick={() => navigate("/chat")}
                 className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  activeView === "chat"
+                  isChat
                     ? "bg-card text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
@@ -111,33 +144,32 @@ export default function App() {
       </header>
 
       {/* Body */}
-      {activeView === "notes" ? (
-        <div className="flex flex-col flex-1 overflow-hidden">
-          {/* Horizontal calendar timeline */}
-          <Calendar selectedDate={selectedDate} onSelectDate={handleSelectDate} />
-
-          {/* Main content */}
-          <main className="flex-1 overflow-y-auto">
-            <div className="max-w-4xl mx-auto px-4 md:px-6 py-6">
-              <DailyNoteView key={selectedDate} date={selectedDate} />
-            </div>
-          </main>
-        </div>
-      ) : (
-        <ChatView onNavigateToDate={handleNavigateToDate} />
-      )}
+      <Routes>
+        <Route path="/" element={<Navigate to={`/day/${todayStr()}`} replace />} />
+        <Route path="/day/:date" element={<DailyNotePage />} />
+        <Route path="/chat" element={<ChatPage />} />
+        <Route path="/chat/:slug" element={<ChatPage />} />
+        <Route path="*" element={<Navigate to={`/day/${todayStr()}`} replace />} />
+      </Routes>
 
       <ImportModal
         open={importModalOpen}
         files={jobs.map(jobToFileResult)}
         onClose={() => setImportModalOpen(false)}
         onNavigateToDate={(date) => {
-          setSelectedDate(date);
-          setActiveView("notes");
+          navigate(`/day/${date}`);
           setImportModalOpen(false);
         }}
         onDeleteJob={deleteJob}
       />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AppLayout />
+    </BrowserRouter>
   );
 }

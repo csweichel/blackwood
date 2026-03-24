@@ -169,11 +169,13 @@ func main() {
 	srv.Handle("GET /api/daily-notes/{date}/pdf", api.ServePDF(store))
 
 	// Serve web UI: filesystem first (development), then embedded (release binary).
+	// Uses an SPA fallback handler so client-side routes (e.g. /day/2025-01-15)
+	// serve index.html instead of 404.
 	if info, err := os.Stat("web/dist"); err == nil && info.IsDir() {
-		srv.Handle("/", http.FileServer(http.Dir("web/dist")))
+		srv.Handle("/", spaHandler(http.Dir("web/dist")))
 		slog.Info("serving web UI from filesystem", "path", "web/dist")
 	} else if sfs, err := staticFS(); err == nil {
-		srv.Handle("/", http.FileServer(http.FS(sfs)))
+		srv.Handle("/", spaHandler(http.FS(sfs)))
 		slog.Info("serving embedded web UI")
 	}
 
@@ -322,6 +324,25 @@ func main() {
 			os.Exit(1)
 		}
 	}
+}
+
+// spaHandler serves static files from fs, falling back to index.html for
+// paths that don't match a real file (client-side routing support).
+func spaHandler(fsys http.FileSystem) http.Handler {
+	fileServer := http.FileServer(fsys)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Try to open the requested path as a file.
+		path := r.URL.Path
+		f, err := fsys.Open(path)
+		if err == nil {
+			f.Close()
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+		// Fall back to index.html for SPA routes.
+		r.URL.Path = "/"
+		fileServer.ServeHTTP(w, r)
+	})
 }
 
 func runSetup() {

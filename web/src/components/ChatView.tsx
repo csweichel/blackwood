@@ -1,68 +1,106 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import type { ChatMessage, Conversation } from "../api/types";
 import { getConversation, listConversations } from "../api/client";
+import { conversationSlug } from "../lib/slugify";
 import ChatPanel from "./ChatPanel";
 import ConversationList from "./ConversationList";
 
 interface ChatViewProps {
+  slug?: string;
   onNavigateToDate: (date: string) => void;
 }
 
-export default function ChatView({ onNavigateToDate }: ChatViewProps) {
+export default function ChatView({ slug, onNavigateToDate }: ChatViewProps) {
+  const navigate = useNavigate();
   const [conversationId, setConversationId] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const loadedLastChat = useRef(false);
+  const initialLoadDone = useRef(false);
 
-  // On mount, load the most recent conversation
+  // Resolve slug to a conversation on mount or when slug changes
   useEffect(() => {
-    if (loadedLastChat.current) return;
-    loadedLastChat.current = true;
+    let cancelled = false;
 
-    listConversations(1, 0)
-      .then(async (res) => {
-        const convs = res.conversations || [];
-        if (convs.length > 0) {
-          const full = await getConversation(convs[0].id);
+    async function resolve() {
+      const convs = (await listConversations(50, 0)).conversations || [];
+
+      if (cancelled) return;
+
+      if (slug) {
+        // Find conversation matching the slug
+        const match = convs.find((c) => conversationSlug(c) === slug);
+        if (match) {
+          const full = await getConversation(match.id);
+          if (!cancelled) {
+            setConversationId(full.id);
+            setMessages(full.messages || []);
+          }
+          return;
+        }
+      }
+
+      // No slug or no match: load most recent conversation (only on first load)
+      if (!initialLoadDone.current && convs.length > 0) {
+        const full = await getConversation(convs[0].id);
+        if (!cancelled) {
           setConversationId(full.id);
           setMessages(full.messages || []);
+          navigate(`/chat/${conversationSlug(convs[0])}`, { replace: true });
         }
-      })
-      .catch(() => {});
-  }, []);
+      }
+    }
+
+    initialLoadDone.current = true;
+    resolve().catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, navigate]);
 
   const handleNewConversation = useCallback(() => {
     setConversationId("");
     setMessages([]);
     setSidebarOpen(false);
-  }, []);
+    navigate("/chat");
+  }, [navigate]);
 
-  const handleSelectConversation = useCallback(async (conv: Conversation) => {
-    setSidebarOpen(false);
-    try {
-      const full = await getConversation(conv.id);
-      setConversationId(full.id);
-      setMessages(full.messages || []);
-    } catch {
-      // If fetching fails, just set the ID and show empty
-      setConversationId(conv.id);
-      setMessages([]);
-    }
-  }, []);
+  const handleSelectConversation = useCallback(
+    async (conv: Conversation) => {
+      setSidebarOpen(false);
+      try {
+        const full = await getConversation(conv.id);
+        setConversationId(full.id);
+        setMessages(full.messages || []);
+      } catch {
+        setConversationId(conv.id);
+        setMessages([]);
+      }
+      navigate(`/chat/${conversationSlug(conv)}`);
+    },
+    [navigate]
+  );
 
-  const handleMessagesUpdate = useCallback((updatedMessages: ChatMessage[], newConversationId: string) => {
-    setMessages(updatedMessages);
-    if (newConversationId && newConversationId !== conversationId) {
-      setConversationId(newConversationId);
-      // Refresh conversation list when a new conversation is created
-      setRefreshKey((k) => k + 1);
-    }
-  }, [conversationId]);
+  const handleMessagesUpdate = useCallback(
+    (updatedMessages: ChatMessage[], newConversationId: string) => {
+      setMessages(updatedMessages);
+      if (newConversationId && newConversationId !== conversationId) {
+        setConversationId(newConversationId);
+        // Refresh conversation list when a new conversation is created
+        setRefreshKey((k) => k + 1);
+      }
+    },
+    [conversationId]
+  );
 
-  const handleSourceClick = useCallback((date: string) => {
-    onNavigateToDate(date);
-  }, [onNavigateToDate]);
+  const handleSourceClick = useCallback(
+    (date: string) => {
+      onNavigateToDate(date);
+    },
+    [onNavigateToDate]
+  );
 
   return (
     <div className="flex flex-1 overflow-hidden relative">
