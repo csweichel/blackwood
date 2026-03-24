@@ -276,6 +276,20 @@ telegram:
 
 All messages are appended to the daily note with a timestamp and "Telegram" source label. Attachments (audio files, photos) are stored alongside the note.
 
+### Web Clipping (bookmarklet)
+
+Clip any web page into today's daily note. The clipper fetches Open Graph metadata (title, description, preview image) and appends a formatted blockquote to the note.
+
+#### Bookmarklet
+
+Drag this to your bookmarks bar (replace the URL with your Blackwood instance):
+
+```
+javascript:void(window.open('https://your-blackwood/clip#'+encodeURIComponent(location.href)))
+```
+
+When clicked on any page, it opens Blackwood's `/clip` route which calls `POST /api/clip`, saves the card, and redirects to today's note.
+
 ## Storage
 
 Daily notes are stored as markdown files on disk:
@@ -317,7 +331,7 @@ On Windows/Linux, use `Ctrl` instead of `Cmd`.
 - [x] Client-side routing with bookmarkable URLs
 - [x] Collapsible sections
 - [x] Keyboard shortcuts
-- [ ] Chrome extension (web clipper)
+- [x] Web clipper (bookmarklet)
 - [ ] iOS app
 - [ ] Mac app (menu bar quick capture)
 

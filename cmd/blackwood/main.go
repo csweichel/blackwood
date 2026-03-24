@@ -168,6 +168,9 @@ func main() {
 	// PDF export for daily notes.
 	srv.Handle("GET /api/daily-notes/{date}/pdf", api.ServePDF(store))
 
+	// Web clipping endpoint.
+	srv.Handle("POST /api/clip", api.NewClipHandler(store))
+
 	// Serve web UI: filesystem first (development), then embedded (release binary).
 	// Uses an SPA fallback handler so client-side routes (e.g. /day/2025-01-15)
 	// serve index.html instead of 404.
