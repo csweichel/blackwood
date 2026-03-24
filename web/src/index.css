@@ -48,7 +48,7 @@
 }
 
 @theme inline {
-  --font-sans: 'Source Serif 4', Georgia, serif;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', Menlo, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -72,7 +72,7 @@
 
 body {
   margin: 0;
-  font-family: 'Source Serif 4', Georgia, serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: var(--background);
@@ -378,7 +378,7 @@ body {
 }
 
 .note-editor .cm-scroller {
-  font-family: 'Source Serif 4', Georgia, serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
 @media (max-width: 767px) {
