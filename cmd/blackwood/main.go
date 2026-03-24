@@ -168,6 +168,11 @@ func main() {
 	// PDF export for daily notes.
 	srv.Handle("GET /api/daily-notes/{date}/pdf", api.ServePDF(store))
 
+	// Search endpoint (requires semantic index).
+	if semanticIndex != nil {
+		srv.Handle("GET /api/search", api.ServeSearch(store, semanticIndex))
+	}
+
 	// Web clipping endpoint.
 	srv.Handle("POST /api/clip", api.NewClipHandler(store))
 
