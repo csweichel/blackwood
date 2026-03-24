@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
 const summarizeTimeout = 60 * time.Second
 
-const summarizeSystemPrompt = `You are a concise summarizer for daily notes. Given the full markdown content of a day's notes, produce a brief summary (2-4 sentences) highlighting key activities, decisions, and topics. Do not use bullet points. Write in third person past tense. Output only the summary text, no headings or labels.`
+const summarizeSystemPrompt = `Summarize this daily note in one sentence, max 160 characters. Third person past tense. No bullet points, no headings, no labels. Just the summary text.`
 
 type nonStreamingResponse struct {
 	Choices []struct {
@@ -27,6 +28,13 @@ type nonStreamingResponse struct {
 func (e *Engine) Summarize(ctx context.Context, content string) (string, error) {
 	if content == "" {
 		return "", fmt.Errorf("empty content")
+	}
+
+	// Strip existing # Summary section to avoid summarizing the previous summary.
+	content = stripSection(content, "# Summary")
+
+	if strings.TrimSpace(content) == "" {
+		return "", fmt.Errorf("no content after stripping summary")
 	}
 
 	messages := []chatMsg{
@@ -76,4 +84,28 @@ func (e *Engine) Summarize(ctx context.Context, content string) (string, error) 
 	}
 
 	return result.Choices[0].Message.Content, nil
+}
+
+// stripSection removes a markdown section and its body from content.
+func stripSection(content, heading string) string {
+	idx := -1
+	if strings.HasPrefix(content, heading+"\n") {
+		idx = 0
+	} else if i := strings.Index(content, "\n"+heading+"\n"); i >= 0 {
+		idx = i + 1
+	}
+	if idx < 0 {
+		return content
+	}
+
+	afterHeading := idx + len(heading) + 1
+	nextSection := -1
+	if i := strings.Index(content[afterHeading:], "\n# "); i >= 0 {
+		nextSection = afterHeading + i + 1
+	}
+
+	if nextSection >= 0 {
+		return content[:idx] + content[nextSection:]
+	}
+	return content[:idx]
 }
