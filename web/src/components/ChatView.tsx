@@ -17,6 +17,7 @@ export default function ChatView({ slug, onNavigateToDate }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
   const initialLoadDone = useRef(false);
 
   // Resolve slug to a conversation on mount or when slug changes
@@ -53,7 +54,17 @@ export default function ChatView({ slug, onNavigateToDate }: ChatViewProps) {
     }
 
     initialLoadDone.current = true;
-    resolve().catch(() => {});
+    resolve().catch((err) => {
+      if (cancelled) return;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("not available") || msg.includes("not configured") || msg.includes("503")) {
+        setChatError("Chat is not available. Configure an OpenAI API key to enable it.");
+      } else if (!navigator.onLine) {
+        setChatError("Chat requires a network connection.");
+      } else {
+        setChatError("Failed to load conversations. Please try again later.");
+      }
+    });
 
     return () => {
       cancelled = true;
@@ -143,12 +154,21 @@ export default function ChatView({ slug, onNavigateToDate }: ChatViewProps) {
           </button>
         </div>
 
-        <ChatPanel
-          conversationId={conversationId}
-          messages={messages}
-          onMessagesUpdate={handleMessagesUpdate}
-          onSourceClick={handleSourceClick}
-        />
+        {chatError ? (
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground px-4">
+            <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-sm text-center">{chatError}</p>
+          </div>
+        ) : (
+          <ChatPanel
+            conversationId={conversationId}
+            messages={messages}
+            onMessagesUpdate={handleMessagesUpdate}
+            onSourceClick={handleSourceClick}
+          />
+        )}
       </div>
     </div>
   );

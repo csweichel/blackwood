@@ -40,6 +40,22 @@ self.addEventListener("fetch", (event) => {
   // Only handle same-origin requests.
   if (url.origin !== self.location.origin) return;
 
+  // Never intercept Connect streaming requests — they use
+  // application/connect+json and the Connect-Protocol-Version header.
+  // Buffering these in the service worker breaks real-time streaming.
+  if (
+    request.headers.get("Connect-Protocol-Version") ||
+    (request.headers.get("Content-Type") || "").includes("application/connect+json")
+  ) {
+    return;
+  }
+
+  // Skip ChatService entirely — chat requires the server and should not
+  // be intercepted or served from cache.
+  if (url.pathname.startsWith("/blackwood.v1.ChatService")) {
+    return;
+  }
+
   // API calls (Connect-RPC): network-first, cache fallback for GET-like reads.
   if (
     url.pathname.startsWith("/blackwood.v1.") ||
