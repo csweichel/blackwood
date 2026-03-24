@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -156,7 +157,7 @@ func (w *Worker) processViwoods(ctx context.Context, job *storage.ImportJob) err
 		if err := w.store.CreateAttachment(ctx, att, page.Image, date); err != nil {
 			slog.Warn("failed to store page attachment", "page", i+1, "error", err)
 		} else {
-			fmt.Fprintf(&md, "![Page %d](/api/attachments/%s)\n\n", i+1, att.ID)
+			fmt.Fprintf(&md, "![Page %d](%s)\n\n", i+1, filepath.Base(att.StoragePath))
 		}
 
 		// OCR the page text.

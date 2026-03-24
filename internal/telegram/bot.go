@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"net/http"
 	neturl "net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -561,7 +562,7 @@ func (b *Bot) downloadOGImage(ctx context.Context, imageURL, noteID, date string
 		return ""
 	}
 
-	return fmt.Sprintf("![](/api/attachments/%s)", att.ID)
+	return fmt.Sprintf("![](%s)", filepath.Base(att.StoragePath))
 }
 
 func (b *Bot) handleVoice(ctx context.Context, client *http.Client, chatID int64, voice *Voice) {
@@ -625,7 +626,7 @@ func (b *Bot) handleVoice(ctx context.Context, client *http.Client, chatID int64
 		return
 	}
 
-	audioRef := fmt.Sprintf(`<audio controls src="/api/attachments/%s"></audio>`, att.ID)
+	audioRef := fmt.Sprintf(`<audio controls src="%s"></audio>`, filepath.Base(att.StoragePath))
 	snippet := fmt.Sprintf("\n\n---\n*%s — Telegram voice message*\n\n%s\n\n%s\n", now.Format("15:04"), audioRef, text)
 	if err := b.store.AppendToSection(ctx, note.ID, "# Notes", snippet); err != nil {
 		slog.Error("telegram: append voice transcription", "error", err)

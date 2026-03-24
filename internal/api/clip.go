@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -98,7 +99,7 @@ func (h *ClipHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				if err := h.store.CreateAttachment(ctx, att, imgData, today); err != nil {
 					slog.Warn("store og:image", "error", err)
 				} else {
-					imageRef = fmt.Sprintf("![](/api/attachments/%s)", att.ID)
+					imageRef = fmt.Sprintf("![](%s)", filepath.Base(att.StoragePath))
 				}
 			} else {
 				slog.Warn("download og:image", "url", card.Image, "error", err)

@@ -180,7 +180,7 @@ func (h *DailyNotesHandler) CreateEntry(ctx context.Context, req *connect.Reques
 	case "audio":
 		var audioRef string
 		if len(createdAttachments) > 0 {
-			audioRef = fmt.Sprintf(`<audio controls src="/api/attachments/%s"></audio>`, createdAttachments[0].ID)
+			audioRef = fmt.Sprintf(`<audio controls src="%s"></audio>`, filepath.Base(createdAttachments[0].StoragePath))
 		}
 		if entry.Content != "" {
 			snippet = fmt.Sprintf("\n\n---\n*%s — Voice memo*\n\n%s\n\n%s\n", ts, audioRef, entry.Content)
@@ -190,7 +190,7 @@ func (h *DailyNotesHandler) CreateEntry(ctx context.Context, req *connect.Reques
 	case "photo":
 		var imgRef string
 		if len(createdAttachments) > 0 {
-			imgRef = fmt.Sprintf("![photo](/api/attachments/%s)", createdAttachments[0].ID)
+			imgRef = fmt.Sprintf("![photo](%s)", filepath.Base(createdAttachments[0].StoragePath))
 		}
 		if entry.Content != "" {
 			snippet = fmt.Sprintf("\n\n---\n*%s — Photo*\n\n%s\n\n%s\n", ts, imgRef, entry.Content)

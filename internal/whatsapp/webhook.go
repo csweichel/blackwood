@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -287,7 +288,7 @@ func (h *WebhookHandler) handleAudio(ctx context.Context, from, mediaID, mimeTyp
 		return
 	}
 
-	audioRef := fmt.Sprintf(`<audio controls src="/api/attachments/%s"></audio>`, att.ID)
+	audioRef := fmt.Sprintf(`<audio controls src="%s"></audio>`, filepath.Base(att.StoragePath))
 	snippet := fmt.Sprintf("\n\n---\n*%s — WhatsApp voice message*\n\n%s\n\n%s\n", now.Format("15:04"), audioRef, text)
 	if err := h.store.AppendDailyNoteContent(ctx, note.ID, snippet); err != nil {
 		slog.Error("whatsapp: append audio transcription", "error", err)
