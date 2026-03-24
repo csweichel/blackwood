@@ -392,7 +392,8 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
   }
 
   function startEditing() {
-    setEditContent(content);
+    const template = "# Summary\n\n# Notes\n\n# Links\n";
+    setEditContent(content.trim() ? content : template);
     setEditing(true);
   }
 

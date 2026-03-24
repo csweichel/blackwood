@@ -265,7 +265,7 @@ func (s *Store) AppendDailyNoteContent(ctx context.Context, id string, text stri
 }
 
 // defaultSections is the initial structure for new daily notes.
-const defaultSections = "# Notes\n\n# Links\n"
+const defaultSections = "# Summary\n\n# Notes\n\n# Links\n"
 
 // AppendToSection appends text under the given markdown heading (e.g. "# Notes" or "# Links").
 // If the section doesn't exist, it creates it. Content is appended at the end of the section
