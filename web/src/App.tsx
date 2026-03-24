@@ -14,6 +14,7 @@ import ChatView from "./components/ChatView";
 import ClipPage from "./components/ClipPage";
 import WeekView from "./components/WeekView";
 import MonthView from "./components/MonthView";
+import SearchPage from "./components/SearchPage";
 import ImportModal from "./components/ImportModal";
 import ImportBanner from "./components/ImportBanner";
 import OfflineBanner from "./components/OfflineBanner";
@@ -62,6 +63,7 @@ function ChatPage() {
 
 function AppLayout() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -91,10 +93,20 @@ function AppLayout() {
         e.preventDefault();
         navigate(isChat ? `/day/${todayStr()}` : "/chat");
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        if (location.pathname.startsWith("/search")) {
+          window.dispatchEvent(new CustomEvent("focus-search"));
+        } else if (searchInputRef.current) {
+          searchInputRef.current.focus();
+        } else {
+          navigate("/search");
+        }
+      }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [navigate, isChat]);
+  }, [navigate, isChat, location.pathname]);
 
   return (
     <div className="flex flex-col bg-background" style={{ height: "100dvh" }}>
@@ -105,6 +117,13 @@ function AppLayout() {
 
           {/* Actions */}
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate("/search")}
+              className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg transition-colors"
+              title="Search (Cmd+K)"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            </button>
             <input
               ref={fileInputRef}
               type="file"
@@ -187,6 +206,7 @@ function AppLayout() {
         <Route path="/week/:weekId" element={<WeekView />} />
         <Route path="/month" element={<MonthView />} />
         <Route path="/month/:monthId" element={<MonthView />} />
+        <Route path="/search" element={<SearchPage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/chat/:slug" element={<ChatPage />} />
         <Route path="/clip" element={<ClipPage />} />

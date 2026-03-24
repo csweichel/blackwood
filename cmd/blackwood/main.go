@@ -176,6 +176,11 @@ func main() {
 	// Range summaries for weekly/monthly views.
 	srv.Handle("GET /api/daily-notes/range", api.ServeRangeSummaries(store))
 
+	// Search endpoint (requires semantic index).
+	if semanticIndex != nil {
+		srv.Handle("GET /api/search", api.ServeSearch(store, semanticIndex))
+	}
+
 	// Web clipping endpoint.
 	srv.Handle("POST /api/clip", api.NewClipHandler(store))
 
