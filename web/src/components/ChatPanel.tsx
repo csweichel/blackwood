@@ -114,7 +114,7 @@ export default function ChatPanel({ conversationId, messages, onMessagesUpdate, 
         if (chunk.conversationId) {
           currentConvId = chunk.conversationId;
         }
-        assistantContent += chunk.content;
+        assistantContent += chunk.content ?? "";
         if (chunk.done && chunk.sources) {
           assistantSources = chunk.sources;
         }
