@@ -405,7 +405,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
   const attachRef = useRef<HTMLDivElement>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
-  const { position: geoPosition, loading: geoLoading, requestLocation } = useGeolocation();
+  const { position: geoPosition, loading: geoLoading, error: geoError, requestLocation } = useGeolocation();
   const [locationTagged, setLocationTagged] = useState(false);
 
   // Close attach menu on outside click
@@ -619,10 +619,10 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
                 <button
                   onClick={() => { setShowAttachMenu(false); requestLocation(); }}
                   disabled={geoLoading || locationTagged}
-                  className={`flex items-center gap-2 px-3 py-2 text-sm w-full text-left ${locationTagged ? "text-accent" : geoLoading ? "text-muted-foreground opacity-50 cursor-wait" : "text-foreground hover:bg-muted"}`}
+                  className={`flex items-center gap-2 px-3 py-2 text-sm w-full text-left ${locationTagged ? "text-accent" : geoLoading ? "text-muted-foreground opacity-50 cursor-wait" : geoError ? "text-destructive" : "text-foreground hover:bg-muted"}`}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-                  {locationTagged ? "Location tagged" : "Location"}
+                  {locationTagged ? "Location tagged" : geoError ? geoError : "Location"}
                 </button>
                 <button
                   onClick={() => { setShowAttachMenu(false); setShowClipForm(true); }}
