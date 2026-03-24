@@ -508,7 +508,12 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
         ) : content.trim() ? (
           <div
             className="prose prose-sm max-w-none note-prose note-container"
-            onClick={startEditing}
+            onClick={(e) => {
+              // Don't enter edit mode when clicking interactive elements
+              const target = e.target as HTMLElement;
+              if (target.closest("summary, details, a, audio, button, video, iframe")) return;
+              startEditing();
+            }}
           >
             <Markdown remarkPlugins={[remarkWikilinks]} rehypePlugins={[rehypeRaw, rehypeYoutubeEmbed, rehypeCollapsible]}>
               {content}
