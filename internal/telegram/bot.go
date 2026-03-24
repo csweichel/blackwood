@@ -10,11 +10,13 @@ import (
 	"log/slog"
 	"math/big"
 	"net/http"
+	neturl "net/url"
 	"strings"
 	"time"
 
 	"github.com/csweichel/blackwood/internal/describe"
 	"github.com/csweichel/blackwood/internal/index"
+	"github.com/csweichel/blackwood/internal/opengraph"
 	"github.com/csweichel/blackwood/internal/storage"
 	"github.com/csweichel/blackwood/internal/transcribe"
 )
@@ -32,12 +34,20 @@ type Update struct {
 }
 
 type Message struct {
-	MessageID int64       `json:"message_id"`
-	Chat      Chat        `json:"chat"`
-	Text      string      `json:"text,omitempty"`
-	Voice     *Voice      `json:"voice,omitempty"`
-	Photo     []PhotoSize `json:"photo,omitempty"`
-	Caption   string      `json:"caption,omitempty"`
+	MessageID int64           `json:"message_id"`
+	Chat      Chat            `json:"chat"`
+	Text      string          `json:"text,omitempty"`
+	Voice     *Voice          `json:"voice,omitempty"`
+	Photo     []PhotoSize     `json:"photo,omitempty"`
+	Caption   string          `json:"caption,omitempty"`
+	Entities  []MessageEntity `json:"entities,omitempty"`
+}
+
+type MessageEntity struct {
+	Type   string `json:"type"`   // "url", "text_link", etc.
+	Offset int    `json:"offset"` // offset in UTF-16 code units
+	Length int    `json:"length"` // length in UTF-16 code units
+	URL    string `json:"url"`    // only for "text_link" type
 }
 
 type Chat struct {
@@ -245,13 +255,13 @@ func (b *Bot) processMessage(ctx context.Context, client *http.Client, msg *Mess
 	case len(msg.Photo) > 0:
 		b.handlePhoto(ctx, client, chatID, msg.Photo, msg.Caption)
 	case text != "":
-		b.handleText(ctx, client, chatID, text)
+		b.handleText(ctx, client, chatID, text, msg.Entities)
 	default:
 		slog.Info("telegram: unsupported message type", "chat_id", chatID)
 	}
 }
 
-func (b *Bot) handleText(ctx context.Context, client *http.Client, chatID int64, text string) {
+func (b *Bot) handleText(ctx context.Context, client *http.Client, chatID int64, text string, entities []MessageEntity) {
 	// Check for RAG query prefix.
 	if strings.HasPrefix(text, "Q:") {
 		slog.Warn("telegram: RAG queries not yet supported via Telegram", "chat_id", chatID)
@@ -268,7 +278,16 @@ func (b *Bot) handleText(ctx context.Context, client *http.Client, chatID int64,
 		return
 	}
 
-	snippet := fmt.Sprintf("\n\n---\n*%s — Telegram*\n\n%s\n", now.Format("15:04"), text)
+	// Extract URLs from entities.
+	urls := extractURLs(text, entities)
+
+	// Build the snippet content: if we have URLs, try to generate preview cards.
+	snippetBody := text
+	if len(urls) > 0 {
+		snippetBody = b.buildSnippetWithPreviews(ctx, text, urls, note.ID, date)
+	}
+
+	snippet := fmt.Sprintf("\n\n---\n*%s — Telegram*\n\n%s\n", now.Format("15:04"), snippetBody)
 	if err := b.store.AppendDailyNoteContent(ctx, note.ID, snippet); err != nil {
 		slog.Error("telegram: append text", "error", err)
 		return
@@ -292,6 +311,260 @@ func (b *Bot) handleText(ctx context.Context, client *http.Client, chatID int64,
 	}
 
 	b.sendMessage(ctx, client, chatID, "✓ Added to your daily notes")
+}
+
+// extractedURL holds a URL and its position in the original message text.
+type extractedURL struct {
+	URL    string
+	Offset int // byte offset in the Go string
+	Length int // byte length in the Go string
+}
+
+// extractURLs pulls URLs from Telegram message entities.
+// Telegram encodes offsets/lengths in UTF-16 code units, so we convert accordingly.
+func extractURLs(text string, entities []MessageEntity) []extractedURL {
+	if len(entities) == 0 {
+		return nil
+	}
+
+	// Convert Go string (UTF-8) to UTF-16 code units for offset mapping.
+	runes := []rune(text)
+	// Build a mapping from UTF-16 offset to rune index.
+	utf16Pos := 0
+	utf16ToRuneIdx := make(map[int]int, len(runes))
+	for i, r := range runes {
+		utf16ToRuneIdx[utf16Pos] = i
+		if r >= 0x10000 {
+			utf16Pos += 2 // surrogate pair
+		} else {
+			utf16Pos++
+		}
+	}
+
+	var urls []extractedURL
+	for _, e := range entities {
+		var u string
+		switch e.Type {
+		case "url":
+			// The URL is embedded in the text at the given offset/length.
+			startRune, ok := utf16ToRuneIdx[e.Offset]
+			if !ok {
+				continue
+			}
+			// Find the end rune index by scanning forward.
+			endUTF16 := e.Offset + e.Length
+			endRune, ok := utf16ToRuneIdx[endUTF16]
+			if !ok {
+				endRune = len(runes)
+			}
+			u = string(runes[startRune:endRune])
+		case "text_link":
+			u = e.URL
+		default:
+			continue
+		}
+		if u == "" {
+			continue
+		}
+		// Ensure the URL has a scheme.
+		if !strings.Contains(u, "://") {
+			u = "https://" + u
+		}
+
+		// Compute byte offset/length for the URL in the original text (for "url" type).
+		var byteOff, byteLen int
+		if e.Type == "url" {
+			startRune := utf16ToRuneIdx[e.Offset]
+			endUTF16 := e.Offset + e.Length
+			endRune, ok := utf16ToRuneIdx[endUTF16]
+			if !ok {
+				endRune = len(runes)
+			}
+			prefix := string(runes[:startRune])
+			extracted := string(runes[startRune:endRune])
+			byteOff = len(prefix)
+			byteLen = len(extracted)
+		}
+
+		urls = append(urls, extractedURL{URL: u, Offset: byteOff, Length: byteLen})
+	}
+	return urls
+}
+
+// buildSnippetWithPreviews replaces URLs in the message text with OG preview cards.
+// Non-URL text is preserved. If a fetch fails, the raw URL is kept.
+func (b *Bot) buildSnippetWithPreviews(ctx context.Context, text string, urls []extractedURL, noteID, date string) string {
+	// For "text_link" entities (Offset/Length == 0), we can't replace in-text,
+	// so we append cards at the end.
+	type replacement struct {
+		byteOffset int
+		byteLength int
+		card       string
+	}
+
+	var replacements []replacement
+	var appendCards []string
+
+	for _, u := range urls {
+		card, err := opengraph.Fetch(ctx, u.URL)
+		if err != nil {
+			slog.Debug("telegram: opengraph fetch failed", "url", u.URL, "error", err)
+			continue
+		}
+		if card == nil {
+			continue
+		}
+
+		cardMD := b.formatCard(ctx, card, u.URL, noteID, date)
+
+		if u.Length > 0 {
+			replacements = append(replacements, replacement{
+				byteOffset: u.Offset,
+				byteLength: u.Length,
+				card:       cardMD,
+			})
+		} else {
+			appendCards = append(appendCards, cardMD)
+		}
+	}
+
+	if len(replacements) == 0 && len(appendCards) == 0 {
+		return text
+	}
+
+	// Sort replacements by offset descending so we can replace from the end
+	// without invalidating earlier offsets.
+	for i := 0; i < len(replacements); i++ {
+		for j := i + 1; j < len(replacements); j++ {
+			if replacements[j].byteOffset > replacements[i].byteOffset {
+				replacements[i], replacements[j] = replacements[j], replacements[i]
+			}
+		}
+	}
+
+	result := text
+	for _, r := range replacements {
+		before := result[:r.byteOffset]
+		after := result[r.byteOffset+r.byteLength:]
+		result = before + r.card + after
+	}
+
+	for _, c := range appendCards {
+		result += "\n\n" + c
+	}
+
+	return result
+}
+
+// formatCard renders an OG card as a markdown blockquote.
+func (b *Bot) formatCard(ctx context.Context, card *opengraph.Card, rawURL, noteID, date string) string {
+	var lines []string
+
+	// Title line, optionally with site name.
+	titleLine := card.Title
+	if card.SiteName != "" && card.Title != "" {
+		titleLine = card.Title + " — " + card.SiteName
+	} else if card.SiteName != "" {
+		titleLine = card.SiteName
+	}
+	if titleLine != "" {
+		lines = append(lines, "> **"+titleLine+"**")
+	}
+
+	if card.Description != "" {
+		lines = append(lines, "> "+card.Description)
+	}
+
+	// Download and attach the OG image if present.
+	if card.Image != "" {
+		if imgRef := b.downloadOGImage(ctx, card.Image, noteID, date); imgRef != "" {
+			lines = append(lines, "> "+imgRef)
+		}
+	}
+
+	// Link line — show a short domain/path.
+	displayURL := rawURL
+	if parsed, err := neturl.Parse(rawURL); err == nil {
+		displayURL = parsed.Host + parsed.Path
+		// Trim trailing slash for cleanliness.
+		displayURL = strings.TrimRight(displayURL, "/")
+	}
+	lines = append(lines, "> ["+displayURL+"]("+rawURL+")")
+
+	return strings.Join(lines, "\n")
+}
+
+// downloadOGImage fetches an OG image and stores it as an attachment.
+// Returns a markdown image reference, or empty string on failure.
+func (b *Bot) downloadOGImage(ctx context.Context, imageURL, noteID, date string) string {
+	imgCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(imgCtx, http.MethodGet, imageURL, nil)
+	if err != nil {
+		slog.Debug("telegram: create og image request", "error", err)
+		return ""
+	}
+	req.Header.Set("User-Agent", "Blackwood/1.0 (link preview)")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		slog.Debug("telegram: download og image", "url", imageURL, "error", err)
+		return ""
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return ""
+	}
+
+	// Limit image download to 5 MB.
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 5*1024*1024))
+	if err != nil {
+		slog.Debug("telegram: read og image", "error", err)
+		return ""
+	}
+	if len(data) == 0 {
+		return ""
+	}
+
+	// Determine content type and extension.
+	contentType := resp.Header.Get("Content-Type")
+	ext := ".jpg"
+	switch {
+	case strings.Contains(contentType, "png"):
+		ext = ".png"
+	case strings.Contains(contentType, "gif"):
+		ext = ".gif"
+	case strings.Contains(contentType, "webp"):
+		ext = ".webp"
+	case strings.Contains(contentType, "svg"):
+		ext = ".svg"
+	}
+
+	// We need an entry to attach to. Create a lightweight entry for the OG image.
+	entry := &storage.Entry{
+		DailyNoteID: noteID,
+		Type:        "text",
+		Content:     "og-preview image",
+		Source:      "telegram",
+	}
+	if err := b.store.CreateEntry(ctx, entry); err != nil {
+		slog.Debug("telegram: create og image entry", "error", err)
+		return ""
+	}
+
+	att := &storage.Attachment{
+		EntryID:     entry.ID,
+		Filename:    "og-preview" + ext,
+		ContentType: contentType,
+	}
+	if err := b.store.CreateAttachment(ctx, att, data, date); err != nil {
+		slog.Debug("telegram: create og image attachment", "error", err)
+		return ""
+	}
+
+	return fmt.Sprintf("![](/api/attachments/%s)", att.ID)
 }
 
 func (b *Bot) handleVoice(ctx context.Context, client *http.Client, chatID int64, voice *Voice) {
