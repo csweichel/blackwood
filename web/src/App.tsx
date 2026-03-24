@@ -104,7 +104,7 @@ function AppLayout() {
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground bg-muted hover:bg-border rounded-lg transition-colors"
+              className="px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground border border-border rounded-lg transition-colors"
             >
               Import
             </button>

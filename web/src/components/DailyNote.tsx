@@ -3,7 +3,7 @@ import Markdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import { visit } from "unist-util-visit";
 import { getDailyNote, updateDailyNoteContent } from "../api/client";
-import EntryForm from "./EntryForm";
+
 import MarkdownEditor from "./MarkdownEditor";
 import AudioRecorder from "./AudioRecorder";
 import PhotoCapture from "./PhotoCapture";
@@ -527,8 +527,6 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
           </div>
         )}
       </div>
-
-      <EntryForm date={date} onCreated={handleEntryCreated} />
 
       <div className="mt-12 pt-6 border-t border-border">
         <p className="text-xs text-muted-foreground">
