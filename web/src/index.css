@@ -350,10 +350,7 @@ body {
 
 .note-container {
   cursor: text;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  padding: 1.25rem 1.5rem;
+  padding: 0;
 }
 
 .note-empty {
@@ -385,13 +382,6 @@ body {
 }
 
 @media (max-width: 767px) {
-  .note-container {
-    border: none;
-    border-radius: 0;
-    padding: 0;
-    background: transparent;
-  }
-
   .note-empty {
     border: none;
     border-radius: 0;
