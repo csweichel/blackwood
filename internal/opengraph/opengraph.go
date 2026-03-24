@@ -2,10 +2,12 @@ package opengraph
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -46,7 +48,21 @@ func Fetch(ctx context.Context, rawURL string) (*Card, error) {
 
 	// Only read the head section — limit to 256 KB to avoid downloading huge pages.
 	limited := io.LimitReader(resp.Body, 256*1024)
-	return parseHead(limited, rawURL)
+	card, err := parseHead(limited, rawURL)
+	if err != nil {
+		return nil, err
+	}
+
+	// Twitter/X blocks bot User-Agents and returns no OG metadata.
+	// Fall back to their public oEmbed API.
+	parsedURL, _ := url.Parse(rawURL)
+	if (card == nil || card.Title == "") && parsedURL != nil && isTwitterURL(parsedURL) {
+		if tCard, err := fetchTwitterOEmbed(ctx, rawURL); err == nil && tCard != nil {
+			return tCard, nil
+		}
+	}
+
+	return card, nil
 }
 
 // parseHead tokenizes HTML and extracts OG/Twitter meta tags and <title>.
@@ -203,4 +219,64 @@ func firstNonEmpty(vals ...string) string {
 		}
 	}
 	return ""
+}
+
+// isTwitterURL returns true if the host is a Twitter/X domain.
+func isTwitterURL(u *url.URL) bool {
+	switch strings.ToLower(u.Host) {
+	case "twitter.com", "www.twitter.com", "x.com", "www.x.com":
+		return true
+	}
+	return false
+}
+
+// fetchTwitterOEmbed uses Twitter's public oEmbed API to get tweet metadata.
+func fetchTwitterOEmbed(ctx context.Context, rawURL string) (*Card, error) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	oembedURL := "https://publish.twitter.com/oembed?url=" + url.QueryEscape(rawURL) + "&omit_script=true"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, oembedURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("oembed status %d", resp.StatusCode)
+	}
+	var oembed struct {
+		AuthorName   string `json:"author_name"`
+		HTML         string `json:"html"`
+		ProviderName string `json:"provider_name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&oembed); err != nil {
+		return nil, err
+	}
+	description := stripHTMLTags(oembed.HTML)
+	return &Card{
+		Title:       oembed.AuthorName,
+		Description: description,
+		SiteName:    oembed.ProviderName,
+		URL:         rawURL,
+	}, nil
+}
+
+var htmlTagRe = regexp.MustCompile(`<[^>]*>`)
+
+// stripHTMLTags removes HTML tags and decodes common entities.
+func stripHTMLTags(s string) string {
+	s = htmlTagRe.ReplaceAllString(s, "")
+	// Decode common HTML entities.
+	r := strings.NewReplacer(
+		"&amp;", "&",
+		"&lt;", "<",
+		"&gt;", ">",
+		"&quot;", `"`,
+		"&#39;", "'",
+		"&nbsp;", " ",
+	)
+	s = r.Replace(s)
+	return strings.TrimSpace(s)
 }

@@ -468,17 +468,17 @@ func (b *Bot) formatCard(ctx context.Context, card *opengraph.Card, rawURL, note
 		titleLine = card.SiteName
 	}
 	if titleLine != "" {
-		lines = append(lines, "> **"+titleLine+"**")
+		lines = append(lines, "**"+titleLine+"**")
 	}
 
 	if card.Description != "" {
-		lines = append(lines, "> "+card.Description)
+		lines = append(lines, card.Description)
 	}
 
 	// Download and attach the OG image if present.
 	if card.Image != "" {
 		if imgRef := b.downloadOGImage(ctx, card.Image, noteID, date); imgRef != "" {
-			lines = append(lines, "> "+imgRef)
+			lines = append(lines, imgRef)
 		}
 	}
 
@@ -489,7 +489,7 @@ func (b *Bot) formatCard(ctx context.Context, card *opengraph.Card, rawURL, note
 		// Trim trailing slash for cleanliness.
 		displayURL = strings.TrimRight(displayURL, "/")
 	}
-	lines = append(lines, "> ["+displayURL+"]("+rawURL+")")
+	lines = append(lines, "["+displayURL+"]("+rawURL+")")
 
 	return strings.Join(lines, "\n")
 }

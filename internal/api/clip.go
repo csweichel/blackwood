@@ -120,13 +120,13 @@ func (h *ClipHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			title = title + " — " + card.SiteName
 		}
 		if title != "" {
-			fmt.Fprintf(&md, "> **%s**\n", title)
+			fmt.Fprintf(&md, "**%s**\n\n", title)
 		}
 		if card.Description != "" {
-			fmt.Fprintf(&md, "> %s\n", card.Description)
+			fmt.Fprintf(&md, "%s\n\n", card.Description)
 		}
 		if imageRef != "" {
-			fmt.Fprintf(&md, "> %s\n", imageRef)
+			fmt.Fprintf(&md, "%s\n\n", imageRef)
 		}
 
 		linkURL := card.URL
@@ -134,7 +134,7 @@ func (h *ClipHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			linkURL = req.URL
 		}
 		domain := domainAndPath(linkURL)
-		fmt.Fprintf(&md, "> [%s](%s)\n", domain, linkURL)
+		fmt.Fprintf(&md, "[%s](%s)\n", domain, linkURL)
 	} else {
 		// No OG metadata — just link the URL.
 		if entry.ID == "" {
@@ -145,7 +145,7 @@ func (h *ClipHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		domain := domainAndPath(req.URL)
-		fmt.Fprintf(&md, "> [%s](%s)\n", domain, req.URL)
+		fmt.Fprintf(&md, "[%s](%s)\n", domain, req.URL)
 	}
 
 	content := md.String()
@@ -153,7 +153,7 @@ func (h *ClipHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Update the entry content in the DB (CreateEntry already inserted it).
 
 	// Append to the daily note markdown.
-	if err := h.store.AppendDailyNoteContent(ctx, note.ID, "\n"+content+"\n"); err != nil {
+	if err := h.store.AppendDailyNoteContent(ctx, note.ID, "\n---\n*Clipped*\n\n"+content+"\n"); err != nil {
 		slog.Error("append daily note content", "error", err)
 		http.Error(w, "failed to update daily note", http.StatusInternalServerError)
 		return
