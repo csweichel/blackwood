@@ -53,20 +53,25 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(cacheFirstStatic(request));
 });
 
-// Network-first for API calls. On success, cache the response for offline use.
-// On failure (offline), return the cached version if available.
+// Network-first for API calls. The Cache API only supports GET requests,
+// so POST-based Connect-RPC calls are not cached here — offline support
+// for those is handled by IndexedDB in the app layer.
 async function networkFirstApi(request) {
-  const cache = await caches.open(CACHE_NAME);
   try {
     const response = await fetch(request);
-    // Cache successful GET/POST reads so they're available offline.
-    if (response.ok) {
+    // Cache successful GET requests (e.g. attachment serving).
+    if (response.ok && request.method === "GET") {
+      const cache = await caches.open(CACHE_NAME);
       cache.put(request, response.clone());
     }
     return response;
   } catch {
-    const cached = await cache.match(request);
-    if (cached) return cached;
+    // For GET requests, try the cache.
+    if (request.method === "GET") {
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(request);
+      if (cached) return cached;
+    }
     // No cache available — return a generic offline error.
     return new Response(
       JSON.stringify({ code: "unavailable", message: "Offline" }),
