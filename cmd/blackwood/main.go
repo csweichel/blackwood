@@ -168,6 +168,11 @@ func main() {
 	// PDF export for daily notes.
 	srv.Handle("GET /api/daily-notes/{date}/pdf", api.ServePDF(store))
 
+	// Summarize endpoint (requires RAG engine).
+	if ragEngine != nil {
+		srv.Handle("POST /api/daily-notes/{date}/summarize", api.ServeSummarize(store, ragEngine))
+	}
+
 	// Web clipping endpoint.
 	srv.Handle("POST /api/clip", api.NewClipHandler(store))
 
@@ -188,6 +193,11 @@ func main() {
 
 	// Start the background import worker.
 	go worker.Start(ctx)
+
+	// Start the nightly digest if RAG is available.
+	if ragEngine != nil {
+		go api.StartNightlyDigest(ctx, store, ragEngine)
+	}
 
 	// Telegram bot.
 	if cfg.Telegram.Enabled {

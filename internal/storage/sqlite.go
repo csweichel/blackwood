@@ -354,6 +354,85 @@ func insertIntoSection(content, section, text string) string {
 	return content + text + "\n"
 }
 
+// SetSection replaces the body of a markdown section (e.g. "# Summary") with new text.
+// If the section doesn't exist, it is inserted before "# Notes" (for "# Summary") or
+// appended at the end.
+func (s *Store) SetSection(ctx context.Context, id string, section string, text string) error {
+	date, err := s.getNoteDate(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	content := s.readNoteContent(date)
+	content = replaceSection(content, section, text)
+
+	if err := s.writeNoteContent(date, content); err != nil {
+		return fmt.Errorf("write note file: %w", err)
+	}
+	_, err = s.db.ExecContext(ctx,
+		`UPDATE daily_notes SET updated_at = ? WHERE id = ?`,
+		time.Now().UTC(), id,
+	)
+	return err
+}
+
+// replaceSection replaces the body of a section heading in content. If the section
+// doesn't exist, it inserts it. For "# Summary", it inserts before "# Notes".
+func replaceSection(content, section, text string) string {
+	// Ensure text ends with newline.
+	if text != "" && !strings.HasSuffix(text, "\n") {
+		text += "\n"
+	}
+
+	// Find the section heading.
+	sectionIdx := -1
+	if strings.HasPrefix(content, section+"\n") {
+		sectionIdx = 0
+	}
+	if sectionIdx < 0 {
+		if idx := strings.Index(content, "\n"+section+"\n"); idx >= 0 {
+			sectionIdx = idx + 1
+		}
+	}
+
+	if sectionIdx >= 0 {
+		// Found — replace the body between this heading and the next.
+		afterHeading := sectionIdx + len(section) + 1
+
+		nextSection := -1
+		if idx := strings.Index(content[afterHeading:], "\n# "); idx >= 0 {
+			nextSection = afterHeading + idx + 1
+		}
+
+		if nextSection >= 0 {
+			return content[:afterHeading] + text + "\n" + content[nextSection:]
+		}
+		return content[:afterHeading] + text
+	}
+
+	// Section not found — insert it.
+	body := section + "\n" + text + "\n"
+
+	// For "# Summary", insert before "# Notes" so it appears at the top.
+	if section == "# Summary" {
+		notesIdx := -1
+		if strings.HasPrefix(content, "# Notes\n") {
+			notesIdx = 0
+		} else if idx := strings.Index(content, "\n# Notes\n"); idx >= 0 {
+			notesIdx = idx + 1
+		}
+		if notesIdx >= 0 {
+			return content[:notesIdx] + body + content[notesIdx:]
+		}
+	}
+
+	// Append at end.
+	if content != "" && !strings.HasSuffix(content, "\n") {
+		content += "\n"
+	}
+	return content + "\n" + body
+}
+
 // ListDatesWithContent returns dates that have non-empty content within the given range.
 func (s *Store) ListDatesWithContent(ctx context.Context, startDate, endDate string) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx,
