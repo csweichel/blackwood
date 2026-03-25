@@ -392,7 +392,7 @@ func (s *Syncer) sync(ctx context.Context) error {
 
 // listMeetings calls the list_meetings MCP tool and parses the result.
 func (s *Syncer) listMeetings(ctx context.Context) ([]Meeting, error) {
-	text, err := s.mcp.callTool(ctx, "list_meetings", nil)
+	text, err := s.mcp.callTool(ctx, "list_meetings", map[string]any{})
 	if err != nil {
 		return nil, err
 	}
