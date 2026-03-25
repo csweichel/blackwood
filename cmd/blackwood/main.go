@@ -80,7 +80,7 @@ func main() {
 	addr := cfg.Server.Addr
 	dataDir := cfg.Server.DataDir
 
-	slog.Info("starting blackwood", "addr", addr, "data-dir", dataDir)
+	slog.Info("starting blackwood", "version", Version, "addr", addr, "data-dir", dataDir)
 
 	// Ensure data directory exists.
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {

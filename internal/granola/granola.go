@@ -64,7 +64,7 @@ type clientInfo struct {
 
 type callToolParams struct {
 	Name      string         `json:"name"`
-	Arguments map[string]any `json:"arguments,omitempty"`
+	Arguments map[string]any `json:"arguments"`
 }
 
 type callToolResult struct {
