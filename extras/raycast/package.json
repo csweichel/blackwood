@@ -1,0 +1,72 @@
+{
+  "name": "blackwood",
+  "title": "Blackwood",
+  "description": "Log notes, clip URLs, ingest images, record voice memos, and ask questions against your Blackwood daily notes.",
+  "icon": "icon.png",
+  "author": "csweichel",
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "log-note",
+      "title": "Log Note",
+      "subtitle": "Blackwood",
+      "description": "Add a text note to today's daily note.",
+      "mode": "view"
+    },
+    {
+      "name": "clip-url",
+      "title": "Clip URL",
+      "subtitle": "Blackwood",
+      "description": "Clip a URL from the clipboard into today's daily note.",
+      "mode": "no-view"
+    },
+    {
+      "name": "ask-question",
+      "title": "Ask Question",
+      "subtitle": "Blackwood",
+      "description": "Ask a question against your notes using RAG.",
+      "mode": "view"
+    },
+    {
+      "name": "ingest-image",
+      "title": "Ingest Image",
+      "subtitle": "Blackwood",
+      "description": "Add an image to today's daily note.",
+      "mode": "no-view"
+    },
+    {
+      "name": "voice-record",
+      "title": "Voice Record",
+      "subtitle": "Blackwood",
+      "description": "Record a voice memo and add it to today's daily note.",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "serverUrl",
+      "title": "Server URL",
+      "description": "The base URL of your Blackwood server (e.g. https://blackwood.example.com).",
+      "type": "textfield",
+      "required": true,
+      "default": "http://localhost:8080"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.93.3",
+    "@raycast/utils": "^1.19.1",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^1.0.11",
+    "typescript": "^5.4.5",
+    "@types/node": "^20.8.10",
+    "eslint": "^8.57.0"
+  },
+  "scripts": {
+    "build": "ray build",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint"
+  }
+}
