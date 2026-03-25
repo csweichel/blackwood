@@ -485,10 +485,11 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
   useEffect(() => {
     if (!geoPosition || locationTagged) return;
     setLocationTagged(true);
-    const { latitude, longitude } = geoPosition;
+    const { latitude, longitude, address } = geoPosition;
     const ts = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     const mapUrl = `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=15/${latitude}/${longitude}`;
-    const snippet = `\n\n---\n*${ts} — 📍 [${latitude.toFixed(4)}, ${longitude.toFixed(4)}](${mapUrl})*\n`;
+    const locationLabel = address || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+    const snippet = `\n\n---\n*${ts} — 📍 [${locationLabel}](${mapUrl})*\n`;
     const newContent = content + snippet;
     setContent(newContent);
     doSave(newContent);
