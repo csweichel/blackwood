@@ -295,23 +295,32 @@ func (c *mcpClient) sendNotification(ctx context.Context, notif jsonRPCRequest) 
 }
 
 // --- Granola meeting types (parsed from MCP tool responses) ---
+//
+// The Granola MCP tools return XML-like markup in their text content, e.g.:
+//
+//   <meetings_data from="..." to="..." count="N">
+//   <meeting id="..." title="..." date="...">
+//     <known_participants>...</known_participants>
+//     <summary>markdown content</summary>
+//   </meeting>
+//   </meetings_data>
+//
+// Transcripts come as JSON: {"id":"...","title":"...","transcript":"..."}
 
 // Meeting represents a meeting from list_meetings.
 type Meeting struct {
-	ID        string   `json:"id"`
-	Title     string   `json:"title"`
-	Date      string   `json:"date"`
-	Attendees []string `json:"attendees"`
+	ID           string
+	Title        string
+	Date         string
+	Participants string // raw participant text from <known_participants>
 }
 
-// MeetingDetail represents the full content from get_meetings.
+// MeetingDetail holds the raw text returned by get_meetings for a single meeting.
+// The Granola MCP already returns well-formatted content, so we store it as-is.
 type MeetingDetail struct {
-	ID            string   `json:"id"`
-	Title         string   `json:"title"`
-	Date          string   `json:"date"`
-	Attendees     []string `json:"attendees"`
-	PrivateNotes  string   `json:"private_notes"`
-	EnhancedNotes string   `json:"enhanced_notes"`
+	Title string
+	Date  string
+	Text  string // raw text from the MCP response
 }
 
 // --- Syncer ---
@@ -390,30 +399,82 @@ func (s *Syncer) sync(ctx context.Context) error {
 	return nil
 }
 
-// listMeetings calls the list_meetings MCP tool and parses the result.
+// listMeetings calls the list_meetings MCP tool and parses the XML-like result.
 func (s *Syncer) listMeetings(ctx context.Context) ([]Meeting, error) {
 	text, err := s.mcp.callTool(ctx, "list_meetings", map[string]any{})
 	if err != nil {
 		return nil, err
 	}
 
+	return parseMeetingsList(text)
+}
+
+// parseMeetingsList parses the XML-like markup returned by list_meetings.
+// Format: <meeting id="..." title="..." date="..."><known_participants>...</known_participants></meeting>
+func parseMeetingsList(text string) ([]Meeting, error) {
 	var meetings []Meeting
-	if err := json.Unmarshal([]byte(text), &meetings); err != nil {
-		// Try to extract a JSON array from the text.
-		start := strings.Index(text, "[")
-		end := strings.LastIndex(text, "]")
-		if start >= 0 && end > start {
-			if err2 := json.Unmarshal([]byte(text[start:end+1]), &meetings); err2 != nil {
-				return nil, fmt.Errorf("parse meetings: %w (raw: %s)", err, truncate(text, 200))
-			}
-		} else {
-			return nil, fmt.Errorf("parse meetings: %w (raw: %s)", err, truncate(text, 200))
+	remaining := text
+
+	for {
+		// Find next <meeting ...> tag
+		tagStart := strings.Index(remaining, "<meeting ")
+		if tagStart < 0 {
+			break
 		}
+		remaining = remaining[tagStart:]
+
+		// Find the end of the opening tag
+		tagEnd := strings.Index(remaining, ">")
+		if tagEnd < 0 {
+			break
+		}
+		openTag := remaining[:tagEnd+1]
+
+		m := Meeting{
+			ID:    extractAttr(openTag, "id"),
+			Title: extractAttr(openTag, "title"),
+			Date:  extractAttr(openTag, "date"),
+		}
+
+		// Extract <known_participants> content if present
+		remaining = remaining[tagEnd+1:]
+		if pStart := strings.Index(remaining, "<known_participants>"); pStart >= 0 {
+			pContent := remaining[pStart+len("<known_participants>"):]
+			if pEnd := strings.Index(pContent, "</known_participants>"); pEnd >= 0 {
+				m.Participants = strings.TrimSpace(pContent[:pEnd])
+			}
+		}
+
+		if m.ID != "" {
+			meetings = append(meetings, m)
+		}
+	}
+
+	if len(meetings) == 0 {
+		return nil, fmt.Errorf("no meetings found in response (raw: %s)", truncate(text, 200))
 	}
 	return meetings, nil
 }
 
-// getMeetingDetail calls get_meetings to fetch full content for a meeting.
+// extractAttr extracts the value of an attribute from an XML-like tag string.
+// e.g. extractAttr(`<meeting id="abc" title="foo">`, "id") returns "abc".
+func extractAttr(tag, attr string) string {
+	needle := attr + `="`
+	idx := strings.Index(tag, needle)
+	if idx < 0 {
+		return ""
+	}
+	val := tag[idx+len(needle):]
+	end := strings.Index(val, `"`)
+	if end < 0 {
+		return ""
+	}
+	return val[:end]
+}
+
+// getMeetingDetail calls get_meetings and returns the raw text content.
+// Title and date are extracted from the <meeting> tag for metadata; the full
+// response text is kept as-is since Granola already returns readable content.
 func (s *Syncer) getMeetingDetail(ctx context.Context, meetingID string) (*MeetingDetail, error) {
 	text, err := s.mcp.callTool(ctx, "get_meetings", map[string]any{
 		"meeting_ids": []string{meetingID},
@@ -422,28 +483,22 @@ func (s *Syncer) getMeetingDetail(ctx context.Context, meetingID string) (*Meeti
 		return nil, err
 	}
 
-	var details []MeetingDetail
-	if err := json.Unmarshal([]byte(text), &details); err == nil && len(details) > 0 {
-		return &details[0], nil
-	}
+	d := &MeetingDetail{Text: text}
 
-	var detail MeetingDetail
-	if err := json.Unmarshal([]byte(text), &detail); err == nil && detail.ID != "" {
-		return &detail, nil
-	}
-
-	start := strings.Index(text, "{")
-	end := strings.LastIndex(text, "}")
-	if start >= 0 && end > start {
-		if err := json.Unmarshal([]byte(text[start:end+1]), &detail); err == nil {
-			return &detail, nil
+	// Pull title/date from the <meeting> tag if present (for metadata only).
+	if tagStart := strings.Index(text, "<meeting "); tagStart >= 0 {
+		if tagEnd := strings.Index(text[tagStart:], ">"); tagEnd >= 0 {
+			tag := text[tagStart : tagStart+tagEnd+1]
+			d.Title = extractAttr(tag, "title")
+			d.Date = extractAttr(tag, "date")
 		}
 	}
 
-	return nil, fmt.Errorf("parse meeting detail (raw: %s)", truncate(text, 200))
+	return d, nil
 }
 
 // getTranscript calls get_meeting_transcript for a meeting.
+// The response is JSON: {"id":"...","title":"...","transcript":"..."}
 func (s *Syncer) getTranscript(ctx context.Context, meetingID string) (string, error) {
 	text, err := s.mcp.callTool(ctx, "get_meeting_transcript", map[string]any{
 		"meeting_id": meetingID,
@@ -452,6 +507,16 @@ func (s *Syncer) getTranscript(ctx context.Context, meetingID string) (string, e
 		slog.Debug("transcript not available", "meeting_id", meetingID, "error", err)
 		return "", nil
 	}
+
+	// Try to extract the transcript field from JSON.
+	var tr struct {
+		Transcript string `json:"transcript"`
+	}
+	if err := json.Unmarshal([]byte(text), &tr); err == nil && tr.Transcript != "" {
+		return tr.Transcript, nil
+	}
+
+	// Fall back to raw text.
 	return text, nil
 }
 
@@ -464,9 +529,9 @@ func (s *Syncer) importMeeting(ctx context.Context, m Meeting) error {
 
 	transcript, _ := s.getTranscript(ctx, m.ID)
 
-	date := parseDateFromISO(m.Date)
+	date := parseDate(m.Date)
 	if date == "" && detail.Date != "" {
-		date = parseDateFromISO(detail.Date)
+		date = parseDate(detail.Date)
 	}
 	if date == "" {
 		date = time.Now().UTC().Format("2006-01-02")
@@ -520,61 +585,41 @@ func (s *Syncer) importMeeting(ctx context.Context, m Meeting) error {
 	return nil
 }
 
-// buildNoteMarkdown formats a meeting as markdown.
+// buildNoteMarkdown combines the meeting detail text with the transcript.
+// The detail text from Granola is already well-formatted, so we use it as-is.
 func buildNoteMarkdown(d *MeetingDetail, transcript string) string {
-	var md strings.Builder
-
-	fmt.Fprintf(&md, "## %s\n\n", d.Title)
-
-	if d.Date != "" {
-		if t := formatTime(d.Date); t != "" {
-			fmt.Fprintf(&md, "**Date:** %s\n\n", t)
-		}
+	if transcript == "" {
+		return d.Text
 	}
 
-	if len(d.Attendees) > 0 {
-		fmt.Fprintf(&md, "**Attendees:** %s\n\n", strings.Join(d.Attendees, ", "))
-	}
-
-	if d.EnhancedNotes != "" {
-		md.WriteString(d.EnhancedNotes)
-		md.WriteString("\n")
-	}
-
-	if d.PrivateNotes != "" {
-		md.WriteString("\n### Private Notes\n\n")
-		md.WriteString(d.PrivateNotes)
-		md.WriteString("\n")
-	}
-
-	if transcript != "" {
-		md.WriteString("\n### Transcript\n\n")
-		md.WriteString(transcript)
-		md.WriteString("\n")
-	}
-
-	return md.String()
+	return d.Text + "\n\n### Transcript\n\n" + transcript + "\n"
 }
 
-// parseDateFromISO extracts YYYY-MM-DD from an ISO 8601 timestamp.
-func parseDateFromISO(iso string) string {
-	if len(iso) < 10 {
+// parseDate extracts YYYY-MM-DD from various date formats.
+// Handles ISO 8601 ("2026-01-27T15:30:00Z"), date-only ("2026-01-27"),
+// and Granola's human-readable format ("Mar 25, 2026 10:30 AM").
+func parseDate(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
 		return ""
 	}
-	return iso[:10]
-}
 
-// formatTime formats an ISO 8601 timestamp as a readable date/time.
-func formatTime(iso string) string {
-	t, err := time.Parse(time.RFC3339, iso)
-	if err != nil {
-		t, err = time.Parse("2006-01-02", iso)
-		if err != nil {
-			return iso
-		}
-		return t.Format("2006-01-02")
+	// ISO 8601 or date-only: starts with 4-digit year.
+	if len(s) >= 10 && s[4] == '-' {
+		return s[:10]
 	}
-	return t.Format("2006-01-02 15:04")
+
+	// Granola format: "Mar 25, 2026 10:30 AM"
+	for _, layout := range []string{
+		"Jan 2, 2006 3:04 PM",
+		"Jan 2, 2006",
+	} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t.Format("2006-01-02")
+		}
+	}
+
+	return ""
 }
 
 func truncate(s string, n int) string {

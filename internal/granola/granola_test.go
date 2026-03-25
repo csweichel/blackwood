@@ -17,99 +17,96 @@ import (
 )
 
 func TestBuildNoteMarkdown(t *testing.T) {
-	tests := []struct {
-		name       string
-		detail     MeetingDetail
-		transcript string
-		contains   []string
-		absent     []string
-	}{
-		{
-			name: "full note with attendees and transcript",
-			detail: MeetingDetail{
-				Title:         "Sprint Planning",
-				Date:          "2026-01-27T15:30:00Z",
-				Attendees:     []string{"Alice", "Bob"},
-				EnhancedNotes: "We planned the sprint and assigned tasks.",
-				PrivateNotes:  "Need to follow up with Bob.",
-			},
-			transcript: "> Alice: Let's start.\n> Bob: Sounds good.",
-			contains: []string{
-				"## Sprint Planning",
-				"**Date:** 2026-01-27 15:30",
-				"**Attendees:** Alice, Bob",
-				"We planned the sprint",
-				"### Private Notes",
-				"Need to follow up with Bob.",
-				"### Transcript",
-				"Alice: Let's start.",
-			},
-		},
-		{
-			name: "note with only enhanced notes, no transcript",
-			detail: MeetingDetail{
-				Title:         "Quick Sync",
-				EnhancedNotes: "A brief sync about the project.",
-			},
-			contains: []string{
-				"## Quick Sync",
-				"A brief sync about the project.",
-			},
-			absent: []string{
-				"### Transcript",
-				"**Attendees:**",
-				"### Private Notes",
-			},
-		},
-		{
-			name: "date-only format",
-			detail: MeetingDetail{
-				Title: "Meeting",
-				Date:  "2026-03-01",
-			},
-			contains: []string{
-				"**Date:** 2026-03-01",
-			},
-		},
-	}
+	t.Run("with transcript", func(t *testing.T) {
+		d := &MeetingDetail{Text: "meeting content here"}
+		md := buildNoteMarkdown(d, "speaker said things")
+		if !strings.Contains(md, "meeting content here") {
+			t.Errorf("expected detail text, got: %s", md)
+		}
+		if !strings.Contains(md, "### Transcript") {
+			t.Errorf("expected transcript section, got: %s", md)
+		}
+		if !strings.Contains(md, "speaker said things") {
+			t.Errorf("expected transcript text, got: %s", md)
+		}
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			md := buildNoteMarkdown(&tt.detail, tt.transcript)
-			for _, s := range tt.contains {
-				if !strings.Contains(md, s) {
-					t.Errorf("expected markdown to contain %q\ngot:\n%s", s, md)
-				}
-			}
-			for _, s := range tt.absent {
-				if strings.Contains(md, s) {
-					t.Errorf("expected markdown NOT to contain %q\ngot:\n%s", s, md)
-				}
-			}
-		})
+	t.Run("without transcript", func(t *testing.T) {
+		d := &MeetingDetail{Text: "just the meeting"}
+		md := buildNoteMarkdown(d, "")
+		if md != "just the meeting" {
+			t.Errorf("expected raw text, got: %s", md)
+		}
+		if strings.Contains(md, "Transcript") {
+			t.Errorf("should not contain transcript section, got: %s", md)
+		}
+	})
+}
+
+func TestParseMeetingsList(t *testing.T) {
+	// Real-world format from Granola MCP.
+	input := `<meetings_data from="Feb 23, 2026" to="Mar 25, 2026" count="2">
+<meeting id="abc-123" title="Sprint Planning" date="Mar 25, 2026 10:30 AM">
+    <known_participants>
+    Alice, Bob
+    </known_participants>
+  </meeting>
+
+<meeting id="def-456" title="1:1 Sync" date="Mar 24, 2026 2:00 PM">
+    <known_participants>
+    Charlie
+    </known_participants>
+  </meeting>
+</meetings_data>`
+
+	meetings, err := parseMeetingsList(input)
+	if err != nil {
+		t.Fatalf("parseMeetingsList: %v", err)
+	}
+	if len(meetings) != 2 {
+		t.Fatalf("got %d meetings, want 2", len(meetings))
+	}
+	if meetings[0].ID != "abc-123" {
+		t.Errorf("meetings[0].ID = %q, want %q", meetings[0].ID, "abc-123")
+	}
+	if meetings[0].Title != "Sprint Planning" {
+		t.Errorf("meetings[0].Title = %q, want %q", meetings[0].Title, "Sprint Planning")
+	}
+	if meetings[1].ID != "def-456" {
+		t.Errorf("meetings[1].ID = %q, want %q", meetings[1].ID, "def-456")
 	}
 }
 
-func TestParseDateFromISO(t *testing.T) {
+func TestParseMeetingsListEmpty(t *testing.T) {
+	_, err := parseMeetingsList("no meetings here")
+	if err == nil {
+		t.Fatal("expected error for empty response")
+	}
+}
+
+func TestParseDate(t *testing.T) {
 	tests := []struct {
 		input string
 		want  string
 	}{
 		{"2026-01-27T15:30:00Z", "2026-01-27"},
 		{"2026-03-01", "2026-03-01"},
+		{"Mar 25, 2026 10:30 AM", "2026-03-25"},
+		{"Jan 2, 2026", "2026-01-02"},
 		{"short", ""},
 		{"", ""},
 	}
 	for _, tt := range tests {
-		got := parseDateFromISO(tt.input)
+		got := parseDate(tt.input)
 		if got != tt.want {
-			t.Errorf("parseDateFromISO(%q) = %q, want %q", tt.input, got, tt.want)
+			t.Errorf("parseDate(%q) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
 }
 
 // fakeMCPServer creates an httptest server that speaks the MCP Streamable HTTP
 // protocol (JSON-RPC over HTTP POST) and responds to initialize, tools/call.
+// Responses use the same XML-like markup format as the real Granola MCP.
 func fakeMCPServer(t *testing.T, meetings []Meeting, details map[string]*MeetingDetail) *httptest.Server {
 	t.Helper()
 	var sessionCounter atomic.Int64
@@ -150,20 +147,31 @@ func fakeMCPServer(t *testing.T, meetings []Meeting, details map[string]*Meeting
 			var resultText string
 			switch params.Name {
 			case "list_meetings":
-				b, _ := json.Marshal(meetings)
-				resultText = string(b)
+				// Return XML-like markup matching real Granola format.
+				var sb strings.Builder
+				fmt.Fprintf(&sb, `<meetings_data from="Jan 1, 2026" to="Jan 31, 2026" count="%d">`, len(meetings))
+				sb.WriteString("\n")
+				for _, m := range meetings {
+					fmt.Fprintf(&sb, `<meeting id="%s" title="%s" date="%s">`, m.ID, m.Title, m.Date)
+					sb.WriteString("\n")
+					if m.Participants != "" {
+						fmt.Fprintf(&sb, "    <known_participants>\n    %s\n    </known_participants>\n", m.Participants)
+					}
+					sb.WriteString("  </meeting>\n\n")
+				}
+				sb.WriteString("</meetings_data>")
+				resultText = sb.String()
 			case "get_meetings":
 				args := params.Arguments
 				ids, _ := args["meeting_ids"].([]interface{})
 				if len(ids) > 0 {
 					id := fmt.Sprint(ids[0])
 					if d, ok := details[id]; ok {
-						b, _ := json.Marshal([]MeetingDetail{*d})
-						resultText = string(b)
+						resultText = d.Text
 					}
 				}
 			case "get_meeting_transcript":
-				resultText = "> Speaker: This is a test transcript."
+				resultText = `{"id":"mtg_test1","title":"Test Meeting","transcript":"> Speaker: This is a test transcript."}`
 			default:
 				resultText = "unknown tool"
 			}
@@ -191,22 +199,28 @@ func fakeMCPServer(t *testing.T, meetings []Meeting, details map[string]*Meeting
 }
 
 func TestSyncWithFakeMCPServer(t *testing.T) {
+	meetingText := `<meetings_data from="Jan 27, 2026" to="Jan 27, 2026" count="1">
+<meeting id="mtg_test1" title="Test Meeting" date="Jan 27, 2026 3:30 PM">
+    <known_participants>
+    Alice, Bob
+    </known_participants>
+  </meeting>
+</meetings_data>`
+
 	meetings := []Meeting{
 		{
-			ID:        "mtg_test1",
-			Title:     "Test Meeting",
-			Date:      "2026-01-27T15:30:00Z",
-			Attendees: []string{"Alice", "Bob"},
+			ID:           "mtg_test1",
+			Title:        "Test Meeting",
+			Date:         "Jan 27, 2026 3:30 PM",
+			Participants: "Alice, Bob",
 		},
 	}
 
 	details := map[string]*MeetingDetail{
 		"mtg_test1": {
-			ID:            "mtg_test1",
-			Title:         "Test Meeting",
-			Date:          "2026-01-27T15:30:00Z",
-			Attendees:     []string{"Alice", "Bob"},
-			EnhancedNotes: "We discussed testing strategies.",
+			Title: "Test Meeting",
+			Date:  "Jan 27, 2026 3:30 PM",
+			Text:  meetingText,
 		},
 	}
 
@@ -250,9 +264,6 @@ func TestSyncWithFakeMCPServer(t *testing.T) {
 	}
 	if !strings.Contains(entry.Content, "Test Meeting") {
 		t.Errorf("entry content should contain title, got: %s", entry.Content)
-	}
-	if !strings.Contains(entry.Content, "We discussed testing strategies.") {
-		t.Errorf("entry content should contain enhanced notes, got: %s", entry.Content)
 	}
 	if !strings.Contains(entry.Content, "Transcript") {
 		t.Errorf("entry content should contain transcript section, got: %s", entry.Content)
