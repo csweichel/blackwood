@@ -26,6 +26,7 @@ import (
 	"github.com/csweichel/blackwood/internal/storage"
 	"github.com/csweichel/blackwood/internal/transcribe"
 	"github.com/csweichel/blackwood/internal/watcher"
+	"github.com/csweichel/blackwood/internal/granola"
 	"github.com/csweichel/blackwood/internal/telegram"
 	"github.com/csweichel/blackwood/internal/whatsapp"
 )
@@ -228,6 +229,17 @@ func main() {
 		tgBot := telegram.NewBot(tgCfg, store, t, d, semanticIndex)
 		go tgBot.Start(ctx)
 		slog.Info("Telegram bot enabled")
+	}
+
+	// Granola meeting notes sync.
+	if cfg.Granola.Enabled {
+		pollInterval, err := time.ParseDuration(cfg.Granola.PollInterval)
+		if err != nil {
+			pollInterval = 1 * time.Hour
+		}
+		gs := granola.New(cfg.GranolaAPIKey(), store, semanticIndex, pollInterval)
+		go gs.Start(ctx)
+		slog.Info("Granola sync enabled", "interval", pollInterval)
 	}
 
 	// Start the file watcher if configured.

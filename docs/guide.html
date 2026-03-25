@@ -310,6 +310,7 @@
           <li><a href="#shortcuts">Keyboard Shortcuts</a></li>
           <li><a href="#whatsapp">WhatsApp Integration</a></li>
           <li><a href="#telegram">Telegram Bot</a></li>
+          <li><a href="#granola">Granola Meeting Notes</a></li>
           <li><a href="#daemon">Viwoods File Watcher</a></li>
           <li><a href="#systemd">Running as a Service</a></li>
         </ol>
@@ -477,10 +478,20 @@
             <td style="padding:8px 12px;">&mdash;</td>
             <td style="padding:8px 12px;">Path to file containing Telegram bot token</td>
           </tr>
-          <tr>
+          <tr style="border-bottom:1px solid var(--border);">
             <td style="padding:8px 12px;"><code>telegram.allowed_chat_ids</code></td>
             <td style="padding:8px 12px;">[] (allow all)</td>
             <td style="padding:8px 12px;">List of Telegram chat IDs allowed to use the bot</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;"><code>granola.api_key_file</code></td>
+            <td style="padding:8px 12px;">&mdash;</td>
+            <td style="padding:8px 12px;">Path to file containing Granola API key</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 12px;"><code>granola.poll_interval</code></td>
+            <td style="padding:8px 12px;">1h</td>
+            <td style="padding:8px 12px;">How often to check for new or updated meeting notes</td>
           </tr>
         </tbody>
       </table>
@@ -637,8 +648,32 @@
         <p><strong>Security:</strong> Keep your bot token secret. Anyone with the token has full control over the bot. Without authorization, the bot rejects all messages and tells the sender to provide the auth code.</p>
       </div>
 
+      <!-- Granola -->
+      <h2 id="granola">8. Granola Meeting Notes (Optional)</h2>
+      <p>Blackwood can automatically import meeting notes from <a href="https://granola.ai">Granola</a>. The sync runs periodically, fetching new or updated notes and writing them as entries on the day each meeting occurred.</p>
+
+      <p>Each imported note includes the meeting title, time, attendees, AI-generated summary, and transcript.</p>
+
+      <h3>Setup</h3>
+      <ol>
+        <li>Generate an API key in Granola: <strong>Settings &rarr; Workspaces &rarr; API</strong> (requires Enterprise plan).</li>
+        <li>Store the key:
+<pre><code><span class="command">echo -n "your-granola-api-key" > ~/.blackwood/secrets/granola-api-key</span>
+<span class="command">chmod 600 ~/.blackwood/secrets/granola-api-key</span></code></pre>
+        </li>
+        <li>Add the <code>granola</code> section to your config:
+<pre><code><span class="key">granola</span>:
+  <span class="key">api_key_file</span>: <span class="string">~/.blackwood/secrets/granola-api-key</span>
+  <span class="key">poll_interval</span>: <span class="string">1h</span></code></pre>
+        </li>
+      </ol>
+
+      <p>Alternatively, set the <code>GRANOLA_API_KEY</code> environment variable. Granola sync auto-enables when an API key is configured.</p>
+
+      <p>Updated notes are re-synced automatically &mdash; if you edit a meeting note in Granola, the corresponding Blackwood entry is updated on the next sync cycle.</p>
+
       <!-- Watcher -->
-      <h2 id="daemon">8. Viwoods File Watcher (Optional)</h2>
+      <h2 id="daemon">9. Viwoods File Watcher (Optional)</h2>
       <p>Blackwood can watch a directory for Viwoods <code>.note</code> files, run OCR on each page, and append the results to your daily notes. Add the <code>watcher</code> section to your config:</p>
 
 <pre><code><span class="key">watcher</span>:
@@ -648,7 +683,7 @@
       <p>The watcher runs inside the main <code>blackwood</code> process. No separate binary is needed.</p>
 
       <!-- Systemd -->
-      <h2 id="systemd">9. Running as a Service</h2>
+      <h2 id="systemd">10. Running as a Service</h2>
       <p>To run Blackwood on startup, create a systemd user service:</p>
 <pre><code><span class="command">mkdir -p ~/.config/systemd/user</span></code></pre>
 

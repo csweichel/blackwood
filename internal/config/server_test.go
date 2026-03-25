@@ -225,3 +225,92 @@ func TestConfigFileOverridesEnvVar(t *testing.T) {
 		t.Errorf("model = %q, want %q (config should override env)", cfg.OpenAI.Model, "config-model")
 	}
 }
+
+func TestGranolaConfigFromFile(t *testing.T) {
+	dir := t.TempDir()
+	keyFile := filepath.Join(dir, "granola-key")
+	if err := os.WriteFile(keyFile, []byte("  gra_test_key  \n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &ServerConfig{
+		Granola: GranolaSettings{
+			APIKeyFile:   keyFile,
+			PollInterval: "30m",
+		},
+	}
+	if err := cfg.Resolve(); err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg.GranolaAPIKey() != "gra_test_key" {
+		t.Errorf("granola api key = %q, want %q", cfg.GranolaAPIKey(), "gra_test_key")
+	}
+	if !cfg.Granola.Enabled {
+		t.Error("expected Granola to be auto-enabled when API key is set")
+	}
+	if cfg.Granola.PollInterval != "30m" {
+		t.Errorf("poll_interval = %q, want %q", cfg.Granola.PollInterval, "30m")
+	}
+}
+
+func TestGranolaConfigFromEnvVar(t *testing.T) {
+	t.Setenv("GRANOLA_API_KEY", "env-granola-key")
+
+	cfg := &ServerConfig{}
+	if err := cfg.Resolve(); err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg.GranolaAPIKey() != "env-granola-key" {
+		t.Errorf("granola api key = %q, want %q", cfg.GranolaAPIKey(), "env-granola-key")
+	}
+	if !cfg.Granola.Enabled {
+		t.Error("expected Granola to be auto-enabled from env var")
+	}
+	if cfg.Granola.PollInterval != "1h" {
+		t.Errorf("default poll_interval = %q, want %q", cfg.Granola.PollInterval, "1h")
+	}
+}
+
+func TestGranolaConfigDisabledByDefault(t *testing.T) {
+	t.Setenv("GRANOLA_API_KEY", "")
+
+	cfg := &ServerConfig{}
+	if err := cfg.Resolve(); err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg.Granola.Enabled {
+		t.Error("expected Granola to be disabled when no API key is set")
+	}
+	if cfg.GranolaAPIKey() != "" {
+		t.Errorf("granola api key should be empty, got %q", cfg.GranolaAPIKey())
+	}
+}
+
+func TestGranolaConfigYAMLParsing(t *testing.T) {
+	content := `
+server:
+  addr: ":8080"
+granola:
+  api_key_file: /tmp/granola-key
+  poll_interval: 2h
+`
+	f := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(f, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := LoadServerConfig(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg.Granola.APIKeyFile != "/tmp/granola-key" {
+		t.Errorf("api_key_file = %q, want %q", cfg.Granola.APIKeyFile, "/tmp/granola-key")
+	}
+	if cfg.Granola.PollInterval != "2h" {
+		t.Errorf("poll_interval = %q, want %q", cfg.Granola.PollInterval, "2h")
+	}
+}

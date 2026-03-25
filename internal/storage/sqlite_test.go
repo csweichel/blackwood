@@ -447,4 +447,60 @@ func TestAppendToSectionLegacyNote(t *testing.T) {
 	}
 }
 
+func TestGranolaSyncState(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	// Getting a non-existent state should fail.
+	_, err := s.GetGranolaSyncState(ctx, "not_xxx")
+	if err == nil {
+		t.Fatal("expected error for missing sync state")
+	}
+
+	// Insert a sync state.
+	gs := &GranolaSyncState{
+		NoteID:    "not_abc123",
+		EntryID:   "entry-1",
+		UpdatedAt: "2026-01-27T16:45:00Z",
+	}
+	if err := s.UpsertGranolaSyncState(ctx, gs); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	// Retrieve it.
+	got, err := s.GetGranolaSyncState(ctx, "not_abc123")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.EntryID != "entry-1" {
+		t.Errorf("entry_id = %q, want %q", got.EntryID, "entry-1")
+	}
+	if got.UpdatedAt != "2026-01-27T16:45:00Z" {
+		t.Errorf("updated_at = %q, want %q", got.UpdatedAt, "2026-01-27T16:45:00Z")
+	}
+	if got.SyncedAt.IsZero() {
+		t.Error("synced_at should be set")
+	}
+
+	// Update the sync state (note was edited in Granola).
+	gs2 := &GranolaSyncState{
+		NoteID:    "not_abc123",
+		EntryID:   "entry-2",
+		UpdatedAt: "2026-01-28T10:00:00Z",
+	}
+	if err := s.UpsertGranolaSyncState(ctx, gs2); err != nil {
+		t.Fatalf("upsert update: %v", err)
+	}
+
+	got2, err := s.GetGranolaSyncState(ctx, "not_abc123")
+	if err != nil {
+		t.Fatalf("get after update: %v", err)
+	}
+	if got2.EntryID != "entry-2" {
+		t.Errorf("entry_id = %q, want %q", got2.EntryID, "entry-2")
+	}
+	if got2.UpdatedAt != "2026-01-28T10:00:00Z" {
+		t.Errorf("updated_at = %q, want %q", got2.UpdatedAt, "2026-01-28T10:00:00Z")
+	}
+}
 

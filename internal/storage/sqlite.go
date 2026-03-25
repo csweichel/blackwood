@@ -1198,3 +1198,42 @@ func (s *Store) ListTelegramAuthorizedChats(ctx context.Context) ([]int64, error
 	return ids, rows.Err()
 }
 
+// --- Granola sync state ---
+
+// GranolaSyncState tracks which Granola notes have been imported and their version.
+type GranolaSyncState struct {
+	NoteID    string
+	EntryID   string
+	UpdatedAt string // Granola's updated_at timestamp
+	SyncedAt  time.Time
+}
+
+// GetGranolaSyncState retrieves the sync state for a Granola note.
+func (s *Store) GetGranolaSyncState(ctx context.Context, noteID string) (*GranolaSyncState, error) {
+	var gs GranolaSyncState
+	err := s.db.QueryRowContext(ctx,
+		`SELECT note_id, entry_id, updated_at, synced_at FROM granola_sync_state WHERE note_id = ?`, noteID,
+	).Scan(&gs.NoteID, &gs.EntryID, &gs.UpdatedAt, &gs.SyncedAt)
+	if err != nil {
+		return nil, fmt.Errorf("get granola sync state: %w", err)
+	}
+	return &gs, nil
+}
+
+// UpsertGranolaSyncState inserts or updates the sync state for a Granola note.
+func (s *Store) UpsertGranolaSyncState(ctx context.Context, gs *GranolaSyncState) error {
+	if gs.SyncedAt.IsZero() {
+		gs.SyncedAt = time.Now().UTC()
+	}
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO granola_sync_state (note_id, entry_id, updated_at, synced_at)
+		 VALUES (?, ?, ?, ?)
+		 ON CONFLICT(note_id) DO UPDATE SET entry_id = excluded.entry_id, updated_at = excluded.updated_at, synced_at = excluded.synced_at`,
+		gs.NoteID, gs.EntryID, gs.UpdatedAt, gs.SyncedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("upsert granola sync state: %w", err)
+	}
+	return nil
+}
+

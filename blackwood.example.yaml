@@ -30,6 +30,11 @@ openai:
 #   allowed_chat_ids:
 #     - 123456789
 
+# Granola meeting notes sync (optional)
+# granola:
+#   api_key_file: ~/.blackwood/secrets/granola-api-key
+#   poll_interval: 1h
+
 # File watcher (optional)
 # watcher:
 #   watch_dirs:

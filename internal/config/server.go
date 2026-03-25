@@ -16,12 +16,14 @@ type ServerConfig struct {
 	WhatsApp WhatsAppSettings `yaml:"whatsapp"`
 	Telegram TelegramSettings `yaml:"telegram"`
 	Watcher  WatcherSettings  `yaml:"watcher"`
+	Granola  GranolaSettings  `yaml:"granola"`
 
 	// Resolved secrets (not serialized).
 	openaiAPIKey        string
 	whatsappAppSecret   string
 	whatsappAccessToken string
 	telegramBotToken    string
+	granolaAPIKey       string
 }
 
 // TLS holds TLS certificate configuration.
@@ -58,6 +60,13 @@ type TelegramSettings struct {
 	Enabled        bool    `yaml:"enabled"`
 	BotTokenFile   string  `yaml:"bot_token_file"`
 	AllowedChatIDs []int64 `yaml:"allowed_chat_ids"`
+}
+
+// GranolaSettings holds Granola meeting notes sync configuration.
+type GranolaSettings struct {
+	Enabled      bool   `yaml:"enabled"`
+	APIKeyFile   string `yaml:"api_key_file"`
+	PollInterval string `yaml:"poll_interval"` // e.g. "1h"
 }
 
 // WhatsAppSettings holds WhatsApp webhook configuration.
@@ -241,6 +250,27 @@ func (c *ServerConfig) Resolve() error {
 		c.Telegram.Enabled = true
 	}
 
+	// Granola API key: file > env var.
+	if c.Granola.APIKeyFile != "" {
+		key, err := readSecretFile(c.Granola.APIKeyFile)
+		if err != nil {
+			return err
+		}
+		c.granolaAPIKey = key
+	} else if key := os.Getenv("GRANOLA_API_KEY"); key != "" {
+		c.granolaAPIKey = key
+	}
+
+	// Auto-enable Granola if API key is resolved.
+	if c.granolaAPIKey != "" {
+		c.Granola.Enabled = true
+	}
+
+	// Granola poll interval default.
+	if c.Granola.PollInterval == "" {
+		c.Granola.PollInterval = "1h"
+	}
+
 	return nil
 }
 
@@ -255,6 +285,9 @@ func (c *ServerConfig) WhatsAppAccessToken() string { return c.whatsappAccessTok
 
 // TelegramBotToken returns the resolved Telegram bot token.
 func (c *ServerConfig) TelegramBotToken() string { return c.telegramBotToken }
+
+// GranolaAPIKey returns the resolved Granola API key.
+func (c *ServerConfig) GranolaAPIKey() string { return c.granolaAPIKey }
 
 // TLSEnabled returns true when both CertFile and KeyFile are configured.
 func (c *ServerConfig) TLSEnabled() bool {

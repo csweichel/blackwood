@@ -23,6 +23,7 @@ Blackwood runs entirely on your machine. Your data stays local.
 - **Bookmarkable URLs** — `/day/2025-01-15` for daily notes, `/chat/2025-01-15-my-question` for conversations; browser back/forward works
 - **Keyboard shortcuts** — `Cmd+D` jump to today, `Cmd+/` toggle chat, `Cmd+T` insert timestamp, `Cmd+Enter` save edit
 - **HTTPS/TLS** — optional TLS with configurable cert/key paths; plain HTTP remains the default
+- **Granola meeting notes** — automatically imports meeting notes from [Granola](https://granola.ai) every hour, including summaries, attendees, and transcripts
 - **File watcher** — optionally watches a directory for new Viwoods `.note` files and auto-imports them
 - **Local-first** — runs on your machine, no cloud dependency
 
@@ -103,7 +104,7 @@ Blackwood is a single Go binary (`blackwood`) serving a React frontend over a si
 │               Go API Server                     │
 │                                                 │
 │  DailyNotesService · ChatService · ImportService│
-│  WhatsApp Webhook · Telegram Bot                │
+│  WhatsApp Webhook · Telegram Bot · Granola Sync │
 │  Attachment Serving                             │
 ├─────────────────────────────────────────────────┤
 │  AI Pipelines                                   │
@@ -134,6 +135,7 @@ Blackwood is a single Go binary (`blackwood`) serving a React frontend over a si
 | `internal/watcher` | Viwoods file watcher (polls a directory for new `.note` files) |
 | `internal/whatsapp` | WhatsApp Business API webhook |
 | `internal/telegram` | Telegram bot (long polling) |
+| `internal/granola` | Granola meeting notes sync (periodic polling) |
 | `web/` | React + TypeScript + Vite frontend |
 
 ### API
@@ -182,6 +184,11 @@ openai:
 #   allowed_chat_ids:
 #     - 123456789
 
+# Granola meeting notes (optional)
+# granola:
+#   api_key_file: ~/.blackwood/secrets/granola-api-key
+#   poll_interval: 1h
+
 # Viwoods file watcher (optional)
 # watcher:
 #   watch_dir: /path/to/viwoods/notes
@@ -204,6 +211,7 @@ When no config file is used, the following environment variables are recognized:
 | `WHATSAPP_ACCESS_TOKEN` | — | Permanent access token |
 | `WHATSAPP_PHONE_NUMBER_ID` | — | Phone number ID for sending replies |
 | `TELEGRAM_BOT_TOKEN` | — | Telegram bot token from @BotFather |
+| `GRANOLA_API_KEY` | — | Granola API key for meeting notes sync |
 
 ### WhatsApp (optional)
 
@@ -275,6 +283,41 @@ telegram:
 | Photo | Describes via gpt-5.2 vision, adds description as entry |
 
 All messages are appended to the daily note with a timestamp and "Telegram" source label. Attachments (audio files, photos) are stored alongside the note.
+
+### Granola (optional)
+
+Automatically import meeting notes from [Granola](https://granola.ai) into your daily notes. The sync runs periodically (default: every hour), fetching new or updated meeting notes and writing them as entries on the day the meeting occurred.
+
+Each imported note includes the meeting title, time, attendees, Granola's AI summary, and the full transcript. Updated notes are re-synced automatically.
+
+#### 1. Get an API key
+
+Granola API access requires an Enterprise plan. Generate a key from **Settings → Workspaces → API** in Granola.
+
+#### 2. Store the key
+
+```sh
+echo -n "your-granola-api-key" > ~/.blackwood/secrets/granola-api-key
+chmod 600 ~/.blackwood/secrets/granola-api-key
+```
+
+#### 3. Configure Blackwood
+
+Add to your config file:
+
+```yaml
+granola:
+  api_key_file: ~/.blackwood/secrets/granola-api-key
+  poll_interval: 1h  # optional, default is 1h
+```
+
+Or use an environment variable:
+
+```sh
+export GRANOLA_API_KEY=your-granola-api-key
+```
+
+Granola sync auto-enables when an API key is configured.
 
 ### Web Clipping (bookmarklet)
 

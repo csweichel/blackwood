@@ -74,3 +74,10 @@ CREATE TABLE IF NOT EXISTS telegram_authorized_chats (
     chat_id INTEGER PRIMARY KEY,
     authorized_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS granola_sync_state (
+    note_id TEXT PRIMARY KEY,
+    entry_id TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    synced_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
