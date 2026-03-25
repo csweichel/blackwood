@@ -277,8 +277,8 @@ func TestSyncWithFakeMCPServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get daily note: %v", err)
 	}
-	if !strings.Contains(dailyNote.Content, "Imported from Granola") {
-		t.Errorf("daily note should contain import marker, got: %s", dailyNote.Content)
+	if !strings.Contains(dailyNote.Content, "# Test Meeting") {
+		t.Errorf("daily note should contain meeting heading, got: %s", dailyNote.Content)
 	}
 
 	// Second sync should skip (already imported).

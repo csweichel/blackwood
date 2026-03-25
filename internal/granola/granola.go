@@ -400,8 +400,14 @@ func (s *Syncer) sync(ctx context.Context) error {
 }
 
 // listMeetings calls the list_meetings MCP tool and parses the XML-like result.
+// Only fetches meetings from the last 10 days.
 func (s *Syncer) listMeetings(ctx context.Context) ([]Meeting, error) {
-	text, err := s.mcp.callTool(ctx, "list_meetings", map[string]any{})
+	now := time.Now().UTC()
+	text, err := s.mcp.callTool(ctx, "list_meetings", map[string]any{
+		"time_range":   "custom",
+		"custom_start": now.AddDate(0, 0, -10).Format("2006-01-02"),
+		"custom_end":   now.Format("2006-01-02"),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -561,8 +567,8 @@ func (s *Syncer) importMeeting(ctx context.Context, m Meeting) error {
 		return fmt.Errorf("create entry: %w", err)
 	}
 
-	snippet := "\n\n---\n*Imported from Granola*\n\n" + md + "\n"
-	if err := s.store.AppendToSection(ctx, dailyNote.ID, "# Notes", snippet); err != nil {
+	snippet := "\n\n# " + m.Title + "\n\n" + md + "\n"
+	if err := s.store.AppendToSection(ctx, dailyNote.ID, "# Meetings", snippet); err != nil {
 		return fmt.Errorf("append to daily note: %w", err)
 	}
 
