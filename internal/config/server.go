@@ -23,7 +23,7 @@ type ServerConfig struct {
 	whatsappAppSecret   string
 	whatsappAccessToken string
 	telegramBotToken    string
-	granolaAPIKey       string
+	granolaOAuthToken   string
 }
 
 // TLS holds TLS certificate configuration.
@@ -63,10 +63,11 @@ type TelegramSettings struct {
 }
 
 // GranolaSettings holds Granola meeting notes sync configuration.
+// Uses the Granola MCP server (https://mcp.granola.ai/mcp) with OAuth.
 type GranolaSettings struct {
-	Enabled      bool   `yaml:"enabled"`
-	APIKeyFile   string `yaml:"api_key_file"`
-	PollInterval string `yaml:"poll_interval"` // e.g. "1h"
+	Enabled        bool   `yaml:"enabled"`
+	OAuthTokenFile string `yaml:"oauth_token_file"`
+	PollInterval   string `yaml:"poll_interval"` // e.g. "1h"
 }
 
 // WhatsAppSettings holds WhatsApp webhook configuration.
@@ -250,19 +251,14 @@ func (c *ServerConfig) Resolve() error {
 		c.Telegram.Enabled = true
 	}
 
-	// Granola API key: file > env var.
-	if c.Granola.APIKeyFile != "" {
-		key, err := readSecretFile(c.Granola.APIKeyFile)
-		if err != nil {
-			return err
+	// Granola: auto-enable if a token file exists or env var is set.
+	if c.Granola.OAuthTokenFile != "" {
+		if _, err := os.Stat(c.Granola.OAuthTokenFile); err == nil {
+			c.Granola.Enabled = true
 		}
-		c.granolaAPIKey = key
-	} else if key := os.Getenv("GRANOLA_API_KEY"); key != "" {
-		c.granolaAPIKey = key
 	}
-
-	// Auto-enable Granola if API key is resolved.
-	if c.granolaAPIKey != "" {
+	if token := os.Getenv("GRANOLA_OAUTH_TOKEN"); token != "" {
+		c.granolaOAuthToken = token
 		c.Granola.Enabled = true
 	}
 
@@ -286,8 +282,8 @@ func (c *ServerConfig) WhatsAppAccessToken() string { return c.whatsappAccessTok
 // TelegramBotToken returns the resolved Telegram bot token.
 func (c *ServerConfig) TelegramBotToken() string { return c.telegramBotToken }
 
-// GranolaAPIKey returns the resolved Granola API key.
-func (c *ServerConfig) GranolaAPIKey() string { return c.granolaAPIKey }
+// GranolaOAuthToken returns the resolved Granola OAuth token.
+func (c *ServerConfig) GranolaOAuthToken() string { return c.granolaOAuthToken }
 
 // TLSEnabled returns true when both CertFile and KeyFile are configured.
 func (c *ServerConfig) TLSEnabled() bool {

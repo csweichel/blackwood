@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	osexec "os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -38,6 +39,10 @@ func main() {
 	// Handle subcommands before flag.Parse() since flag doesn't support them.
 	if len(os.Args) > 1 && os.Args[1] == "setup" {
 		runSetup()
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "granola-login" {
+		runGranolaLogin()
 		return
 	}
 
@@ -237,7 +242,23 @@ func main() {
 		if err != nil {
 			pollInterval = 1 * time.Hour
 		}
-		gs := granola.New(cfg.GranolaAPIKey(), store, semanticIndex, pollInterval)
+
+		var ts *granola.TokenSource
+		if cfg.Granola.OAuthTokenFile != "" {
+			pt, err := granola.LoadToken(cfg.Granola.OAuthTokenFile)
+			if err != nil {
+				slog.Error("failed to load Granola token file", "path", cfg.Granola.OAuthTokenFile, "error", err)
+			} else {
+				ts = granola.NewTokenSource(pt, cfg.Granola.OAuthTokenFile)
+			}
+		}
+		if ts == nil {
+			// Fallback: plain token from env var (no refresh support).
+			pt := &granola.PersistedToken{AccessToken: cfg.GranolaOAuthToken()}
+			ts = granola.NewTokenSource(pt, "")
+		}
+
+		gs := granola.New(ts, store, semanticIndex, pollInterval)
 		go gs.Start(ctx)
 		slog.Info("Granola sync enabled", "interval", pollInterval)
 	}
@@ -380,6 +401,83 @@ func spaHandler(fsys http.FileSystem) http.Handler {
 		r.URL.Path = "/"
 		fileServer.ServeHTTP(w, r)
 	})
+}
+
+func runGranolaLogin() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: cannot determine home directory: %v\n", err)
+		os.Exit(1)
+	}
+
+	secretsDir := filepath.Join(home, ".blackwood", "secrets")
+	if err := os.MkdirAll(secretsDir, 0o700); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: cannot create secrets directory: %v\n", err)
+		os.Exit(1)
+	}
+	tokenPath := filepath.Join(secretsDir, "granola-oauth-token")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	login, err := granola.OAuthLogin(ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Open this URL in your browser to authorize Blackwood:")
+	fmt.Printf("\n  %s\n\n", login.AuthURL)
+
+	// Try to open the browser.
+	for _, cmd := range []string{"open", "xdg-open", "sensible-browser"} {
+		if p := osexec.Command(cmd, login.AuthURL); p.Start() == nil {
+			break
+		}
+	}
+
+	fmt.Println("After authorizing, your browser will redirect to a URL starting with")
+	fmt.Printf("  %s?code=...\n\n", login.RedirectURI)
+	fmt.Println("Paste the full redirect URL (or just the code) here:")
+	fmt.Print("> ")
+
+	var input string
+	fmt.Scanln(&input)
+
+	code, err := granola.ExtractCodeFromURL(input)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	token, err := login.Exchange(ctx, code)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error exchanging code: %v\n", err)
+		os.Exit(1)
+	}
+
+	pt := &granola.PersistedToken{
+		AccessToken:  token.AccessToken,
+		RefreshToken: token.RefreshToken,
+		ClientID:     login.ClientID,
+		ClientSecret: login.ClientSecret,
+	}
+	if token.ExpiresIn > 0 {
+		pt.ExpiresAt = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
+	}
+
+	if err := granola.SaveToken(tokenPath, pt); err != nil {
+		fmt.Fprintf(os.Stderr, "Error saving token: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("\n✓ Granola OAuth token saved to %s\n", tokenPath)
+	if token.RefreshToken != "" {
+		fmt.Println("  (includes refresh token — will auto-renew)")
+	}
+	fmt.Println("\nAdd this to your blackwood config:")
+	fmt.Println("  granola:")
+	fmt.Printf("    oauth_token_file: %s\n", tokenPath)
 }
 
 func runSetup() {

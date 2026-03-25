@@ -30,9 +30,10 @@ openai:
 #   allowed_chat_ids:
 #     - 123456789
 
-# Granola meeting notes sync (optional)
+# Granola meeting notes via MCP (optional)
+# Run `blackwood granola-login` to obtain an OAuth token.
 # granola:
-#   api_key_file: ~/.blackwood/secrets/granola-api-key
+#   oauth_token_file: ~/.blackwood/secrets/granola-oauth-token
 #   poll_interval: 1h
 
 # File watcher (optional)

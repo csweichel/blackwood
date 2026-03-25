@@ -484,9 +484,9 @@
             <td style="padding:8px 12px;">List of Telegram chat IDs allowed to use the bot</td>
           </tr>
           <tr style="border-bottom:1px solid var(--border);">
-            <td style="padding:8px 12px;"><code>granola.api_key_file</code></td>
+            <td style="padding:8px 12px;"><code>granola.oauth_token_file</code></td>
             <td style="padding:8px 12px;">&mdash;</td>
-            <td style="padding:8px 12px;">Path to file containing Granola API key</td>
+            <td style="padding:8px 12px;">Path to file containing Granola OAuth token (from <code>blackwood granola-login</code>)</td>
           </tr>
           <tr>
             <td style="padding:8px 12px;"><code>granola.poll_interval</code></td>
@@ -650,27 +650,24 @@
 
       <!-- Granola -->
       <h2 id="granola">8. Granola Meeting Notes (Optional)</h2>
-      <p>Blackwood can automatically import meeting notes from <a href="https://granola.ai">Granola</a>. The sync runs periodically, fetching new or updated notes and writing them as entries on the day each meeting occurred.</p>
+      <p>Blackwood can automatically import meeting notes from <a href="https://granola.ai">Granola</a> via the <a href="https://www.granola.ai/blog/granola-mcp">Granola MCP server</a>. The sync runs periodically, fetching new or updated notes and writing them as entries on the day each meeting occurred.</p>
 
-      <p>Each imported note includes the meeting title, time, attendees, AI-generated summary, and transcript.</p>
+      <p>Each imported note includes the meeting title, date, attendees, AI-enhanced notes, private notes, and transcript (paid Granola tiers).</p>
 
       <h3>Setup</h3>
       <ol>
-        <li>Generate an API key in Granola: <strong>Settings &rarr; Workspaces &rarr; API</strong> (requires Enterprise plan).</li>
-        <li>Store the key:
-<pre><code><span class="command">echo -n "your-granola-api-key" > ~/.blackwood/secrets/granola-api-key</span>
-<span class="command">chmod 600 ~/.blackwood/secrets/granola-api-key</span></code></pre>
+        <li>Log in via OAuth:
+<pre><code><span class="command">blackwood granola-login</span></code></pre>
+          <p>This opens your browser for authentication and saves the token to <code>~/.blackwood/secrets/granola-oauth-token</code>.</p>
         </li>
         <li>Add the <code>granola</code> section to your config:
 <pre><code><span class="key">granola</span>:
-  <span class="key">api_key_file</span>: <span class="string">~/.blackwood/secrets/granola-api-key</span>
+  <span class="key">oauth_token_file</span>: <span class="string">~/.blackwood/secrets/granola-oauth-token</span>
   <span class="key">poll_interval</span>: <span class="string">1h</span></code></pre>
         </li>
       </ol>
 
-      <p>Alternatively, set the <code>GRANOLA_API_KEY</code> environment variable. Granola sync auto-enables when an API key is configured.</p>
-
-      <p>Updated notes are re-synced automatically &mdash; if you edit a meeting note in Granola, the corresponding Blackwood entry is updated on the next sync cycle.</p>
+      <p>Alternatively, set the <code>GRANOLA_OAUTH_TOKEN</code> environment variable. Granola sync auto-enables when an OAuth token is configured.</p>
 
       <!-- Watcher -->
       <h2 id="daemon">9. Viwoods File Watcher (Optional)</h2>

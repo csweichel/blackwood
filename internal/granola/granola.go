@@ -1,8 +1,14 @@
 // Package granola provides a periodic sync that imports meeting notes from
-// the Granola API into Blackwood daily notes.
+// Granola via its MCP (Model Context Protocol) server into Blackwood daily notes.
+//
+// The Granola MCP server at https://mcp.granola.ai/mcp exposes tools for
+// listing and retrieving meeting notes. Authentication is via OAuth 2.0 —
+// run `blackwood granola-login` to obtain a token.
 package granola
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,6 +16,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/csweichel/blackwood/internal/index"
@@ -17,84 +24,172 @@ import (
 )
 
 const (
-	baseURL  = "https://public-api.granola.ai/v1"
-	pageSize = 30
+	mcpEndpoint     = "https://mcp.granola.ai/mcp"
+	protocolVersion = "2025-03-26"
 )
 
-// --- Granola API types ---
+// --- JSON-RPC types ---
 
-type listNotesResponse struct {
-	Notes   []Note `json:"notes"`
-	HasMore bool   `json:"hasMore"`
-	Cursor  string `json:"cursor"`
+type jsonRPCRequest struct {
+	JSONRPC string      `json:"jsonrpc"`
+	ID      int64       `json:"id,omitempty"`
+	Method  string      `json:"method"`
+	Params  interface{} `json:"params,omitempty"`
 }
 
-type Note struct {
-	ID        string  `json:"id"`
-	Title     string  `json:"title"`
-	Owner     Person  `json:"owner"`
-	CreatedAt string  `json:"created_at"`
-	UpdatedAt string  `json:"updated_at"`
+type jsonRPCResponse struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      *int64          `json:"id,omitempty"`
+	Result  json.RawMessage `json:"result,omitempty"`
+	Error   *jsonRPCError   `json:"error,omitempty"`
 }
 
-type noteDetail struct {
-	ID              string           `json:"id"`
-	Title           string           `json:"title"`
-	Owner           Person           `json:"owner"`
-	CreatedAt       string           `json:"created_at"`
-	UpdatedAt       string           `json:"updated_at"`
-	CalendarEvent   *calendarEvent   `json:"calendar_event"`
-	Attendees       []Person         `json:"attendees"`
-	SummaryMarkdown string           `json:"summary_markdown"`
-	SummaryText     string           `json:"summary_text"`
-	Transcript      []transcriptLine `json:"transcript"`
+type jsonRPCError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
 }
 
-type Person struct {
-	Name  string `json:"name"`
-	Email string `json:"email"`
+// --- MCP types ---
+
+type initializeParams struct {
+	ProtocolVersion string         `json:"protocolVersion"`
+	Capabilities    map[string]any `json:"capabilities"`
+	ClientInfo      clientInfo     `json:"clientInfo"`
 }
 
-type calendarEvent struct {
-	EventTitle         string `json:"event_title"`
-	Organiser          string `json:"organiser"`
-	ScheduledStartTime string `json:"scheduled_start_time"`
-	ScheduledEndTime   string `json:"scheduled_end_time"`
+type clientInfo struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
 }
 
-type transcriptLine struct {
-	Speaker   speaker `json:"speaker"`
-	Text      string  `json:"text"`
-	StartTime string  `json:"start_time"`
-	EndTime   string  `json:"end_time"`
+type callToolParams struct {
+	Name      string         `json:"name"`
+	Arguments map[string]any `json:"arguments,omitempty"`
 }
 
-type speaker struct {
-	Source string `json:"source"` // "microphone" or "speaker"
+type callToolResult struct {
+	Content []toolContent `json:"content"`
+	IsError bool          `json:"isError,omitempty"`
 }
 
-// --- API client ---
-
-type client struct {
-	apiKey     string
-	baseURL    string
-	httpClient *http.Client
+type toolContent struct {
+	Type string `json:"type"`
+	Text string `json:"text,omitempty"`
 }
 
-func newClient(apiKey string) *client {
-	return &client{
-		apiKey:     apiKey,
-		baseURL:    baseURL,
-		httpClient: &http.Client{Timeout: 30 * time.Second},
+// --- MCP client ---
+
+type mcpClient struct {
+	tokenSource *TokenSource
+	endpoint    string
+	sessionID   string
+	httpClient  *http.Client
+	nextID      atomic.Int64
+}
+
+func newMCPClient(ts *TokenSource) *mcpClient {
+	return &mcpClient{
+		tokenSource: ts,
+		endpoint:    mcpEndpoint,
+		httpClient:  &http.Client{Timeout: 60 * time.Second},
 	}
 }
 
-func (c *client) do(ctx context.Context, method, path string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, nil)
+// initialize performs the MCP initialization handshake.
+func (c *mcpClient) initialize(ctx context.Context) error {
+	req := jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      c.nextID.Add(1),
+		Method:  "initialize",
+		Params: initializeParams{
+			ProtocolVersion: protocolVersion,
+			Capabilities:    map[string]any{},
+			ClientInfo: clientInfo{
+				Name:    "blackwood",
+				Version: "1.0",
+			},
+		},
+	}
+
+	resp, err := c.send(ctx, req)
+	if err != nil {
+		return fmt.Errorf("initialize: %w", err)
+	}
+	if resp.Error != nil {
+		return fmt.Errorf("initialize error: %s", resp.Error.Message)
+	}
+
+	// Send initialized notification (no ID = notification).
+	notif := jsonRPCRequest{
+		JSONRPC: "2.0",
+		Method:  "notifications/initialized",
+	}
+	return c.sendNotification(ctx, notif)
+}
+
+// callTool invokes an MCP tool and returns the text content.
+func (c *mcpClient) callTool(ctx context.Context, name string, args map[string]any) (string, error) {
+	req := jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      c.nextID.Add(1),
+		Method:  "tools/call",
+		Params: callToolParams{
+			Name:      name,
+			Arguments: args,
+		},
+	}
+
+	resp, err := c.send(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("call %s: %w", name, err)
+	}
+	if resp.Error != nil {
+		return "", fmt.Errorf("call %s error: %s", name, resp.Error.Message)
+	}
+
+	var result callToolResult
+	if err := json.Unmarshal(resp.Result, &result); err != nil {
+		return "", fmt.Errorf("parse %s result: %w", name, err)
+	}
+	if result.IsError {
+		if len(result.Content) > 0 {
+			return "", fmt.Errorf("tool %s error: %s", name, result.Content[0].Text)
+		}
+		return "", fmt.Errorf("tool %s returned error", name)
+	}
+
+	var texts []string
+	for _, c := range result.Content {
+		if c.Type == "text" && c.Text != "" {
+			texts = append(texts, c.Text)
+		}
+	}
+	return strings.Join(texts, "\n"), nil
+}
+
+// send sends a JSON-RPC request and returns the response.
+// Handles both direct JSON responses and SSE-streamed responses.
+func (c *mcpClient) send(ctx context.Context, rpcReq jsonRPCRequest) (*jsonRPCResponse, error) {
+	body, err := json.Marshal(rpcReq)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+	token, err := c.tokenSource.AccessToken(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get access token: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("Authorization", "Bearer "+token)
+	if c.sessionID != "" {
+		req.Header.Set("Mcp-Session-Id", c.sessionID)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -102,89 +197,147 @@ func (c *client) do(ctx context.Context, method, path string) ([]byte, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return nil, err
+	// Capture session ID from response.
+	if sid := resp.Header.Get("Mcp-Session-Id"); sid != "" {
+		c.sessionID = sid
+	}
+
+	if resp.StatusCode == http.StatusNotFound && c.sessionID != "" {
+		return nil, fmt.Errorf("session expired")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("granola API %s %s: HTTP %d: %s", method, path, resp.StatusCode, string(body))
-	}
-	return body, nil
-}
-
-// listNotes returns notes updated after the given time, paginating through all results.
-func (c *client) listNotes(ctx context.Context, updatedAfter time.Time) ([]Note, error) {
-	var all []Note
-	cursor := ""
-
-	for {
-		path := fmt.Sprintf("/notes?page_size=%d&updated_after=%s",
-			pageSize, updatedAfter.Format("2006-01-02"))
-		if cursor != "" {
-			path += "&cursor=" + cursor
-		}
-
-		data, err := c.do(ctx, http.MethodGet, path)
-		if err != nil {
-			return nil, err
-		}
-
-		var resp listNotesResponse
-		if err := json.Unmarshal(data, &resp); err != nil {
-			return nil, fmt.Errorf("parse notes list: %w", err)
-		}
-
-		all = append(all, resp.Notes...)
-
-		if !resp.HasMore || resp.Cursor == "" {
-			break
-		}
-		cursor = resp.Cursor
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(b))
 	}
 
-	return all, nil
+	ct := resp.Header.Get("Content-Type")
+	if strings.HasPrefix(ct, "text/event-stream") {
+		return c.readSSEResponse(resp.Body, rpcReq.ID)
+	}
+
+	// Direct JSON response.
+	var rpcResp jsonRPCResponse
+	if err := json.NewDecoder(resp.Body).Decode(&rpcResp); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	return &rpcResp, nil
 }
 
-// getNote returns the full detail for a single note.
-func (c *client) getNote(ctx context.Context, id string) (*noteDetail, error) {
-	data, err := c.do(ctx, http.MethodGet, "/notes/"+id)
+// readSSEResponse reads an SSE stream and returns the JSON-RPC response
+// matching the given request ID.
+func (c *mcpClient) readSSEResponse(r io.Reader, requestID int64) (*jsonRPCResponse, error) {
+	scanner := bufio.NewScanner(r)
+	var dataLines []string
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if strings.HasPrefix(line, "data: ") {
+			dataLines = append(dataLines, strings.TrimPrefix(line, "data: "))
+			continue
+		}
+
+		// Empty line = end of SSE event.
+		if line == "" && len(dataLines) > 0 {
+			data := strings.Join(dataLines, "\n")
+			dataLines = nil
+
+			var resp jsonRPCResponse
+			if err := json.Unmarshal([]byte(data), &resp); err != nil {
+				continue
+			}
+
+			if resp.ID != nil && *resp.ID == requestID {
+				return &resp, nil
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("read SSE: %w", err)
+	}
+	return nil, fmt.Errorf("SSE stream ended without response for request %d", requestID)
+}
+
+// sendNotification sends a JSON-RPC notification (no response expected).
+func (c *mcpClient) sendNotification(ctx context.Context, notif jsonRPCRequest) error {
+	body, err := json.Marshal(notif)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	var nd noteDetail
-	if err := json.Unmarshal(data, &nd); err != nil {
-		return nil, fmt.Errorf("parse note detail: %w", err)
+	token, err := c.tokenSource.AccessToken(ctx)
+	if err != nil {
+		return fmt.Errorf("get access token: %w", err)
 	}
-	return &nd, nil
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("Authorization", "Bearer "+token)
+	if c.sessionID != "" {
+		req.Header.Set("Mcp-Session-Id", c.sessionID)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	_ = resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
+		return fmt.Errorf("notification rejected: HTTP %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// --- Granola meeting types (parsed from MCP tool responses) ---
+
+// Meeting represents a meeting from list_meetings.
+type Meeting struct {
+	ID        string   `json:"id"`
+	Title     string   `json:"title"`
+	Date      string   `json:"date"`
+	Attendees []string `json:"attendees"`
+}
+
+// MeetingDetail represents the full content from get_meetings.
+type MeetingDetail struct {
+	ID            string   `json:"id"`
+	Title         string   `json:"title"`
+	Date          string   `json:"date"`
+	Attendees     []string `json:"attendees"`
+	PrivateNotes  string   `json:"private_notes"`
+	EnhancedNotes string   `json:"enhanced_notes"`
 }
 
 // --- Syncer ---
 
-// Syncer periodically imports Granola meeting notes into Blackwood.
+// Syncer periodically imports Granola meeting notes into Blackwood via MCP.
 type Syncer struct {
-	client  *client
+	mcp     *mcpClient
 	store   *storage.Store
 	indexer *index.Index // may be nil
 	poll    time.Duration
 }
 
 // New creates a new Granola syncer.
-func New(apiKey string, store *storage.Store, indexer *index.Index, pollInterval time.Duration) *Syncer {
+func New(ts *TokenSource, store *storage.Store, indexer *index.Index, pollInterval time.Duration) *Syncer {
 	return &Syncer{
-		client:  newClient(apiKey),
+		mcp:     newMCPClient(ts),
 		store:   store,
 		indexer: indexer,
 		poll:    pollInterval,
 	}
 }
 
-// Start runs the sync loop until ctx is cancelled. It syncs immediately on
-// start, then every poll interval.
+// Start runs the sync loop until ctx is cancelled.
 func (s *Syncer) Start(ctx context.Context) {
-	slog.Info("granola sync started", "interval", s.poll)
+	slog.Info("granola MCP sync started", "interval", s.poll)
 
-	// Run immediately on start.
 	if err := s.sync(ctx); err != nil {
 		slog.Error("granola sync failed", "error", err)
 	}
@@ -195,7 +348,7 @@ func (s *Syncer) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Info("granola sync stopped")
+			slog.Info("granola MCP sync stopped")
 			return
 		case <-ticker.C:
 			if err := s.sync(ctx); err != nil {
@@ -205,30 +358,29 @@ func (s *Syncer) Start(ctx context.Context) {
 	}
 }
 
-// sync fetches recently updated notes from Granola and imports any that are
-// new or updated since last sync.
+// sync initializes an MCP session, lists meetings, and imports new/updated ones.
 func (s *Syncer) sync(ctx context.Context) error {
-	// Look back 7 days to catch any notes we might have missed.
-	lookback := time.Now().UTC().Add(-7 * 24 * time.Hour)
-
-	notes, err := s.client.listNotes(ctx, lookback)
-	if err != nil {
-		return fmt.Errorf("list notes: %w", err)
+	if err := s.mcp.initialize(ctx); err != nil {
+		return fmt.Errorf("MCP initialize: %w", err)
 	}
 
-	slog.Info("granola sync: fetched note list", "count", len(notes))
+	meetings, err := s.listMeetings(ctx)
+	if err != nil {
+		return fmt.Errorf("list meetings: %w", err)
+	}
+
+	slog.Info("granola sync: fetched meeting list", "count", len(meetings))
 
 	var imported, skipped int
-	for _, n := range notes {
-		// Check if we already imported this version.
-		existing, _ := s.store.GetGranolaSyncState(ctx, n.ID)
-		if existing != nil && existing.UpdatedAt == n.UpdatedAt {
+	for _, m := range meetings {
+		existing, _ := s.store.GetGranolaSyncState(ctx, m.ID)
+		if existing != nil {
 			skipped++
 			continue
 		}
 
-		if err := s.importNote(ctx, n); err != nil {
-			slog.Error("granola import failed", "note_id", n.ID, "title", n.Title, "error", err)
+		if err := s.importMeeting(ctx, m); err != nil {
+			slog.Error("granola import failed", "meeting_id", m.ID, "title", m.Title, "error", err)
 			continue
 		}
 		imported++
@@ -238,19 +390,83 @@ func (s *Syncer) sync(ctx context.Context) error {
 	return nil
 }
 
-// importNote fetches the full note detail and writes it into a Blackwood daily note.
-func (s *Syncer) importNote(ctx context.Context, n Note) error {
-	detail, err := s.client.getNote(ctx, n.ID)
+// listMeetings calls the list_meetings MCP tool and parses the result.
+func (s *Syncer) listMeetings(ctx context.Context) ([]Meeting, error) {
+	text, err := s.mcp.callTool(ctx, "list_meetings", nil)
 	if err != nil {
-		return fmt.Errorf("get note %s: %w", n.ID, err)
+		return nil, err
 	}
 
-	// Determine the date from the meeting start time or note creation time.
-	date := parseDateFromISO(detail.CreatedAt)
-	if detail.CalendarEvent != nil && detail.CalendarEvent.ScheduledStartTime != "" {
-		if d := parseDateFromISO(detail.CalendarEvent.ScheduledStartTime); d != "" {
-			date = d
+	var meetings []Meeting
+	if err := json.Unmarshal([]byte(text), &meetings); err != nil {
+		// Try to extract a JSON array from the text.
+		start := strings.Index(text, "[")
+		end := strings.LastIndex(text, "]")
+		if start >= 0 && end > start {
+			if err2 := json.Unmarshal([]byte(text[start:end+1]), &meetings); err2 != nil {
+				return nil, fmt.Errorf("parse meetings: %w (raw: %s)", err, truncate(text, 200))
+			}
+		} else {
+			return nil, fmt.Errorf("parse meetings: %w (raw: %s)", err, truncate(text, 200))
 		}
+	}
+	return meetings, nil
+}
+
+// getMeetingDetail calls get_meetings to fetch full content for a meeting.
+func (s *Syncer) getMeetingDetail(ctx context.Context, meetingID string) (*MeetingDetail, error) {
+	text, err := s.mcp.callTool(ctx, "get_meetings", map[string]any{
+		"meeting_ids": []string{meetingID},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var details []MeetingDetail
+	if err := json.Unmarshal([]byte(text), &details); err == nil && len(details) > 0 {
+		return &details[0], nil
+	}
+
+	var detail MeetingDetail
+	if err := json.Unmarshal([]byte(text), &detail); err == nil && detail.ID != "" {
+		return &detail, nil
+	}
+
+	start := strings.Index(text, "{")
+	end := strings.LastIndex(text, "}")
+	if start >= 0 && end > start {
+		if err := json.Unmarshal([]byte(text[start:end+1]), &detail); err == nil {
+			return &detail, nil
+		}
+	}
+
+	return nil, fmt.Errorf("parse meeting detail (raw: %s)", truncate(text, 200))
+}
+
+// getTranscript calls get_meeting_transcript for a meeting.
+func (s *Syncer) getTranscript(ctx context.Context, meetingID string) (string, error) {
+	text, err := s.mcp.callTool(ctx, "get_meeting_transcript", map[string]any{
+		"meeting_id": meetingID,
+	})
+	if err != nil {
+		slog.Debug("transcript not available", "meeting_id", meetingID, "error", err)
+		return "", nil
+	}
+	return text, nil
+}
+
+// importMeeting fetches full detail and transcript, then writes to a daily note.
+func (s *Syncer) importMeeting(ctx context.Context, m Meeting) error {
+	detail, err := s.getMeetingDetail(ctx, m.ID)
+	if err != nil {
+		return fmt.Errorf("get detail for %s: %w", m.ID, err)
+	}
+
+	transcript, _ := s.getTranscript(ctx, m.ID)
+
+	date := parseDateFromISO(m.Date)
+	if date == "" && detail.Date != "" {
+		date = parseDateFromISO(detail.Date)
 	}
 	if date == "" {
 		date = time.Now().UTC().Format("2006-01-02")
@@ -261,55 +477,11 @@ func (s *Syncer) importNote(ctx context.Context, n Note) error {
 		return fmt.Errorf("get or create daily note: %w", err)
 	}
 
-	// Build markdown content for the entry.
-	md := buildNoteMarkdown(detail)
+	md := buildNoteMarkdown(detail, transcript)
 
-	// Check if we're updating an existing entry or creating a new one.
-	existing, _ := s.store.GetGranolaSyncState(ctx, n.ID)
-
-	var entryID string
-	if existing != nil && existing.EntryID != "" {
-		// Update existing entry.
-		entry, err := s.store.GetEntry(ctx, existing.EntryID)
-		if err != nil {
-			// Entry was deleted — create a new one.
-			entryID, err = s.createEntry(ctx, dailyNote, md, n, date)
-			if err != nil {
-				return err
-			}
-		} else {
-			entry.Content = md
-			entry.RawContent = md
-			if err := s.store.UpdateEntry(ctx, entry); err != nil {
-				return fmt.Errorf("update entry: %w", err)
-			}
-			entryID = entry.ID
-		}
-	} else {
-		entryID, err = s.createEntry(ctx, dailyNote, md, n, date)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Record sync state.
-	state := &storage.GranolaSyncState{
-		NoteID:    n.ID,
-		EntryID:   entryID,
-		UpdatedAt: n.UpdatedAt,
-	}
-	if err := s.store.UpsertGranolaSyncState(ctx, state); err != nil {
-		return fmt.Errorf("upsert sync state: %w", err)
-	}
-
-	slog.Info("granola note imported", "note_id", n.ID, "title", n.Title, "date", date)
-	return nil
-}
-
-func (s *Syncer) createEntry(ctx context.Context, dailyNote *storage.DailyNote, md string, n Note, date string) (string, error) {
 	meta, _ := json.Marshal(map[string]string{
-		"granola_note_id": n.ID,
-		"granola_title":   n.Title,
+		"granola_meeting_id": m.ID,
+		"granola_title":      m.Title,
 	})
 
 	entry := &storage.Entry{
@@ -321,74 +493,64 @@ func (s *Syncer) createEntry(ctx context.Context, dailyNote *storage.DailyNote, 
 		Metadata:    string(meta),
 	}
 	if err := s.store.CreateEntry(ctx, entry); err != nil {
-		return "", fmt.Errorf("create entry: %w", err)
+		return fmt.Errorf("create entry: %w", err)
 	}
 
-	// Append to the daily note markdown.
 	snippet := "\n\n---\n*Imported from Granola*\n\n" + md + "\n"
 	if err := s.store.AppendToSection(ctx, dailyNote.ID, "# Notes", snippet); err != nil {
-		return "", fmt.Errorf("append to daily note: %w", err)
+		return fmt.Errorf("append to daily note: %w", err)
 	}
 
-	// Index for semantic search.
 	if s.indexer != nil && md != "" {
 		if err := s.indexer.IndexEntry(ctx, entry.ID, md); err != nil {
 			slog.Warn("failed to index granola entry", "entry_id", entry.ID, "error", err)
 		}
 	}
 
-	return entry.ID, nil
+	state := &storage.GranolaSyncState{
+		NoteID:    m.ID,
+		EntryID:   entry.ID,
+		UpdatedAt: m.Date,
+	}
+	if err := s.store.UpsertGranolaSyncState(ctx, state); err != nil {
+		return fmt.Errorf("upsert sync state: %w", err)
+	}
+
+	slog.Info("granola meeting imported", "meeting_id", m.ID, "title", m.Title, "date", date)
+	return nil
 }
 
-// buildNoteMarkdown formats a Granola note detail as markdown.
-func buildNoteMarkdown(d *noteDetail) string {
+// buildNoteMarkdown formats a meeting as markdown.
+func buildNoteMarkdown(d *MeetingDetail, transcript string) string {
 	var md strings.Builder
 
-	// Title
 	fmt.Fprintf(&md, "## %s\n\n", d.Title)
 
-	// Meeting metadata
-	if d.CalendarEvent != nil {
-		start := formatTime(d.CalendarEvent.ScheduledStartTime)
-		end := formatTime(d.CalendarEvent.ScheduledEndTime)
-		if start != "" && end != "" {
-			fmt.Fprintf(&md, "**Time:** %s – %s\n\n", start, end)
+	if d.Date != "" {
+		if t := formatTime(d.Date); t != "" {
+			fmt.Fprintf(&md, "**Date:** %s\n\n", t)
 		}
 	}
 
 	if len(d.Attendees) > 0 {
-		var names []string
-		for _, a := range d.Attendees {
-			if a.Name != "" {
-				names = append(names, a.Name)
-			} else {
-				names = append(names, a.Email)
-			}
-		}
-		fmt.Fprintf(&md, "**Attendees:** %s\n\n", strings.Join(names, ", "))
+		fmt.Fprintf(&md, "**Attendees:** %s\n\n", strings.Join(d.Attendees, ", "))
 	}
 
-	// Summary (prefer markdown, fall back to text)
-	if d.SummaryMarkdown != "" {
-		md.WriteString(d.SummaryMarkdown)
-		md.WriteString("\n")
-	} else if d.SummaryText != "" {
-		md.WriteString(d.SummaryText)
+	if d.EnhancedNotes != "" {
+		md.WriteString(d.EnhancedNotes)
 		md.WriteString("\n")
 	}
 
-	// Transcript
-	if len(d.Transcript) > 0 {
+	if d.PrivateNotes != "" {
+		md.WriteString("\n### Private Notes\n\n")
+		md.WriteString(d.PrivateNotes)
+		md.WriteString("\n")
+	}
+
+	if transcript != "" {
 		md.WriteString("\n### Transcript\n\n")
-		for _, t := range d.Transcript {
-			label := t.Speaker.Source
-			if label == "microphone" {
-				label = "You"
-			} else {
-				label = "Speaker"
-			}
-			fmt.Fprintf(&md, "> **%s:** %s\n>\n", label, t.Text)
-		}
+		md.WriteString(transcript)
+		md.WriteString("\n")
 	}
 
 	return md.String()
@@ -402,11 +564,22 @@ func parseDateFromISO(iso string) string {
 	return iso[:10]
 }
 
-// formatTime formats an ISO 8601 timestamp as HH:MM.
+// formatTime formats an ISO 8601 timestamp as a readable date/time.
 func formatTime(iso string) string {
 	t, err := time.Parse(time.RFC3339, iso)
 	if err != nil {
-		return ""
+		t, err = time.Parse("2006-01-02", iso)
+		if err != nil {
+			return iso
+		}
+		return t.Format("2006-01-02")
 	}
-	return t.Format("15:04")
+	return t.Format("2006-01-02 15:04")
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "..."
 }

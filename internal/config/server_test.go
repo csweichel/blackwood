@@ -228,26 +228,23 @@ func TestConfigFileOverridesEnvVar(t *testing.T) {
 
 func TestGranolaConfigFromFile(t *testing.T) {
 	dir := t.TempDir()
-	keyFile := filepath.Join(dir, "granola-key")
-	if err := os.WriteFile(keyFile, []byte("  gra_test_key  \n"), 0o600); err != nil {
+	tokenFile := filepath.Join(dir, "granola-token")
+	if err := os.WriteFile(tokenFile, []byte(`{"access_token":"test"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
 	cfg := &ServerConfig{
 		Granola: GranolaSettings{
-			APIKeyFile:   keyFile,
-			PollInterval: "30m",
+			OAuthTokenFile: tokenFile,
+			PollInterval:   "30m",
 		},
 	}
 	if err := cfg.Resolve(); err != nil {
 		t.Fatal(err)
 	}
 
-	if cfg.GranolaAPIKey() != "gra_test_key" {
-		t.Errorf("granola api key = %q, want %q", cfg.GranolaAPIKey(), "gra_test_key")
-	}
 	if !cfg.Granola.Enabled {
-		t.Error("expected Granola to be auto-enabled when API key is set")
+		t.Error("expected Granola to be auto-enabled when token file exists")
 	}
 	if cfg.Granola.PollInterval != "30m" {
 		t.Errorf("poll_interval = %q, want %q", cfg.Granola.PollInterval, "30m")
@@ -255,15 +252,15 @@ func TestGranolaConfigFromFile(t *testing.T) {
 }
 
 func TestGranolaConfigFromEnvVar(t *testing.T) {
-	t.Setenv("GRANOLA_API_KEY", "env-granola-key")
+	t.Setenv("GRANOLA_OAUTH_TOKEN", "env-granola-token")
 
 	cfg := &ServerConfig{}
 	if err := cfg.Resolve(); err != nil {
 		t.Fatal(err)
 	}
 
-	if cfg.GranolaAPIKey() != "env-granola-key" {
-		t.Errorf("granola api key = %q, want %q", cfg.GranolaAPIKey(), "env-granola-key")
+	if cfg.GranolaOAuthToken() != "env-granola-token" {
+		t.Errorf("granola oauth token = %q, want %q", cfg.GranolaOAuthToken(), "env-granola-token")
 	}
 	if !cfg.Granola.Enabled {
 		t.Error("expected Granola to be auto-enabled from env var")
@@ -274,7 +271,7 @@ func TestGranolaConfigFromEnvVar(t *testing.T) {
 }
 
 func TestGranolaConfigDisabledByDefault(t *testing.T) {
-	t.Setenv("GRANOLA_API_KEY", "")
+	t.Setenv("GRANOLA_OAUTH_TOKEN", "")
 
 	cfg := &ServerConfig{}
 	if err := cfg.Resolve(); err != nil {
@@ -282,10 +279,22 @@ func TestGranolaConfigDisabledByDefault(t *testing.T) {
 	}
 
 	if cfg.Granola.Enabled {
-		t.Error("expected Granola to be disabled when no API key is set")
+		t.Error("expected Granola to be disabled when no OAuth token is set")
 	}
-	if cfg.GranolaAPIKey() != "" {
-		t.Errorf("granola api key should be empty, got %q", cfg.GranolaAPIKey())
+}
+
+func TestGranolaConfigDisabledWhenFileMissing(t *testing.T) {
+	cfg := &ServerConfig{
+		Granola: GranolaSettings{
+			OAuthTokenFile: "/nonexistent/path/token",
+		},
+	}
+	if err := cfg.Resolve(); err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg.Granola.Enabled {
+		t.Error("expected Granola to be disabled when token file doesn't exist")
 	}
 }
 
@@ -294,7 +303,7 @@ func TestGranolaConfigYAMLParsing(t *testing.T) {
 server:
   addr: ":8080"
 granola:
-  api_key_file: /tmp/granola-key
+  oauth_token_file: /tmp/granola-token
   poll_interval: 2h
 `
 	f := filepath.Join(t.TempDir(), "config.yaml")
@@ -307,8 +316,8 @@ granola:
 		t.Fatal(err)
 	}
 
-	if cfg.Granola.APIKeyFile != "/tmp/granola-key" {
-		t.Errorf("api_key_file = %q, want %q", cfg.Granola.APIKeyFile, "/tmp/granola-key")
+	if cfg.Granola.OAuthTokenFile != "/tmp/granola-token" {
+		t.Errorf("oauth_token_file = %q, want %q", cfg.Granola.OAuthTokenFile, "/tmp/granola-token")
 	}
 	if cfg.Granola.PollInterval != "2h" {
 		t.Errorf("poll_interval = %q, want %q", cfg.Granola.PollInterval, "2h")
