@@ -568,6 +568,36 @@ func (s *Store) CreateEntry(ctx context.Context, e *Entry) error {
 	return nil
 }
 
+// GetEntryByClientRequestID retrieves a previously created entry for an
+// idempotent CreateEntry client request ID.
+func (s *Store) GetEntryByClientRequestID(ctx context.Context, requestID string) (*Entry, error) {
+	var e Entry
+	err := s.db.QueryRowContext(ctx,
+		`SELECT e.id, e.daily_note_id, e.type, e.content, e.raw_content, e.source, e.metadata, e.created_at, e.updated_at
+		 FROM create_entry_requests cer
+		 JOIN entries e ON e.id = cer.entry_id
+		 WHERE cer.request_id = ?`,
+		requestID,
+	).Scan(&e.ID, &e.DailyNoteID, &e.Type, &e.Content, &e.RawContent, &e.Source, &e.Metadata, &e.CreatedAt, &e.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("get entry by client request ID: %w", err)
+	}
+	return &e, nil
+}
+
+// RecordCreateEntryRequest stores an idempotency mapping for a client request.
+func (s *Store) RecordCreateEntryRequest(ctx context.Context, requestID, entryID string) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT OR IGNORE INTO create_entry_requests (request_id, entry_id, created_at)
+		 VALUES (?, ?, ?)`,
+		requestID, entryID, time.Now().UTC(),
+	)
+	if err != nil {
+		return fmt.Errorf("record create entry request: %w", err)
+	}
+	return nil
+}
+
 // GetEntry retrieves an entry by its ID.
 func (s *Store) GetEntry(ctx context.Context, id string) (*Entry, error) {
 	var e Entry
@@ -1236,4 +1266,3 @@ func (s *Store) UpsertGranolaSyncState(ctx context.Context, gs *GranolaSyncState
 	}
 	return nil
 }
-

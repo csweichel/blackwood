@@ -9,13 +9,13 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	blackwoodv1 "github.com/csweichel/blackwood/gen/blackwood/v1"
-	"github.com/csweichel/blackwood/internal/index"
 	"github.com/csweichel/blackwood/internal/storage"
 	"github.com/csweichel/blackwood/internal/transcribe"
 )
@@ -56,11 +56,11 @@ var protoToEntrySource = map[blackwoodv1.EntrySource]string{
 type DailyNotesHandler struct {
 	store       *storage.Store
 	transcriber transcribe.Transcriber // may be nil if not configured
-	indexer     *index.Index           // may be nil if not configured
+	indexer     EntryIndexer           // may be nil if chat index is disabled
 }
 
 // NewDailyNotesHandler creates a new DailyNotesHandler backed by the given store.
-func NewDailyNotesHandler(store *storage.Store, transcriber transcribe.Transcriber, indexer *index.Index) *DailyNotesHandler {
+func NewDailyNotesHandler(store *storage.Store, transcriber transcribe.Transcriber, indexer EntryIndexer) *DailyNotesHandler {
 	return &DailyNotesHandler{store: store, transcriber: transcriber, indexer: indexer}
 }
 
@@ -154,7 +154,7 @@ func (h *DailyNotesHandler) CreateEntry(ctx context.Context, req *connect.Reques
 
 	// Transcribe audio entries via Whisper if available.
 	if entry.Type == "audio" && h.transcriber != nil && len(req.Msg.AttachmentData) > 0 {
-		text, err := h.transcriber.Transcribe(ctx, req.Msg.AttachmentData[0], "webm")
+		text, err := h.transcriber.Transcribe(ctx, req.Msg.AttachmentData[0], attachmentFormat(req.Msg.AttachmentContentTypes, req.Msg.AttachmentFilenames))
 		if err != nil {
 			slog.Warn("audio transcription failed", "error", err)
 		} else if text != "" {
@@ -206,6 +206,12 @@ func (h *DailyNotesHandler) CreateEntry(ctx context.Context, req *connect.Reques
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("append daily note content: %w", err))
 	}
 
+	if h.indexer != nil && entry.Content != "" {
+		if err := h.indexer.IndexEntry(ctx, entry.ID, entry.Content); err != nil {
+			slog.Warn("index entry failed", "entry_id", entry.ID, "error", err)
+		}
+	}
+
 	protoEntry, err := h.entryToProto(ctx, entry)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -231,6 +237,12 @@ func (h *DailyNotesHandler) UpdateEntry(ctx context.Context, req *connect.Reques
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update entry: %w", err))
 	}
 
+	if h.indexer != nil {
+		if err := h.indexer.IndexEntry(ctx, entry.ID, entry.Content); err != nil {
+			slog.Warn("reindex entry failed", "entry_id", entry.ID, "error", err)
+		}
+	}
+
 	protoEntry, err := h.entryToProto(ctx, entry)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -246,6 +258,12 @@ func (h *DailyNotesHandler) DeleteEntry(ctx context.Context, req *connect.Reques
 
 	if err := h.store.DeleteEntry(ctx, req.Msg.Id); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("delete entry: %w", err))
+	}
+
+	if h.indexer != nil {
+		if err := h.indexer.DeleteEntry(req.Msg.Id); err != nil {
+			slog.Warn("delete index entry failed", "entry_id", req.Msg.Id, "error", err)
+		}
 	}
 
 	return connect.NewResponse(&blackwoodv1.DeleteEntryResponse{}), nil
@@ -439,4 +457,32 @@ func (h *DailyNotesHandler) entryToProto(ctx context.Context, e *storage.Entry) 
 	}
 
 	return pe, nil
+}
+
+func attachmentFormat(contentTypes, filenames []string) string {
+	if len(contentTypes) > 0 {
+		if mediaType, _, err := mime.ParseMediaType(contentTypes[0]); err == nil {
+			switch mediaType {
+			case "audio/mp4", "audio/x-m4a":
+				return "m4a"
+			case "audio/mpeg", "audio/mp3":
+				return "mp3"
+			case "audio/wav", "audio/x-wav":
+				return "wav"
+			case "audio/aac":
+				return "aac"
+			case "audio/ogg":
+				return "ogg"
+			case "audio/webm":
+				return "webm"
+			}
+		}
+	}
+	if len(filenames) > 0 {
+		ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(filenames[0])), ".")
+		if ext != "" {
+			return ext
+		}
+	}
+	return "webm"
 }

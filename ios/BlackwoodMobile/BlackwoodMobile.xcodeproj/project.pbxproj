@@ -1,0 +1,307 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		BWBUILDFILE00000000000001 /* BlackwoodMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000001 /* BlackwoodMobileApp.swift */; };
+		BWBUILDFILE00000000000002 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000002 /* AppModel.swift */; };
+		BWBUILDFILE00000000000003 /* MainViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000003 /* MainViews.swift */; };
+		BWBUILDFILE00000000000004 /* AudioRecorderController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000004 /* AudioRecorderController.swift */; };
+		BWBUILDFILE00000000000005 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000005 /* Models.swift */; };
+		BWBUILDFILE00000000000006 /* QueueStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000006 /* QueueStore.swift */; };
+		BWBUILDFILE00000000000007 /* BlackwoodAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000007 /* BlackwoodAPIClient.swift */; };
+		BWBUILDFILE00000000000008 /* SyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000008 /* SyncEngine.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		BWFILE00000000000001 /* BlackwoodMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlackwoodMobileApp.swift; sourceTree = "<group>"; };
+		BWFILE00000000000002 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		BWFILE00000000000003 /* MainViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViews.swift; sourceTree = "<group>"; };
+		BWFILE00000000000004 /* AudioRecorderController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorderController.swift; sourceTree = "<group>"; };
+		BWFILE00000000000005 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		BWFILE00000000000006 /* QueueStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueStore.swift; sourceTree = "<group>"; };
+		BWFILE00000000000007 /* BlackwoodAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlackwoodAPIClient.swift; sourceTree = "<group>"; };
+		BWFILE00000000000008 /* SyncEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngine.swift; sourceTree = "<group>"; };
+		BWPRODUCT00000000000001 /* BlackwoodMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BlackwoodMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		BWFRAMEWORKPHASE00000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		BWGROUP00000000000001 = {
+			isa = PBXGroup;
+			children = (
+				BWGROUP00000000000002 /* App */,
+				BWGROUP00000000000003 /* BlackwoodMobileCore */,
+				BWGROUP00000000000004 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		BWGROUP00000000000002 /* App */ = {
+			isa = PBXGroup;
+			path = App;
+			sourceTree = "<group>";
+			children = (
+				BWFILE00000000000001 /* BlackwoodMobileApp.swift */,
+				BWFILE00000000000002 /* AppModel.swift */,
+				BWGROUP00000000000005 /* Views */,
+				BWGROUP00000000000006 /* Recording */,
+			);
+		};
+		BWGROUP00000000000003 /* BlackwoodMobileCore */ = {
+			isa = PBXGroup;
+			path = Sources/BlackwoodMobileCore;
+			sourceTree = SOURCE_ROOT;
+			children = (
+				BWFILE00000000000005 /* Models.swift */,
+				BWFILE00000000000006 /* QueueStore.swift */,
+				BWFILE00000000000007 /* BlackwoodAPIClient.swift */,
+				BWFILE00000000000008 /* SyncEngine.swift */,
+			);
+		};
+		BWGROUP00000000000004 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				BWPRODUCT00000000000001 /* BlackwoodMobile.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		BWGROUP00000000000005 /* Views */ = {
+			isa = PBXGroup;
+			path = Views;
+			sourceTree = "<group>";
+			children = (
+				BWFILE00000000000003 /* MainViews.swift */,
+			);
+		};
+		BWGROUP00000000000006 /* Recording */ = {
+			isa = PBXGroup;
+			path = Recording;
+			sourceTree = "<group>";
+			children = (
+				BWFILE00000000000004 /* AudioRecorderController.swift */,
+			);
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		BWMOBILETARGET00000000000001 /* BlackwoodMobile */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BWCONFIGLISTTARGET0000001 /* Build configuration list for PBXNativeTarget "BlackwoodMobile" */;
+			buildPhases = (
+				BWSOURCESPHASE0000000001 /* Sources */,
+				BWFRAMEWORKPHASE00000001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BlackwoodMobile;
+			productName = BlackwoodMobile;
+			productReference = BWPRODUCT00000000000001 /* BlackwoodMobile.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		BWPROJECT00000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1620;
+				LastUpgradeCheck = 1620;
+				TargetAttributes = {
+					BWMOBILETARGET00000000000001 = {
+						CreatedOnToolsVersion = 16.2;
+					};
+				};
+			};
+			buildConfigurationList = BWCONFIGLISTPROJECT000001 /* Build configuration list for PBXProject "BlackwoodMobile" */;
+			compatibilityVersion = "Xcode 15.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = BWGROUP00000000000001;
+			productRefGroup = BWGROUP00000000000004 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				BWMOBILETARGET00000000000001 /* BlackwoodMobile */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		BWSOURCESPHASE0000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BWBUILDFILE00000000000001 /* BlackwoodMobileApp.swift in Sources */,
+				BWBUILDFILE00000000000002 /* AppModel.swift in Sources */,
+				BWBUILDFILE00000000000003 /* MainViews.swift in Sources */,
+				BWBUILDFILE00000000000004 /* AudioRecorderController.swift in Sources */,
+				BWBUILDFILE00000000000005 /* Models.swift in Sources */,
+				BWBUILDFILE00000000000006 /* QueueStore.swift in Sources */,
+				BWBUILDFILE00000000000007 /* BlackwoodAPIClient.swift in Sources */,
+				BWBUILDFILE00000000000008 /* SyncEngine.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		BWBUILDCONFIGPROJECTDEBUG0001 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Blackwood;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Blackwood needs microphone access so you can record voice notes.";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.blackwood.mobile;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		BWBUILDCONFIGPROJECTRELEASE0001 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Blackwood;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Blackwood needs microphone access so you can record voice notes.";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.blackwood.mobile;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		BWBUILDCONFIGTARGETDEBUG0001 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Blackwood;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Blackwood needs microphone access so you can record voice notes.";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.blackwood.mobile;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		BWBUILDCONFIGTARGETRELEASE0001 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Blackwood;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Blackwood needs microphone access so you can record voice notes.";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.blackwood.mobile;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		BWCONFIGLISTPROJECT000001 /* Build configuration list for PBXProject "BlackwoodMobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BWBUILDCONFIGPROJECTDEBUG0001,
+				BWBUILDCONFIGPROJECTRELEASE0001,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BWCONFIGLISTTARGET0000001 /* Build configuration list for PBXNativeTarget "BlackwoodMobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BWBUILDCONFIGTARGETDEBUG0001,
+				BWBUILDCONFIGTARGETRELEASE0001,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = BWPROJECT00000000000001 /* Project object */;
+}

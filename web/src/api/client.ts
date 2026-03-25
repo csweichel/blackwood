@@ -301,34 +301,67 @@ export async function* streamChat(
     const text = await resp.text();
     throw new Error(`Chat failed (${resp.status}): ${text}`);
   }
+  if (!resp.body) {
+    throw new Error("Chat failed: empty response body");
+  }
 
-  const reader = resp.body!.getReader();
+  const reader = resp.body.getReader();
   const decoder = new TextDecoder();
-  let pending = new Uint8Array(0);
+  let buffer = new Uint8Array(0);
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
+    if (!value || value.length === 0) continue;
 
-    const next = new Uint8Array(pending.length + value.length);
-    next.set(pending);
-    next.set(value, pending.length);
-    pending = next;
+    const merged = new Uint8Array(buffer.length + value.length);
+    merged.set(buffer, 0);
+    merged.set(value, buffer.length);
+    buffer = merged;
 
-    // Parse complete envelopes from the buffer.
-    while (pending.length >= 5) {
-      const flags = pending[0];
-      const len = new DataView(pending.buffer, pending.byteOffset).getUint32(1, false);
-      if (pending.length < 5 + len) break;
+    while (buffer.length >= 5) {
+      const flags = buffer[0];
+      const len =
+        (((buffer[1] << 24) |
+        (buffer[2] << 16) |
+        (buffer[3] << 8) |
+        buffer[4]) >>> 0);
+      const frameSize = 5 + len;
+      if (buffer.length < frameSize) break;
 
-      const payload = pending.slice(5, 5 + len);
-      pending = pending.slice(5 + len);
+      const payload = buffer.slice(5, frameSize);
+      buffer = buffer.slice(frameSize);
 
-      // Flags 0x02 = end-of-stream trailers; skip.
-      if (flags & 0x02) continue;
+      if ((flags & 0x01) !== 0) {
+        throw new Error("Chat failed: compressed stream frames are not supported");
+      }
 
-      const parsed = JSON.parse(decoder.decode(payload));
-      yield parsed;
+      const text = decoder.decode(payload);
+      if (!text.trim()) continue;
+      const parsed = JSON.parse(text) as Record<string, unknown>;
+
+      // End-stream envelope can carry protocol-level errors.
+      if ((flags & 0x02) !== 0) {
+        const streamErr = parsed.error as { message?: string; code?: string } | undefined;
+        if (streamErr?.message) {
+          throw new Error(`Chat failed (${streamErr.code ?? "unknown"}): ${streamErr.message}`);
+        }
+        continue;
+      }
+
+      const msg = (parsed.result ?? parsed) as {
+        content?: string;
+        done?: boolean;
+        conversationId?: string;
+        sources?: SourceReference[];
+      };
+
+      yield {
+        content: msg.content ?? "",
+        done: Boolean(msg.done),
+        conversationId: msg.conversationId ?? "",
+        sources: msg.sources ?? [],
+      };
     }
   }
 }

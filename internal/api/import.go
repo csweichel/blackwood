@@ -13,7 +13,6 @@ import (
 
 	blackwoodv1 "github.com/csweichel/blackwood/gen/blackwood/v1"
 	"github.com/csweichel/blackwood/internal/importqueue"
-	"github.com/csweichel/blackwood/internal/index"
 	"github.com/csweichel/blackwood/internal/noteparser"
 	"github.com/csweichel/blackwood/internal/ocr"
 	"github.com/csweichel/blackwood/internal/storage"
@@ -23,13 +22,13 @@ import (
 type ImportHandler struct {
 	store      *storage.Store
 	recognizer ocr.Recognizer // may be nil if no LLM config
-	indexer    *index.Index   // may be nil if not configured
+	indexer    EntryIndexer   // may be nil if chat index is disabled
 	worker     *importqueue.Worker
 	dataDir    string
 }
 
 // NewImportHandler creates a new ImportHandler backed by the given store and optional OCR recognizer.
-func NewImportHandler(store *storage.Store, recognizer ocr.Recognizer, indexer *index.Index, worker *importqueue.Worker, dataDir string) *ImportHandler {
+func NewImportHandler(store *storage.Store, recognizer ocr.Recognizer, indexer EntryIndexer, worker *importqueue.Worker, dataDir string) *ImportHandler {
 	return &ImportHandler{store: store, recognizer: recognizer, indexer: indexer, worker: worker, dataDir: dataDir}
 }
 
@@ -130,21 +129,9 @@ func (h *ImportHandler) ImportViwoods(ctx context.Context, req *connect.Request[
 		}
 	}
 
-	if h.indexer != nil && entry.Content != "" {
+	if h.indexer != nil && content != "" {
 		if err := h.indexer.IndexEntry(ctx, entry.ID, entry.Content); err != nil {
-			slog.Warn("failed to index viwoods entry", "entry_id", entry.ID, "error", err)
-		}
-	}
-
-	// Store each page PNG as an attachment.
-	for i, page := range note.Pages {
-		att := &storage.Attachment{
-			EntryID:     entry.ID,
-			Filename:    fmt.Sprintf("page_%d.png", i+1),
-			ContentType: "image/png",
-		}
-		if err := h.store.CreateAttachment(ctx, att, page.Image, date); err != nil {
-			slog.Warn("failed to store page attachment", "page", i+1, "error", err)
+			slog.Warn("index viwoods entry failed", "entry_id", entry.ID, "error", err)
 		}
 	}
 
@@ -202,9 +189,9 @@ func (h *ImportHandler) ImportObsidian(ctx context.Context, req *connect.Request
 		}
 		if err := h.store.CreateEntry(ctx, entry); err != nil {
 			slog.Warn("failed to create audit entry for obsidian import", "file", f.Filename, "error", err)
-		} else if h.indexer != nil && content != "" {
-			if err := h.indexer.IndexEntry(ctx, entry.ID, content); err != nil {
-				slog.Warn("failed to index obsidian entry", "entry_id", entry.ID, "error", err)
+		} else if h.indexer != nil {
+			if err := h.indexer.IndexEntry(ctx, entry.ID, entry.Content); err != nil {
+				slog.Warn("index obsidian entry failed", "entry_id", entry.ID, "error", err)
 			}
 		}
 

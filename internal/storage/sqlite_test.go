@@ -182,6 +182,43 @@ func TestEntryCRUD(t *testing.T) {
 	}
 }
 
+func TestCreateEntryRequestIdempotencyMapping(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	note, err := s.CreateDailyNote(ctx, "2025-02-11")
+	if err != nil {
+		t.Fatalf("create note: %v", err)
+	}
+
+	e := &Entry{
+		DailyNoteID: note.ID,
+		Type:        "audio",
+		Content:     "voice memo",
+		RawContent:  "voice memo",
+		Source:      "api",
+		Metadata:    "{}",
+	}
+	if err := s.CreateEntry(ctx, e); err != nil {
+		t.Fatalf("create entry: %v", err)
+	}
+
+	if err := s.RecordCreateEntryRequest(ctx, "client-123", e.ID); err != nil {
+		t.Fatalf("record request: %v", err)
+	}
+	if err := s.RecordCreateEntryRequest(ctx, "client-123", e.ID); err != nil {
+		t.Fatalf("record duplicate request: %v", err)
+	}
+
+	got, err := s.GetEntryByClientRequestID(ctx, "client-123")
+	if err != nil {
+		t.Fatalf("get by client request ID: %v", err)
+	}
+	if got.ID != e.ID {
+		t.Fatalf("got entry ID %q, want %q", got.ID, e.ID)
+	}
+}
+
 func TestCreateAttachmentWithFileStorage(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
@@ -503,4 +540,3 @@ func TestGranolaSyncState(t *testing.T) {
 		t.Errorf("updated_at = %q, want %q", got2.UpdatedAt, "2026-01-28T10:00:00Z")
 	}
 }
-

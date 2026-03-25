@@ -79,6 +79,7 @@ message CreateEntryRequest {
   repeated bytes attachment_data = 6;
   repeated string attachment_filenames = 7;
   repeated string attachment_content_types = 8;
+  string client_request_id = 9;
 }
 
 message UpdateEntryRequest {

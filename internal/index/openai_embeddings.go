@@ -33,6 +33,14 @@ func NewOpenAIEmbeddingClient(apiKey string) *OpenAIEmbeddingClient {
 	}
 }
 
+// WithModel overrides the embedding model used for requests.
+func (c *OpenAIEmbeddingClient) WithModel(model string) *OpenAIEmbeddingClient {
+	if model != "" {
+		c.model = model
+	}
+	return c
+}
+
 type embeddingRequest struct {
 	Model string   `json:"model"`
 	Input []string `json:"input"`

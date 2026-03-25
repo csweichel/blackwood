@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -19,16 +20,16 @@ import (
 	"github.com/csweichel/blackwood/internal/api"
 	"github.com/csweichel/blackwood/internal/config"
 	"github.com/csweichel/blackwood/internal/describe"
+	"github.com/csweichel/blackwood/internal/granola"
 	"github.com/csweichel/blackwood/internal/importqueue"
 	"github.com/csweichel/blackwood/internal/index"
 	"github.com/csweichel/blackwood/internal/ocr"
 	"github.com/csweichel/blackwood/internal/rag"
 	"github.com/csweichel/blackwood/internal/state"
 	"github.com/csweichel/blackwood/internal/storage"
+	"github.com/csweichel/blackwood/internal/telegram"
 	"github.com/csweichel/blackwood/internal/transcribe"
 	"github.com/csweichel/blackwood/internal/watcher"
-	"github.com/csweichel/blackwood/internal/granola"
-	"github.com/csweichel/blackwood/internal/telegram"
 	"github.com/csweichel/blackwood/internal/whatsapp"
 )
 
@@ -117,13 +118,16 @@ func main() {
 	var semanticIndex *index.Index
 	var ragEngine *rag.Engine
 	if apiKey := cfg.APIKey(); apiKey != "" {
-		embClient := index.NewOpenAIEmbeddingClient(apiKey)
+		embClient := index.NewOpenAIEmbeddingClient(apiKey).WithModel(cfg.OpenAI.EmbeddingModel)
 
 		var err error
 		semanticIndex, err = index.New(store.DB(), embClient)
 		if err != nil {
 			slog.Error("create index", "error", err)
 			os.Exit(1)
+		}
+		if err := reindexExistingEntries(context.Background(), store.DB(), semanticIndex); err != nil {
+			slog.Warn("initial reindex failed", "error", err)
 		}
 
 		ragEngine = rag.New(semanticIndex, store, apiKey, cfg.OpenAI.ChatModel)
@@ -142,8 +146,6 @@ func main() {
 	// Register the import service.
 	importPath, importHandler := blackwoodv1connect.NewImportServiceHandler(api.NewImportHandler(store, recognizer, semanticIndex, worker, dataDir))
 	srv.Handle(importPath, importHandler)
-
-	// Register the chat service.
 	chatPath, chatHandler := blackwoodv1connect.NewChatServiceHandler(api.NewChatHandler(ragEngine, store))
 	srv.Handle(chatPath, chatHandler)
 
@@ -303,7 +305,6 @@ func main() {
 				} else {
 					continue
 				}
-
 				// Create import job.
 				jobID := storage.NewUUID()
 				job := &storage.ImportJob{
@@ -720,5 +721,31 @@ func runSetup() {
 	fmt.Println("To start Blackwood:")
 	fmt.Printf("  blackwood --config %s\n", configPath)
 }
+func reindexExistingEntries(ctx context.Context, db *sql.DB, idx *index.Index) error {
+	rows, err := db.QueryContext(ctx, `SELECT id, content FROM entries`)
+	if err != nil {
+		return fmt.Errorf("query entries for reindex: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
 
+	var entries []index.EntryForIndex
+	for rows.Next() {
+		var e index.EntryForIndex
+		if err := rows.Scan(&e.ID, &e.Text); err != nil {
+			return fmt.Errorf("scan entry for reindex: %w", err)
+		}
+		entries = append(entries, e)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate entries for reindex: %w", err)
+	}
 
+	if len(entries) == 0 {
+		return nil
+	}
+	if err := idx.Reindex(ctx, entries); err != nil {
+		return fmt.Errorf("reindex entries: %w", err)
+	}
+	slog.Info("reindexed entries", "count", len(entries))
+	return nil
+}
