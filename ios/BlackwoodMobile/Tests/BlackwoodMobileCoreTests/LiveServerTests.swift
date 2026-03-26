@@ -49,7 +49,7 @@ func liveWireProtocolRoundTrip() async throws {
             date: date,
             localFilePath: audioURL.path,
             filename: "integration-clip.m4a",
-            contentType: "audio/mp4",
+            contentType: "audio/x-m4a",
             duration: 2
         )
     )

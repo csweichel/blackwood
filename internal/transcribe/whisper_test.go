@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 )
@@ -61,6 +62,9 @@ func TestTranscribe_MultipartFormat(t *testing.T) {
 
 		if header.Filename != "audio.m4a" {
 			t.Errorf("expected filename %q, got %q", "audio.m4a", header.Filename)
+		}
+		if got := header.Header.Get("Content-Type"); got != "audio/x-m4a" {
+			t.Errorf("expected part Content-Type %q, got %q", "audio/x-m4a", got)
 		}
 
 		data, _ := io.ReadAll(file)
@@ -142,5 +146,25 @@ func TestTranscribe_ContextCancellation(t *testing.T) {
 	}
 	if err != context.Canceled {
 		t.Errorf("expected context.Canceled, got %v", err)
+	}
+}
+
+func TestMimeTypeForFormat(t *testing.T) {
+	tests := map[string]string{
+		"m4a":  "audio/x-m4a",
+		"mp4":  "audio/mp4",
+		"mp3":  "audio/mpeg",
+		"mpeg": "audio/mpeg",
+		"wav":  "audio/wav",
+		"ogg":  "audio/ogg",
+		"webm": "audio/webm",
+		"flac": "audio/flac",
+		"foo":  "application/octet-stream",
+	}
+
+	for input, want := range tests {
+		if got := mimeTypeForFormat(strings.ToUpper(input)); got != want {
+			t.Errorf("mimeTypeForFormat(%q) = %q, want %q", input, got, want)
+		}
 	}
 }

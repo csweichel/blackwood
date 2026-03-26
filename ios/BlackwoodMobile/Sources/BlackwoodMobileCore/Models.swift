@@ -250,7 +250,7 @@ public struct PendingEntryUpload: Codable, Equatable, Sendable, Identifiable {
         type: Int = 2,
         localFilePath: String,
         filename: String = "recording.m4a",
-        contentType: String = "audio/m4a",
+        contentType: String = "audio/x-m4a",
         createdAt: Date = Date(),
         capturedAt: Date = Date(),
         duration: TimeInterval,

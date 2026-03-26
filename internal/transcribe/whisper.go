@@ -8,6 +8,8 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
+	"strings"
 	"time"
 )
 
@@ -76,7 +78,11 @@ func (t *WhisperTranscriber) doRequest(ctx context.Context, audio []byte, format
 	writer := multipart.NewWriter(&body)
 
 	// Add the audio file part.
-	part, err := writer.CreateFormFile("file", "audio."+format)
+	filename := "audio." + format
+	partHeader := make(textproto.MIMEHeader)
+	partHeader.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`, "file", filename))
+	partHeader.Set("Content-Type", mimeTypeForFormat(format))
+	part, err := writer.CreatePart(partHeader)
 	if err != nil {
 		return "", 0, fmt.Errorf("creating form file: %w", err)
 	}
@@ -121,4 +127,25 @@ func (t *WhisperTranscriber) doRequest(ctx context.Context, audio []byte, format
 	}
 
 	return whisperResp.Text, resp.StatusCode, nil
+}
+
+func mimeTypeForFormat(format string) string {
+	switch strings.ToLower(format) {
+	case "m4a":
+		return "audio/x-m4a"
+	case "mp4":
+		return "audio/mp4"
+	case "mp3", "mpeg", "mpga":
+		return "audio/mpeg"
+	case "wav":
+		return "audio/wav"
+	case "ogg", "oga":
+		return "audio/ogg"
+	case "webm":
+		return "audio/webm"
+	case "flac":
+		return "audio/flac"
+	default:
+		return "application/octet-stream"
+	}
 }

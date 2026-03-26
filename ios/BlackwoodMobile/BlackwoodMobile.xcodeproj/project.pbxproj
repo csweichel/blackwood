@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -15,6 +15,7 @@
 		BWBUILDFILE00000000000006 /* QueueStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000006 /* QueueStore.swift */; };
 		BWBUILDFILE00000000000007 /* BlackwoodAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000007 /* BlackwoodAPIClient.swift */; };
 		BWBUILDFILE00000000000008 /* SyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000008 /* SyncEngine.swift */; };
+		BWBUILDFILE00000000000009 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000009 /* LaunchScreen.storyboard */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,6 +27,7 @@
 		BWFILE00000000000006 /* QueueStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueStore.swift; sourceTree = "<group>"; };
 		BWFILE00000000000007 /* BlackwoodAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlackwoodAPIClient.swift; sourceTree = "<group>"; };
 		BWFILE00000000000008 /* SyncEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngine.swift; sourceTree = "<group>"; };
+		BWFILE00000000000009 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		BWPRODUCT00000000000001 /* BlackwoodMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BlackwoodMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -39,37 +41,49 @@
 		};
 /* End PBXFrameworksBuildPhase section */
 
+/* Begin PBXResourcesBuildPhase section */
+		BWRESOURCESPHASE00000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BWBUILDFILE00000000000009 /* LaunchScreen.storyboard in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXGroup section */
 		BWGROUP00000000000001 = {
 			isa = PBXGroup;
 			children = (
 				BWGROUP00000000000002 /* App */,
-				BWGROUP00000000000003 /* BlackwoodMobileCore */,
+				BWGROUP00000000000003 /* Sources/BlackwoodMobileCore */,
 				BWGROUP00000000000004 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
 		BWGROUP00000000000002 /* App */ = {
 			isa = PBXGroup;
-			path = App;
-			sourceTree = "<group>";
 			children = (
 				BWFILE00000000000001 /* BlackwoodMobileApp.swift */,
 				BWFILE00000000000002 /* AppModel.swift */,
+				BWFILE00000000000009 /* LaunchScreen.storyboard */,
 				BWGROUP00000000000005 /* Views */,
 				BWGROUP00000000000006 /* Recording */,
 			);
+			path = App;
+			sourceTree = "<group>";
 		};
-		BWGROUP00000000000003 /* BlackwoodMobileCore */ = {
+		BWGROUP00000000000003 /* Sources/BlackwoodMobileCore */ = {
 			isa = PBXGroup;
-			path = Sources/BlackwoodMobileCore;
-			sourceTree = SOURCE_ROOT;
 			children = (
 				BWFILE00000000000005 /* Models.swift */,
 				BWFILE00000000000006 /* QueueStore.swift */,
 				BWFILE00000000000007 /* BlackwoodAPIClient.swift */,
 				BWFILE00000000000008 /* SyncEngine.swift */,
 			);
+			path = Sources/BlackwoodMobileCore;
+			sourceTree = SOURCE_ROOT;
 		};
 		BWGROUP00000000000004 /* Products */ = {
 			isa = PBXGroup;
@@ -81,19 +95,19 @@
 		};
 		BWGROUP00000000000005 /* Views */ = {
 			isa = PBXGroup;
-			path = Views;
-			sourceTree = "<group>";
 			children = (
 				BWFILE00000000000003 /* MainViews.swift */,
 			);
+			path = Views;
+			sourceTree = "<group>";
 		};
 		BWGROUP00000000000006 /* Recording */ = {
 			isa = PBXGroup;
-			path = Recording;
-			sourceTree = "<group>";
 			children = (
 				BWFILE00000000000004 /* AudioRecorderController.swift */,
 			);
+			path = Recording;
+			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
@@ -104,6 +118,7 @@
 			buildPhases = (
 				BWSOURCESPHASE0000000001 /* Sources */,
 				BWFRAMEWORKPHASE00000001 /* Frameworks */,
+				BWRESOURCESPHASE00000001 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -166,13 +181,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		BWBUILDCONFIGPROJECTDEBUG0001 = {
+		BWBUILDCONFIGPROJECTDEBUG0001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
@@ -180,6 +193,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Blackwood;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Blackwood needs microphone access so you can record voice notes.";
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -196,13 +210,11 @@
 			};
 			name = Debug;
 		};
-		BWBUILDCONFIGPROJECTRELEASE0001 = {
+		BWBUILDCONFIGPROJECTRELEASE0001 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
@@ -210,6 +222,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Blackwood;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Blackwood needs microphone access so you can record voice notes.";
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -226,17 +239,16 @@
 			};
 			name = Release;
 		};
-		BWBUILDCONFIGTARGETDEBUG0001 = {
+		BWBUILDCONFIGTARGETDEBUG0001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = SBFM8LSJQ6;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Blackwood;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Blackwood needs microphone access so you can record voice notes.";
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -253,17 +265,16 @@
 			};
 			name = Debug;
 		};
-		BWBUILDCONFIGTARGETRELEASE0001 = {
+		BWBUILDCONFIGTARGETRELEASE0001 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = SBFM8LSJQ6;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Blackwood;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Blackwood needs microphone access so you can record voice notes.";
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -286,8 +297,8 @@
 		BWCONFIGLISTPROJECT000001 /* Build configuration list for PBXProject "BlackwoodMobile" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				BWBUILDCONFIGPROJECTDEBUG0001,
-				BWBUILDCONFIGPROJECTRELEASE0001,
+				BWBUILDCONFIGPROJECTDEBUG0001 /* Debug */,
+				BWBUILDCONFIGPROJECTRELEASE0001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -295,8 +306,8 @@
 		BWCONFIGLISTTARGET0000001 /* Build configuration list for PBXNativeTarget "BlackwoodMobile" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				BWBUILDCONFIGTARGETDEBUG0001,
-				BWBUILDCONFIGTARGETRELEASE0001,
+				BWBUILDCONFIGTARGETDEBUG0001 /* Debug */,
+				BWBUILDCONFIGTARGETRELEASE0001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -296,7 +296,7 @@ final class AppModel: ObservableObject {
             date: date,
             localFilePath: fileURL.path,
             filename: fileURL.lastPathComponent,
-            contentType: "audio/mp4",
+            contentType: audioContentType(for: fileURL),
             capturedAt: Date(),
             duration: duration
         )
@@ -316,6 +316,19 @@ final class AppModel: ObservableObject {
         UserDefaults.standard.set(false, forKey: ShortcutKeys.startRecording)
         selectedTab = .today
         presentRecorder(autoStart: true)
+    }
+
+    private func audioContentType(for fileURL: URL) -> String {
+        switch fileURL.pathExtension.lowercased() {
+        case "m4a":
+            return "audio/x-m4a"
+        case "wav":
+            return "audio/wav"
+        case "mp3":
+            return "audio/mpeg"
+        default:
+            return "application/octet-stream"
+        }
     }
 
     static func dayString(from date: Date) -> String {

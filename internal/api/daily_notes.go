@@ -154,9 +154,24 @@ func (h *DailyNotesHandler) CreateEntry(ctx context.Context, req *connect.Reques
 
 	// Transcribe audio entries via Whisper if available.
 	if entry.Type == "audio" && h.transcriber != nil && len(req.Msg.AttachmentData) > 0 {
-		text, err := h.transcriber.Transcribe(ctx, req.Msg.AttachmentData[0], attachmentFormat(req.Msg.AttachmentContentTypes, req.Msg.AttachmentFilenames))
+		format := attachmentFormat(req.Msg.AttachmentContentTypes, req.Msg.AttachmentFilenames)
+		filename := ""
+		contentType := ""
+		if len(req.Msg.AttachmentFilenames) > 0 {
+			filename = req.Msg.AttachmentFilenames[0]
+		}
+		if len(req.Msg.AttachmentContentTypes) > 0 {
+			contentType = req.Msg.AttachmentContentTypes[0]
+		}
+		text, err := h.transcriber.Transcribe(ctx, req.Msg.AttachmentData[0], format)
 		if err != nil {
-			slog.Warn("audio transcription failed", "error", err)
+			slog.Warn("audio transcription failed",
+				"error", err,
+				"format", format,
+				"filename", filename,
+				"content_type", contentType,
+				"size_bytes", len(req.Msg.AttachmentData[0]),
+			)
 		} else if text != "" {
 			entry.Content = text
 			if err := h.store.UpdateEntryContent(ctx, entry.ID, text); err != nil {

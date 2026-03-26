@@ -44,11 +44,13 @@ final class AudioRecorderController: NSObject, ObservableObject, AVAudioRecorder
                 AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
                 AVSampleRateKey: 44_100,
                 AVNumberOfChannelsKey: 1,
+                AVEncoderBitRateKey: 128_000,
                 AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
             ]
 
             let recorder = try AVAudioRecorder(url: fileURL, settings: settings)
             recorder.delegate = self
+            recorder.prepareToRecord()
             recorder.record()
             self.recorder = recorder
             self.startedAt = Date()
