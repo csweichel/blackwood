@@ -203,12 +203,12 @@ function rehypeCollapsible() {
         {
           type: "element",
           tagName: "details",
-          properties: { open: true },
+          properties: { open: true, className: "list-collapse" },
           children: [
             {
               type: "element",
               tagName: "summary",
-              properties: {},
+              properties: { className: "list-collapse-summary" },
               children: summaryContent,
             },
             ...detailsBody,
@@ -269,9 +269,30 @@ function remarkWikilinks() {
 const SECTION_HEADINGS = new Set(["Summary", "Notes", "Links"]);
 
 /**
+ * React SVG icons for section headings, injected via component overrides.
+ */
+const SECTION_ICONS_JSX: Record<string, React.ReactNode> = {
+  Summary: (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>
+    </svg>
+  ),
+  Notes: (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+    </svg>
+  ),
+  Links: (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+    </svg>
+  ),
+};
+
+/**
  * Rehype plugin that styles known section headings (# Summary, # Notes,
- * # Links) as small uppercase label dividers by adding CSS classes.
- * Works on bare h1 elements and h1 elements inside <summary> (collapsible).
+ * # Links) with an icon and bold title. Works on bare h1 elements and
+ * h1 elements inside <summary> (collapsible).
  * Also marks the paragraph after # Summary with a special class.
  */
 function rehypeSectionLabels() {
@@ -755,7 +776,26 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
               startEditing();
             }}
           >
-            <Markdown remarkPlugins={[remarkGfm, remarkWikilinks]} rehypePlugins={[rehypeRaw, rehypeYoutubeEmbed, rehypeCollapsible, rehypeSectionLabels, rehypeAttachmentUrls(date)]}>
+            <Markdown
+              remarkPlugins={[remarkGfm, remarkWikilinks]}
+              rehypePlugins={[rehypeRaw, rehypeYoutubeEmbed, rehypeCollapsible, rehypeSectionLabels, rehypeAttachmentUrls(date)]}
+              components={{
+                h1: ({ className, children, ...props }) => {
+                  const cls = typeof className === "string" ? className : "";
+                  if (cls.includes("note-section-label")) {
+                    const text = typeof children === "string" ? children : String(children ?? "");
+                    const icon = SECTION_ICONS_JSX[text.trim()];
+                    return (
+                      <h1 className={cls} {...props}>
+                        {icon && <span className="note-section-icon">{icon}</span>}
+                        {children}
+                      </h1>
+                    );
+                  }
+                  return <h1 className={className} {...props}>{children}</h1>;
+                },
+              }}
+            >
               {content}
             </Markdown>
           </div>
