@@ -443,7 +443,10 @@ func runGranolaLogin() {
 	fmt.Print("> ")
 
 	var input string
-	fmt.Scanln(&input)
+	if _, err := fmt.Scanln(&input); err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
+		os.Exit(1)
+	}
 
 	code, err := granola.ExtractCodeFromURL(input)
 	if err != nil {

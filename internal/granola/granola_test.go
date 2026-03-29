@@ -134,7 +134,7 @@ func fakeMCPServer(t *testing.T, meetings []Meeting, details map[string]*Meeting
 				ID:      &req.ID,
 				Result:  json.RawMessage(`{"protocolVersion":"2025-03-26","capabilities":{},"serverInfo":{"name":"granola-test","version":"1.0"}}`),
 			}
-			json.NewEncoder(w).Encode(resp)
+			_ = json.NewEncoder(w).Encode(resp)
 
 		case "notifications/initialized":
 			w.WriteHeader(http.StatusAccepted)
@@ -142,7 +142,7 @@ func fakeMCPServer(t *testing.T, meetings []Meeting, details map[string]*Meeting
 		case "tools/call":
 			paramsBytes, _ := json.Marshal(req.Params)
 			var params callToolParams
-			json.Unmarshal(paramsBytes, &params)
+			_ = json.Unmarshal(paramsBytes, &params)
 
 			var resultText string
 			switch params.Name {
@@ -185,7 +185,7 @@ func fakeMCPServer(t *testing.T, meetings []Meeting, details map[string]*Meeting
 				ID:      &req.ID,
 				Result:  resultBytes,
 			}
-			json.NewEncoder(w).Encode(resp)
+			_ = json.NewEncoder(w).Encode(resp)
 
 		default:
 			resp := jsonRPCResponse{
@@ -193,7 +193,7 @@ func fakeMCPServer(t *testing.T, meetings []Meeting, details map[string]*Meeting
 				ID:      &req.ID,
 				Error:   &jsonRPCError{Code: -32601, Message: "method not found"},
 			}
-			json.NewEncoder(w).Encode(resp)
+			_ = json.NewEncoder(w).Encode(resp)
 		}
 	}))
 }
@@ -233,7 +233,7 @@ func TestSyncWithFakeMCPServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	// Create syncer pointing at the fake MCP server.
 	pt := &PersistedToken{AccessToken: "test-oauth-token"}
@@ -363,7 +363,7 @@ func TestTokenSourceAutoRefresh(t *testing.T) {
 		}
 		refreshCalled = true
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(OAuthToken{
+		_ = json.NewEncoder(w).Encode(OAuthToken{
 			AccessToken:  "new-access-token",
 			RefreshToken: "new-refresh-token",
 			ExpiresIn:    3600,
@@ -430,7 +430,7 @@ func TestMCPClientSSEResponse(t *testing.T) {
 	// Test that the MCP client correctly parses SSE-streamed responses.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req jsonRPCRequest
-		json.NewDecoder(r.Body).Decode(&req)
+		_ = json.NewDecoder(r.Body).Decode(&req)
 
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
@@ -446,7 +446,7 @@ func TestMCPClientSSEResponse(t *testing.T) {
 			Result:  resultBytes,
 		}
 		respBytes, _ := json.Marshal(resp)
-		fmt.Fprintf(w, "data: %s\n\n", respBytes)
+		_, _ = fmt.Fprintf(w, "data: %s\n\n", respBytes)
 	}))
 	defer srv.Close()
 
