@@ -227,7 +227,7 @@ body {
   height: auto;
 }
 
-/* --- Section labels (# Summary, # Notes, # Links) --- */
+/* --- Section labels (all root-level h1 headings) --- */
 
 .note-section-label {
   font-family: var(--font-sans);
@@ -301,6 +301,22 @@ body {
 /* Content inside section details gets left indent */
 .note-prose > details:has(> summary .note-section-label) > *:not(summary) {
   padding-left: 1.5rem;
+}
+
+/* Nested h2 sections inside h1 sections */
+.note-prose > details:has(> summary .note-section-label) details > summary > h2,
+.note-prose > details:has(> summary .note-section-label) details > summary > h3 {
+  font-size: 0.875rem !important;
+  font-weight: 600;
+  margin-top: 0.25rem;
+}
+
+.note-prose > details:has(> summary .note-section-label) details {
+  margin-top: 0.75rem;
+}
+
+.note-prose > details:has(> summary .note-section-label) details > *:not(summary) {
+  padding-left: 1rem;
 }
 
 /* Summary text — the paragraph right after the Summary label */

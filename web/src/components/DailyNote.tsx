@@ -266,7 +266,7 @@ function remarkWikilinks() {
   };
 }
 
-const SECTION_HEADINGS = new Set(["Summary", "Notes", "Links"]);
+// All root-level h1 headings are treated as section labels.
 
 /**
  * React SVG icons for section headings, injected via component overrides.
@@ -290,9 +290,9 @@ const SECTION_ICONS_JSX: Record<string, React.ReactNode> = {
 };
 
 /**
- * Rehype plugin that styles known section headings (# Summary, # Notes,
- * # Links) with an icon and bold title. Works on bare h1 elements and
- * h1 elements inside <summary> (collapsible).
+ * Rehype plugin that styles all root-level h1 headings as section labels
+ * with an icon and bold title. Works on bare h1 elements and h1 elements
+ * inside <summary> (collapsible).
  * Also marks the paragraph after # Summary with a special class.
  */
 function rehypeSectionLabels() {
@@ -303,7 +303,6 @@ function rehypeSectionLabels() {
       // Case 1: bare h1 (not wrapped by collapsible — e.g. empty section)
       if (node.tagName === "h1" && parent.tagName !== "summary") {
         const text = getTextContent(node).trim();
-        if (!SECTION_HEADINGS.has(text)) return;
         const cls = text === "Summary" ? "note-section-label note-section-summary-label" : "note-section-label";
         node.properties = { ...(node.properties || {}), className: cls };
         node.children = [{ type: "text", value: text }];
@@ -321,7 +320,6 @@ function rehypeSectionLabels() {
       const h1 = node.children?.find((c: any) => c.type === "element" && c.tagName === "h1");
       if (!h1) return;
       const text = getTextContent(h1).trim();
-      if (!SECTION_HEADINGS.has(text)) return;
 
       // Add the label class to the h1 but keep it as h1 so collapsible CSS works.
       const cls = text === "Summary" ? "note-section-label note-section-summary-label" : "note-section-label";
