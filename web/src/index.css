@@ -311,7 +311,7 @@ body {
   margin-top: 0.25rem;
 }
 
-.note-prose > details:has(> summary .note-section-label) details {
+.note-prose > details:has(> summary .note-section-label) details:not(.list-collapse) {
   margin-top: 0.75rem;
 }
 
@@ -434,36 +434,38 @@ body {
 
 /* Pull the details back so the summary bullet aligns with sibling li bullets */
 .note-prose li > details.list-collapse {
-  margin-left: -1.5em;
+  margin-left: -0.5em;
   padding-left: 0;
 }
 
 .note-prose details.list-collapse > summary.list-collapse-summary {
-  display: list-item;
-  list-style-type: disc;
-  list-style-position: inside;
+  position: relative;
   cursor: pointer;
-  padding-left: 1.5em;
-  text-indent: -1.5em;
+  padding-left: 0.5em;
+  list-style-type: none;
 }
 
 .note-prose details.list-collapse > summary.list-collapse-summary::before {
   content: none;
 }
 
-.note-prose details.list-collapse:not([open]) > summary.list-collapse-summary {
-  list-style-type: "▸ ";
+.note-prose details.list-collapse:not([open]) > summary.list-collapse-summary::after {
+  content: "▸";
+  position: absolute;
+  left: -0.75em;
   color: var(--muted-foreground);
 }
 
-.note-prose details.list-collapse[open] > summary.list-collapse-summary {
-  list-style-type: disc;
+.note-prose details.list-collapse[open] > summary.list-collapse-summary::after {
+  content: "•";
+  position: absolute;
+  left: -0.75em;
 }
 
 /* Nested lists inside the collapsible keep normal indent */
 .note-prose details.list-collapse > ul,
 .note-prose details.list-collapse > ol {
-  margin-left: 1.5em;
+  margin-left: 0.5em;
 }
 
 /* --- Wikilink pill style --- */
