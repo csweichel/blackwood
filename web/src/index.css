@@ -414,13 +414,13 @@ body {
 .note-prose input[type="checkbox"]:checked::after {
   content: "";
   position: absolute;
-  left: 3.5px;
-  top: 1px;
+  left: 50%;
+  top: 45%;
   width: 5px;
   height: 9px;
   border: solid var(--background);
   border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
+  transform: translate(-50%, -55%) rotate(45deg);
 }
 
 /* Task list items: flex layout for checkbox alignment */
