@@ -347,6 +347,25 @@ function getTextContent(node: any): string {
 }
 
 /**
+ * Rehype plugin that assigns a sequential data-checkbox-index to each
+ * checkbox input so we can map a click back to the raw markdown.
+ */
+function rehypeCheckboxIndex() {
+  return (tree: any) => {
+    let idx = 0;
+    visit(tree, "element", (node: any) => {
+      if (
+        node.tagName === "input" &&
+        node.properties?.type === "checkbox"
+      ) {
+        node.properties["data-checkbox-index"] = idx;
+        idx++;
+      }
+    });
+  };
+}
+
+/**
  * Rehype plugin that rewrites relative src/href attributes on img and audio
  * elements to point to the date-based attachment API route. This makes
  * relative filenames (e.g. "photo-abc12345.jpg") written into the markdown
@@ -419,6 +438,10 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
   const [showCamera, setShowCamera] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showClipForm, setShowClipForm] = useState(false);
+  const [sectionsCollapsed, setSectionsCollapsed] = useState(false);
+  const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+  const overflowRef = useRef<HTMLDivElement>(null);
+  const proseRef = useRef<HTMLDivElement>(null);
   const [clipUrl, setClipUrl] = useState("");
   const [clipLoading, setClipLoading] = useState(false);
   const attachRef = useRef<HTMLDivElement>(null);
@@ -440,6 +463,19 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     }
   }, [showAttachMenu]);
 
+  // Close overflow menu on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
+        setShowOverflowMenu(false);
+      }
+    }
+    if (showOverflowMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showOverflowMenu]);
+
   // Reset editing state when date changes
   useEffect(() => {
     setEditing(false);
@@ -447,6 +483,8 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     setShowCamera(false);
     setShowAttachMenu(false);
     setShowClipForm(false);
+    setSectionsCollapsed(false);
+    setShowOverflowMenu(false);
   }, [date]);
 
 
@@ -524,6 +562,30 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     }, 1000);
   }
 
+  /** Toggle the nth checkbox in the raw markdown between [ ] and [x]. */
+  function toggleCheckbox(index: number) {
+    const checkboxRe = /- \[([ xX])\]/g;
+    let count = 0;
+    const newContent = content.replace(checkboxRe, (match, mark) => {
+      if (count++ === index) {
+        return mark.trim() ? "- [ ]" : "- [x]";
+      }
+      return match;
+    });
+    setContent(newContent);
+    doSave(newContent);
+  }
+
+  /** Collapse or expand all <details> section headings in the rendered note. */
+  function toggleAllSections() {
+    if (!proseRef.current) return;
+    const next = !sectionsCollapsed;
+    proseRef.current.querySelectorAll("details").forEach((d) => {
+      d.open = !next;
+    });
+    setSectionsCollapsed(next);
+  }
+
   function startEditing() {
     const template = "# Summary\n\n# Notes\n\n# Links\n";
     setEditContent(content.trim() ? content : template);
@@ -572,7 +634,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
         </h2>
         <div className="flex items-center gap-3">
           <span
-            className={`text-xs transition-opacity ${
+            className={`text-xs transition-opacity ${editing ? "hidden md:inline" : ""} ${
               saveStatus === "idle" ? "opacity-0" : "opacity-100"
             } ${
               saveStatus === "saving"
@@ -594,23 +656,47 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
           </span>
           {content.trim() && (
             <button
-              onClick={generateSummary}
-              disabled={summarizing}
-              className={`p-1.5 rounded-md transition-colors ${summarizing ? "text-muted-foreground opacity-50 cursor-wait" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
-              title="Generate summary"
+              onClick={toggleAllSections}
+              className="p-1.5 rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
+              title={sectionsCollapsed ? "Expand all sections" : "Collapse all sections"}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z"/></svg>
+              {sectionsCollapsed ? (
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7 20 5-5 5 5"/><path d="m7 4 5 5 5-5"/></svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
+              )}
             </button>
           )}
           {content.trim() && (
-            <button
-              onClick={downloadPdf}
-              disabled={pdfLoading}
-              className={`p-1.5 rounded-md transition-colors ${pdfLoading ? "text-muted-foreground opacity-50 cursor-wait" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
-              title="Download as PDF"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" x2="12" y1="18" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
-            </button>
+            <div className="relative" ref={overflowRef}>
+              <button
+                onClick={() => setShowOverflowMenu((v) => !v)}
+                className={`p-1.5 rounded-md transition-colors ${showOverflowMenu ? "text-accent bg-muted" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+                title="More actions"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+              </button>
+              {showOverflowMenu && (
+                <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg z-50 min-w-[180px]">
+                  <button
+                    onClick={() => { setShowOverflowMenu(false); generateSummary(); }}
+                    disabled={summarizing}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left disabled:opacity-50"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z"/></svg>
+                    {summarizing ? "Summarising…" : "Generate summary"}
+                  </button>
+                  <button
+                    onClick={() => { setShowOverflowMenu(false); downloadPdf(); }}
+                    disabled={pdfLoading}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left disabled:opacity-50"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" x2="12" y1="18" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
+                    {pdfLoading ? "Exporting…" : "Export as PDF"}
+                  </button>
+                </div>
+              )}
+            </div>
           )}
           <div className="relative" ref={attachRef}>
             <button
@@ -662,7 +748,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
               Edit
             </button>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="hidden md:flex items-center gap-2">
               <button
                 onClick={handleCancel}
                 className="px-3 py-1.5 text-xs font-medium text-muted-foreground bg-muted rounded-md hover:bg-border transition-colors"
@@ -766,17 +852,25 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
           />
         ) : content.trim() ? (
           <div
+            ref={proseRef}
             className="prose prose-sm max-w-none note-prose note-container"
             onClick={(e) => {
-              // Don't enter edit mode when clicking interactive elements
               const target = e.target as HTMLElement;
-              if (target.closest("summary, details, a, audio, button, video, iframe")) return;
+              // Handle checkbox toggle without entering edit mode.
+              if (target.tagName === "INPUT" && (target as HTMLInputElement).type === "checkbox") {
+                e.preventDefault();
+                const idx = target.getAttribute("data-checkbox-index");
+                if (idx != null) toggleCheckbox(parseInt(idx, 10));
+                return;
+              }
+              // Don't enter edit mode when clicking interactive elements
+              if (target.closest("summary, details, a, audio, button, video, iframe, input")) return;
               startEditing();
             }}
           >
             <Markdown
               remarkPlugins={[remarkGfm, remarkWikilinks]}
-              rehypePlugins={[rehypeRaw, rehypeYoutubeEmbed, rehypeCollapsible, rehypeSectionLabels, rehypeAttachmentUrls(date)]}
+              rehypePlugins={[rehypeRaw, rehypeYoutubeEmbed, rehypeCollapsible, rehypeSectionLabels, rehypeCheckboxIndex, rehypeAttachmentUrls(date)]}
               components={{
                 h1: ({ className, children, ...props }) => {
                   const cls = typeof className === "string" ? className : "";
@@ -791,6 +885,13 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
                     );
                   }
                   return <h1 className={className} {...props}>{children}</h1>;
+                },
+                input: ({ type, checked, disabled: _disabled, ...props }) => {
+                  if (type === "checkbox") {
+                    // Render without disabled so click events fire.
+                    return <input type="checkbox" checked={checked} readOnly {...props} />;
+                  }
+                  return <input type={type} checked={checked} {...props} />;
                 },
               }}
             >
@@ -819,6 +920,47 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
           <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Esc</kbd> exit edit
         </p>
       </div>
+
+      {/* Mobile bottom bar for save status + Cancel/Done when editing */}
+      {editing && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border px-4 py-3 flex items-center justify-between z-40">
+          <span
+            className={`text-xs transition-opacity ${
+              saveStatus === "idle" ? "opacity-0" : "opacity-100"
+            } ${
+              saveStatus === "saving"
+                ? "text-muted-foreground"
+                : saveStatus === "saved"
+                ? "text-accent"
+                : saveStatus === "error"
+                ? "text-destructive"
+                : ""
+            }`}
+          >
+            {saveStatus === "saving"
+              ? "Saving..."
+              : saveStatus === "saved"
+              ? "Saved"
+              : saveStatus === "error"
+              ? "Save failed"
+              : ""}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleCancel}
+              className="px-4 py-2 text-sm font-medium text-muted-foreground bg-muted rounded-md hover:bg-border transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:opacity-90 transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

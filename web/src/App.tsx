@@ -19,6 +19,7 @@ import ImportModal from "./components/ImportModal";
 import ImportBanner from "./components/ImportBanner";
 import OfflineBanner from "./components/OfflineBanner";
 import SettingsPanel from "./components/SettingsPanel";
+import Logo from "./components/Logo";
 import TimezoneBanner from "./components/TimezoneBanner";
 import { PreferencesProvider, usePreferences } from "./hooks/usePreferences";
 import { useImportJobs } from "./hooks/useImportJobs";
@@ -140,7 +141,7 @@ function AppLayout() {
       {/* Header */}
       <header className="border-b border-border bg-card shrink-0">
         <div className="max-w-4xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
-          <h1 className="text-lg font-medium tracking-tight text-foreground">Blackwood</h1>
+          <Logo height={36} width={128} />
 
           {/* Actions */}
           <div className="flex items-center gap-2">
@@ -193,43 +194,47 @@ function AppLayout() {
             <div className="flex items-center bg-muted rounded-lg p-0.5">
               <button
                 onClick={() => navigate(`/day/${today}`)}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                className={`px-2 sm:px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                   isDay
                     ? "bg-card text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                Day
+                <span className="sm:hidden">D</span>
+                <span className="hidden sm:inline">Day</span>
               </button>
               <button
                 onClick={() => navigate(`/week/${getCurrentWeekId()}`)}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                className={`px-2 sm:px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                   isWeek
                     ? "bg-card text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                Week
+                <span className="sm:hidden">W</span>
+                <span className="hidden sm:inline">Week</span>
               </button>
               <button
                 onClick={() => navigate(`/month/${getCurrentMonthId()}`)}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                className={`px-2 sm:px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                   isMonth
                     ? "bg-card text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                Month
+                <span className="sm:hidden">M</span>
+                <span className="hidden sm:inline">Month</span>
               </button>
               <button
                 onClick={() => navigate("/chat")}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                className={`px-2 sm:px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                   isChat
                     ? "bg-card text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                Chat
+                <span className="sm:hidden">C</span>
+                <span className="hidden sm:inline">Chat</span>
               </button>
             </div>
           </div>
