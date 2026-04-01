@@ -36,6 +36,14 @@ async function rpc<Req, Res>(method: string, request: Req, service: string = DAI
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),
   });
+  if (resp.status === 401) {
+    if (resp.headers.get("X-Auth-Setup-Required") === "true") {
+      window.location.href = "/auth/setup";
+    } else {
+      window.location.href = "/auth/login";
+    }
+    throw new Error("Unauthorized");
+  }
   if (!resp.ok) {
     const text = await resp.text();
     throw new Error(`RPC ${method} failed (${resp.status}): ${text}`);

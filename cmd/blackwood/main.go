@@ -18,6 +18,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/csweichel/blackwood/gen/blackwood/v1/blackwoodv1connect"
 	"github.com/csweichel/blackwood/internal/api"
+	"github.com/csweichel/blackwood/internal/auth"
 	"github.com/csweichel/blackwood/internal/config"
 	"github.com/csweichel/blackwood/internal/describe"
 	"github.com/csweichel/blackwood/internal/granola"
@@ -200,9 +201,30 @@ func main() {
 	// Web clipping endpoint.
 	srv.Handle("POST /api/clip", api.NewClipHandler(store))
 
+	// --- Authentication ---
+	// Must be registered before the SPA catch-all handler so Connect
+	// routes like /blackwood.v1.AuthService/* are matched first.
+	if cfg.Auth.TOTP.Enabled {
+		authMiddleware, err := auth.Setup(auth.SetupConfig{
+			Store:  store,
+			UseTLS: cfg.TLSEnabled(),
+		}, srv.Mux())
+		if err != nil {
+			slog.Error("auth setup", "error", err)
+			os.Exit(1)
+		}
+		srv.SetAuthMiddleware(authMiddleware)
+		slog.Info("TOTP authentication enabled")
+	} else {
+		if err := auth.Cleanup(store); err != nil {
+			slog.Error("auth cleanup", "error", err)
+		}
+	}
+
 	// Serve web UI: filesystem first (development), then embedded (release binary).
 	// Uses an SPA fallback handler so client-side routes (e.g. /day/2025-01-15)
 	// serve index.html instead of 404.
+	// Registered after all API/Connect routes so the catch-all doesn't shadow them.
 	if info, err := os.Stat("web/dist"); err == nil && info.IsDir() {
 		srv.Handle("/", spaHandler(http.Dir("web/dist")))
 		slog.Info("serving web UI from filesystem", "path", "web/dist")

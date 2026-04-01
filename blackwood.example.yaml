@@ -36,6 +36,11 @@ openai:
 #   oauth_token_file: ~/.blackwood/secrets/granola-oauth-token
 #   poll_interval: 1h
 
+# Authentication (optional)
+# auth:
+#   totp:
+#     enabled: true
+
 # File watcher (optional)
 # watcher:
 #   watch_dirs:

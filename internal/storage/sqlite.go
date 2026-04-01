@@ -1376,4 +1376,69 @@ func (s *Store) GetAllPreferences(ctx context.Context) (map[string]string, error
 	return prefs, rows.Err()
 }
 
+// --- Auth: TOTP secret ---
+
+// SaveTOTPSecret stores the TOTP shared secret. Only one secret can exist (id=1).
+func (s *Store) SaveTOTPSecret(ctx context.Context, secret string) error {
+	_, err := s.exec(ctx,
+		`INSERT OR REPLACE INTO auth_totp (id, secret, created_at) VALUES (1, ?, CURRENT_TIMESTAMP)`,
+		secret,
+	)
+	return err
+}
+
+// GetTOTPSecret returns the stored TOTP secret, or "" if none exists.
+func (s *Store) GetTOTPSecret(ctx context.Context) (string, error) {
+	var secret string
+	err := s.readDB.QueryRowContext(ctx, `SELECT secret FROM auth_totp WHERE id = 1`).Scan(&secret)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return secret, err
+}
+
+// DeleteTOTPSecret removes the stored TOTP secret.
+func (s *Store) DeleteTOTPSecret(ctx context.Context) error {
+	_, err := s.exec(ctx, `DELETE FROM auth_totp`)
+	return err
+}
+
+// --- Auth: Sessions ---
+
+// CreateSession inserts a new session and returns its token.
+func (s *Store) CreateSession(ctx context.Context, token string, expiresAt time.Time) error {
+	_, err := s.exec(ctx,
+		`INSERT INTO auth_sessions (token, expires_at) VALUES (?, ?)`,
+		token, expiresAt,
+	)
+	return err
+}
+
+// GetSession returns the expiry time for a session token.
+// Returns zero time and sql.ErrNoRows if the token does not exist.
+func (s *Store) GetSession(ctx context.Context, token string) (time.Time, error) {
+	var expiresAt time.Time
+	err := s.readDB.QueryRowContext(ctx,
+		`SELECT expires_at FROM auth_sessions WHERE token = ?`, token,
+	).Scan(&expiresAt)
+	return expiresAt, err
+}
+
+// DeleteSession removes a single session by token.
+func (s *Store) DeleteSession(ctx context.Context, token string) error {
+	_, err := s.exec(ctx, `DELETE FROM auth_sessions WHERE token = ?`, token)
+	return err
+}
+
+// DeleteAllSessions removes all sessions.
+func (s *Store) DeleteAllSessions(ctx context.Context) error {
+	_, err := s.exec(ctx, `DELETE FROM auth_sessions`)
+	return err
+}
+
+// CleanExpiredSessions removes sessions whose expires_at is in the past.
+func (s *Store) CleanExpiredSessions(ctx context.Context) error {
+	_, err := s.exec(ctx, `DELETE FROM auth_sessions WHERE expires_at < CURRENT_TIMESTAMP`)
+	return err
+}
 

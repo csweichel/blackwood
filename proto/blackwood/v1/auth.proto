@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package blackwood.v1;
+
+option go_package = "github.com/csweichel/blackwood/gen/blackwood/v1;blackwoodv1";
+
+message AuthStatusRequest {}
+
+message AuthStatusResponse {
+  bool authenticated = 1;
+  bool setup_required = 2;
+}
+
+message GetSetupInfoRequest {}
+
+message GetSetupInfoResponse {
+  string secret = 1;
+  string qr_code = 2; // base64-encoded PNG
+}
+
+message ConfirmSetupRequest {
+  string secret = 1;
+  string code = 2;
+}
+
+message ConfirmSetupResponse {
+  bool ok = 1;
+  string error = 2;
+}
+
+message LoginRequest {
+  string code = 1;
+}
+
+message LoginResponse {
+  bool ok = 1;
+  string error = 2;
+}
+
+message LogoutRequest {}
+
+message LogoutResponse {}
+
+service AuthService {
+  rpc Status(AuthStatusRequest) returns (AuthStatusResponse);
+  rpc GetSetupInfo(GetSetupInfoRequest) returns (GetSetupInfoResponse);
+  rpc ConfirmSetup(ConfirmSetupRequest) returns (ConfirmSetupResponse);
+  rpc Login(LoginRequest) returns (LoginResponse);
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+}

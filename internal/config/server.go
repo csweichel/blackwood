@@ -17,6 +17,7 @@ type ServerConfig struct {
 	Telegram TelegramSettings `yaml:"telegram"`
 	Watcher  WatcherSettings  `yaml:"watcher"`
 	Granola  GranolaSettings  `yaml:"granola"`
+	Auth     AuthSettings     `yaml:"auth"`
 
 	// Resolved secrets (not serialized).
 	openaiAPIKey        string
@@ -24,6 +25,16 @@ type ServerConfig struct {
 	whatsappAccessToken string
 	telegramBotToken    string
 	granolaOAuthToken   string
+}
+
+// AuthSettings holds authentication configuration.
+type AuthSettings struct {
+	TOTP TOTPSettings `yaml:"totp"`
+}
+
+// TOTPSettings holds TOTP authenticator configuration.
+type TOTPSettings struct {
+	Enabled bool `yaml:"enabled"`
 }
 
 // TLS holds TLS certificate configuration.

@@ -21,6 +21,8 @@ import OfflineBanner from "./components/OfflineBanner";
 import SettingsPanel from "./components/SettingsPanel";
 import Logo from "./components/Logo";
 import TimezoneBanner from "./components/TimezoneBanner";
+import AuthLogin from "./components/AuthLogin";
+import AuthSetup from "./components/AuthSetup";
 import { PreferencesProvider, usePreferences } from "./hooks/usePreferences";
 import { useImportJobs } from "./hooks/useImportJobs";
 import { jobToFileResult } from "./components/importUtils";
@@ -277,9 +279,18 @@ function AppLayout() {
 export default function App() {
   return (
     <BrowserRouter>
-      <PreferencesProvider>
-        <AppLayout />
-      </PreferencesProvider>
+      <Routes>
+        <Route path="/auth/login" element={<AuthLogin />} />
+        <Route path="/auth/setup" element={<AuthSetup />} />
+        <Route
+          path="*"
+          element={
+            <PreferencesProvider>
+              <AppLayout />
+            </PreferencesProvider>
+          }
+        />
+      </Routes>
     </BrowserRouter>
   );
 }
