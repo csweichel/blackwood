@@ -1301,7 +1301,7 @@ func (s *Store) GetAllPreferences(ctx context.Context) (map[string]string, error
 	if err != nil {
 		return nil, fmt.Errorf("list preferences: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	prefs := make(map[string]string)
 	for rows.Next() {
