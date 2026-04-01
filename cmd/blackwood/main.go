@@ -121,7 +121,7 @@ func main() {
 		embClient := index.NewOpenAIEmbeddingClient(apiKey).WithModel(cfg.OpenAI.EmbeddingModel)
 
 		var err error
-		semanticIndex, err = index.New(store.DB(), embClient)
+		semanticIndex, err = index.New(store.DB(), store.WriteDB(), embClient)
 		if err != nil {
 			slog.Error("create index", "error", err)
 			os.Exit(1)

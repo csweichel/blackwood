@@ -92,7 +92,7 @@ func TestIndexEntry_And_Search(t *testing.T) {
 		},
 	}
 
-	idx, err := New(db, client)
+	idx, err := New(db, db, client)
 	if err != nil {
 		t.Fatalf("creating index: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestIndexEntry_SkipsEmptyText(t *testing.T) {
 	db := openTestDB(t)
 	client := &mockEmbeddingClient{embeddings: map[string][]float32{}}
 
-	idx, err := New(db, client)
+	idx, err := New(db, db, client)
 	if err != nil {
 		t.Fatalf("creating index: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestDeleteEntry(t *testing.T) {
 		},
 	}
 
-	idx, err := New(db, client)
+	idx, err := New(db, db, client)
 	if err != nil {
 		t.Fatalf("creating index: %v", err)
 	}
@@ -200,7 +200,7 @@ func TestSearch_RespectsLimit(t *testing.T) {
 		},
 	}
 
-	idx, err := New(db, client)
+	idx, err := New(db, db, client)
 	if err != nil {
 		t.Fatalf("creating index: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestReindex(t *testing.T) {
 		},
 	}
 
-	idx, err := New(db, client)
+	idx, err := New(db, db, client)
 	if err != nil {
 		t.Fatalf("creating index: %v", err)
 	}
@@ -265,7 +265,7 @@ func TestIndexEntry_Upsert(t *testing.T) {
 		},
 	}
 
-	idx, err := New(db, client)
+	idx, err := New(db, db, client)
 	if err != nil {
 		t.Fatalf("creating index: %v", err)
 	}

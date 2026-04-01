@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"math"
 	"sort"
+
+	"github.com/csweichel/blackwood/internal/storage"
 )
 
 const embeddingsSchema = `
@@ -20,8 +22,9 @@ CREATE TABLE IF NOT EXISTS embeddings (
 
 // Index provides semantic search over entries using embeddings stored in SQLite.
 type Index struct {
-	db     *sql.DB
-	client EmbeddingClient
+	readDB  *sql.DB
+	writeDB *sql.DB
+	client  EmbeddingClient
 }
 
 // SearchResult represents a single search hit.
@@ -38,11 +41,12 @@ type EntryForIndex struct {
 }
 
 // New creates an Index, ensuring the embeddings table exists.
-func New(db *sql.DB, client EmbeddingClient) (*Index, error) {
-	if _, err := db.Exec(embeddingsSchema); err != nil {
+// readDB is used for search queries, writeDB for index mutations.
+func New(readDB *sql.DB, writeDB *sql.DB, client EmbeddingClient) (*Index, error) {
+	if _, err := writeDB.Exec(embeddingsSchema); err != nil {
 		return nil, fmt.Errorf("creating embeddings table: %w", err)
 	}
-	return &Index{db: db, client: client}, nil
+	return &Index{readDB: readDB, writeDB: writeDB, client: client}, nil
 }
 
 // IndexEntry computes an embedding for text and stores it. Empty text is skipped.
@@ -63,12 +67,14 @@ func (idx *Index) IndexEntry(ctx context.Context, entryID string, text string) e
 
 	snippet := truncate(text, 200)
 
-	_, err = idx.db.ExecContext(ctx,
-		`INSERT INTO embeddings (entry_id, embedding, snippet) VALUES (?, ?, ?)
-		 ON CONFLICT(entry_id) DO UPDATE SET embedding = excluded.embedding, snippet = excluded.snippet`,
-		entryID, string(embJSON), snippet,
-	)
-	if err != nil {
+	if err := storage.RetryOnBusy(ctx, func() error {
+		_, e := idx.writeDB.ExecContext(ctx,
+			`INSERT INTO embeddings (entry_id, embedding, snippet) VALUES (?, ?, ?)
+			 ON CONFLICT(entry_id) DO UPDATE SET embedding = excluded.embedding, snippet = excluded.snippet`,
+			entryID, string(embJSON), snippet,
+		)
+		return e
+	}); err != nil {
 		return fmt.Errorf("storing embedding: %w", err)
 	}
 	return nil
@@ -85,7 +91,7 @@ func (idx *Index) Search(ctx context.Context, query string, limit int) ([]Search
 		return nil, fmt.Errorf("computing query embedding: %w", err)
 	}
 
-	rows, err := idx.db.QueryContext(ctx, `SELECT entry_id, embedding, snippet FROM embeddings`)
+	rows, err := idx.readDB.QueryContext(ctx, `SELECT entry_id, embedding, snippet FROM embeddings`)
 	if err != nil {
 		return nil, fmt.Errorf("querying embeddings: %w", err)
 	}
@@ -126,8 +132,10 @@ func (idx *Index) Search(ctx context.Context, query string, limit int) ([]Search
 
 // DeleteEntry removes the embedding for an entry.
 func (idx *Index) DeleteEntry(entryID string) error {
-	_, err := idx.db.Exec(`DELETE FROM embeddings WHERE entry_id = ?`, entryID)
-	if err != nil {
+	if err := storage.RetryOnBusy(context.Background(), func() error {
+		_, e := idx.writeDB.Exec(`DELETE FROM embeddings WHERE entry_id = ?`, entryID)
+		return e
+	}); err != nil {
 		return fmt.Errorf("deleting embedding: %w", err)
 	}
 	return nil
@@ -170,12 +178,14 @@ func (idx *Index) Reindex(ctx context.Context, entries []EntryForIndex) error {
 			}
 			snippet := truncate(entry.Text, 200)
 
-			_, err = idx.db.ExecContext(ctx,
-				`INSERT INTO embeddings (entry_id, embedding, snippet) VALUES (?, ?, ?)
-				 ON CONFLICT(entry_id) DO UPDATE SET embedding = excluded.embedding, snippet = excluded.snippet`,
-				entry.ID, string(embJSON), snippet,
-			)
-			if err != nil {
+			if err := storage.RetryOnBusy(ctx, func() error {
+				_, e := idx.writeDB.ExecContext(ctx,
+					`INSERT INTO embeddings (entry_id, embedding, snippet) VALUES (?, ?, ?)
+					 ON CONFLICT(entry_id) DO UPDATE SET embedding = excluded.embedding, snippet = excluded.snippet`,
+					entry.ID, string(embJSON), snippet,
+				)
+				return e
+			}); err != nil {
 				return fmt.Errorf("storing embedding for %s: %w", entry.ID, err)
 			}
 		}

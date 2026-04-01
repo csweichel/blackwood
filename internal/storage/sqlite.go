@@ -19,8 +19,12 @@ import (
 var schema string
 
 // Store provides SQLite-backed storage for daily notes, entries, and attachments.
+// It uses separate connection pools for reads and writes to avoid SQLITE_BUSY
+// contention. The write pool is limited to a single connection so all writes
+// are serialized in-process.
 type Store struct {
-	db      *sql.DB
+	readDB  *sql.DB
+	writeDB *sql.DB
 	dataDir string
 }
 
@@ -89,29 +93,84 @@ func newUUID() string {
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
+// dsn builds the connection string with WAL mode, busy_timeout, and foreign keys.
+func dsn(dbPath string) string {
+	return dbPath + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)"
+}
+
 // New opens (or creates) a SQLite database at dbPath, runs migrations,
 // and returns a ready-to-use Store. dataDir is used for attachment file storage.
+//
+// Two connection pools are created: a single-connection write pool (serializes
+// all writes) and a multi-connection read pool (allows concurrent reads).
+// Both use WAL mode and a 5-second busy_timeout.
 func New(dbPath string, dataDir string) (*Store, error) {
-	db, err := sql.Open("sqlite", dbPath+"?_pragma=foreign_keys(1)")
+	connStr := dsn(dbPath)
+
+	writeDB, err := sql.Open("sqlite", connStr)
 	if err != nil {
-		return nil, fmt.Errorf("open database: %w", err)
+		return nil, fmt.Errorf("open write database: %w", err)
 	}
-	if _, err := db.Exec(schema); err != nil {
-		_ = db.Close()
+	writeDB.SetMaxOpenConns(1)
+
+	readDB, err := sql.Open("sqlite", connStr)
+	if err != nil {
+		_ = writeDB.Close()
+		return nil, fmt.Errorf("open read database: %w", err)
+	}
+	readDB.SetMaxOpenConns(4)
+
+	// Run migrations on the write connection.
+	if _, err := writeDB.Exec(schema); err != nil {
+		_ = writeDB.Close()
+		_ = readDB.Close()
 		return nil, fmt.Errorf("run migrations: %w", err)
 	}
-	return &Store{db: db, dataDir: dataDir}, nil
+
+	return &Store{readDB: readDB, writeDB: writeDB, dataDir: dataDir}, nil
 }
 
-// Close closes the underlying database connection.
+// Close closes both the read and write database connections.
 func (s *Store) Close() error {
-	return s.db.Close()
+	wErr := s.writeDB.Close()
+	rErr := s.readDB.Close()
+	if wErr != nil {
+		return wErr
+	}
+	return rErr
 }
 
-// DB returns the underlying database connection for use by other packages
-// that need to share the same database (e.g., the embeddings index).
+// DB returns the read database connection for use by other packages
+// that need read access to the database (e.g., the embeddings index search).
 func (s *Store) DB() *sql.DB {
-	return s.db
+	return s.readDB
+}
+
+// WriteDB returns the write database connection for use by other packages
+// that need write access to the database (e.g., the embeddings index).
+func (s *Store) WriteDB() *sql.DB {
+	return s.writeDB
+}
+
+// exec wraps a write operation with retry-on-busy.
+func (s *Store) exec(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	var res sql.Result
+	err := RetryOnBusy(ctx, func() error {
+		var e error
+		res, e = s.writeDB.ExecContext(ctx, query, args...)
+		return e
+	})
+	return res, err
+}
+
+// queryRow wraps a single-row read.
+func (s *Store) queryRow(ctx context.Context, query string, args ...any) *sql.Row {
+	return s.readDB.QueryRowContext(ctx, query, args...)
+}
+
+// query wraps a multi-row read.
+func (s *Store) query(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	return s.readDB.QueryContext(ctx, query, args...)
 }
 
 // dayDir returns the filesystem path for a daily note's folder.
@@ -163,7 +222,7 @@ func (s *Store) writeNoteContent(date, content string) error {
 // getNoteDate looks up the date for a daily note by its ID.
 func (s *Store) getNoteDate(ctx context.Context, id string) (string, error) {
 	var date string
-	err := s.db.QueryRowContext(ctx, `SELECT date FROM daily_notes WHERE id = ?`, id).Scan(&date)
+	err := s.queryRow(ctx, `SELECT date FROM daily_notes WHERE id = ?`, id).Scan(&date)
 	if err != nil {
 		return "", fmt.Errorf("get note date: %w", err)
 	}
@@ -176,7 +235,7 @@ func (s *Store) getNoteDate(ctx context.Context, id string) (string, error) {
 func (s *Store) CreateDailyNote(ctx context.Context, date string) (*DailyNote, error) {
 	now := time.Now().UTC()
 	id := newUUID()
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.exec(ctx,
 		`INSERT INTO daily_notes (id, date, content, created_at, updated_at) VALUES (?, ?, '', ?, ?)`,
 		id, date, now, now,
 	)
@@ -189,7 +248,7 @@ func (s *Store) CreateDailyNote(ctx context.Context, date string) (*DailyNote, e
 // GetDailyNote retrieves a daily note by its ID.
 func (s *Store) GetDailyNote(ctx context.Context, id string) (*DailyNote, error) {
 	var n DailyNote
-	err := s.db.QueryRowContext(ctx,
+	err := s.queryRow(ctx,
 		`SELECT id, date, created_at, updated_at FROM daily_notes WHERE id = ?`, id,
 	).Scan(&n.ID, &n.Date, &n.CreatedAt, &n.UpdatedAt)
 	if err != nil {
@@ -202,7 +261,7 @@ func (s *Store) GetDailyNote(ctx context.Context, id string) (*DailyNote, error)
 // GetDailyNoteByDate retrieves a daily note by its date string.
 func (s *Store) GetDailyNoteByDate(ctx context.Context, date string) (*DailyNote, error) {
 	var n DailyNote
-	err := s.db.QueryRowContext(ctx,
+	err := s.queryRow(ctx,
 		`SELECT id, date, created_at, updated_at FROM daily_notes WHERE date = ?`, date,
 	).Scan(&n.ID, &n.Date, &n.CreatedAt, &n.UpdatedAt)
 	if err != nil {
@@ -224,7 +283,7 @@ func (s *Store) GetOrCreateDailyNote(ctx context.Context, date string) (*DailyNo
 
 // ListDailyNotes returns daily notes ordered by date descending.
 func (s *Store) ListDailyNotes(ctx context.Context, limit, offset int) ([]DailyNote, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.query(ctx,
 		`SELECT id, date, created_at, updated_at FROM daily_notes ORDER BY date DESC LIMIT ? OFFSET ?`,
 		limit, offset,
 	)
@@ -254,7 +313,7 @@ func (s *Store) UpdateDailyNoteContent(ctx context.Context, id string, content s
 	if err := s.writeNoteContent(date, content); err != nil {
 		return fmt.Errorf("write note file: %w", err)
 	}
-	_, err = s.db.ExecContext(ctx,
+	_, err = s.exec(ctx,
 		`UPDATE daily_notes SET updated_at = ? WHERE id = ?`,
 		time.Now().UTC(), id,
 	)
@@ -271,7 +330,7 @@ func (s *Store) AppendDailyNoteContent(ctx context.Context, id string, text stri
 	if err := s.writeNoteContent(date, existing+text); err != nil {
 		return fmt.Errorf("write note file: %w", err)
 	}
-	_, err = s.db.ExecContext(ctx,
+	_, err = s.exec(ctx,
 		`UPDATE daily_notes SET updated_at = ? WHERE id = ?`,
 		time.Now().UTC(), id,
 	)
@@ -323,7 +382,7 @@ func (s *Store) AppendToSection(ctx context.Context, id string, section string, 
 	if err := s.writeNoteContent(date, content); err != nil {
 		return fmt.Errorf("write note file: %w", err)
 	}
-	_, err = s.db.ExecContext(ctx,
+	_, err = s.exec(ctx,
 		`UPDATE daily_notes SET updated_at = ? WHERE id = ?`,
 		time.Now().UTC(), id,
 	)
@@ -395,7 +454,7 @@ func (s *Store) SetSection(ctx context.Context, id string, section string, text 
 	if err := s.writeNoteContent(date, content); err != nil {
 		return fmt.Errorf("write note file: %w", err)
 	}
-	_, err = s.db.ExecContext(ctx,
+	_, err = s.exec(ctx,
 		`UPDATE daily_notes SET updated_at = ? WHERE id = ?`,
 		time.Now().UTC(), id,
 	)
@@ -461,7 +520,7 @@ func replaceSection(content, section, text string) string {
 
 // ListDatesWithContent returns dates that have non-empty content within the given range.
 func (s *Store) ListDatesWithContent(ctx context.Context, startDate, endDate string) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.query(ctx,
 		`SELECT date FROM daily_notes WHERE date >= ? AND date <= ? ORDER BY date`,
 		startDate, endDate,
 	)
@@ -493,7 +552,7 @@ type DailyNoteSummary struct {
 // ListSummariesInRange returns daily note summaries for dates in [startDate, endDate].
 // It extracts the "# Summary" section from each note's content.
 func (s *Store) ListSummariesInRange(ctx context.Context, startDate, endDate string) ([]DailyNoteSummary, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.query(ctx,
 		`SELECT date FROM daily_notes WHERE date >= ? AND date <= ? ORDER BY date`,
 		startDate, endDate,
 	)
@@ -557,7 +616,7 @@ func (s *Store) CreateEntry(ctx context.Context, e *Entry) error {
 	e.ID = newUUID()
 	e.CreatedAt = now
 	e.UpdatedAt = now
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.exec(ctx,
 		`INSERT INTO entries (id, daily_note_id, type, content, raw_content, source, metadata, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		e.ID, e.DailyNoteID, e.Type, e.Content, e.RawContent, e.Source, e.Metadata, e.CreatedAt, e.UpdatedAt,
@@ -572,7 +631,7 @@ func (s *Store) CreateEntry(ctx context.Context, e *Entry) error {
 // idempotent CreateEntry client request ID.
 func (s *Store) GetEntryByClientRequestID(ctx context.Context, requestID string) (*Entry, error) {
 	var e Entry
-	err := s.db.QueryRowContext(ctx,
+	err := s.queryRow(ctx,
 		`SELECT e.id, e.daily_note_id, e.type, e.content, e.raw_content, e.source, e.metadata, e.created_at, e.updated_at
 		 FROM create_entry_requests cer
 		 JOIN entries e ON e.id = cer.entry_id
@@ -587,7 +646,7 @@ func (s *Store) GetEntryByClientRequestID(ctx context.Context, requestID string)
 
 // RecordCreateEntryRequest stores an idempotency mapping for a client request.
 func (s *Store) RecordCreateEntryRequest(ctx context.Context, requestID, entryID string) error {
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.exec(ctx,
 		`INSERT OR IGNORE INTO create_entry_requests (request_id, entry_id, created_at)
 		 VALUES (?, ?, ?)`,
 		requestID, entryID, time.Now().UTC(),
@@ -601,7 +660,7 @@ func (s *Store) RecordCreateEntryRequest(ctx context.Context, requestID, entryID
 // GetEntry retrieves an entry by its ID.
 func (s *Store) GetEntry(ctx context.Context, id string) (*Entry, error) {
 	var e Entry
-	err := s.db.QueryRowContext(ctx,
+	err := s.queryRow(ctx,
 		`SELECT id, daily_note_id, type, content, raw_content, source, metadata, created_at, updated_at
 		 FROM entries WHERE id = ?`, id,
 	).Scan(&e.ID, &e.DailyNoteID, &e.Type, &e.Content, &e.RawContent, &e.Source, &e.Metadata, &e.CreatedAt, &e.UpdatedAt)
@@ -613,7 +672,7 @@ func (s *Store) GetEntry(ctx context.Context, id string) (*Entry, error) {
 
 // ListEntries returns all entries for a given daily note, ordered by creation time.
 func (s *Store) ListEntries(ctx context.Context, dailyNoteID string) ([]Entry, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.query(ctx,
 		`SELECT id, daily_note_id, type, content, raw_content, source, metadata, created_at, updated_at
 		 FROM entries WHERE daily_note_id = ? ORDER BY created_at`, dailyNoteID,
 	)
@@ -636,7 +695,7 @@ func (s *Store) ListEntries(ctx context.Context, dailyNoteID string) ([]Entry, e
 // UpdateEntry updates an existing entry's mutable fields.
 func (s *Store) UpdateEntry(ctx context.Context, e *Entry) error {
 	e.UpdatedAt = time.Now().UTC()
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.exec(ctx,
 		`UPDATE entries SET type = ?, content = ?, raw_content = ?, source = ?, metadata = ?, updated_at = ?
 		 WHERE id = ?`,
 		e.Type, e.Content, e.RawContent, e.Source, e.Metadata, e.UpdatedAt, e.ID,
@@ -653,7 +712,7 @@ func (s *Store) UpdateEntry(ctx context.Context, e *Entry) error {
 
 // UpdateEntryContent updates only the content field of an entry.
 func (s *Store) UpdateEntryContent(ctx context.Context, id, content string) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE entries SET content = ?, raw_content = ?, updated_at = ? WHERE id = ?`, content, content, time.Now().UTC(), id)
+	_, err := s.exec(ctx, `UPDATE entries SET content = ?, raw_content = ?, updated_at = ? WHERE id = ?`, content, content, time.Now().UTC(), id)
 	if err != nil {
 		return fmt.Errorf("update entry content: %w", err)
 	}
@@ -671,7 +730,7 @@ func (s *Store) DeleteEntry(ctx context.Context, id string) error {
 		_ = os.Remove(a.StoragePath)
 	}
 
-	res, err := s.db.ExecContext(ctx, `DELETE FROM entries WHERE id = ?`, id)
+	res, err := s.exec(ctx, `DELETE FROM entries WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("delete entry: %w", err)
 	}
@@ -702,7 +761,7 @@ func (s *Store) CreateAttachment(ctx context.Context, a *Attachment, data []byte
 		return fmt.Errorf("write attachment file: %w", err)
 	}
 
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.exec(ctx,
 		`INSERT INTO attachments (id, entry_id, filename, content_type, size, storage_path, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		a.ID, a.EntryID, a.Filename, a.ContentType, a.Size, a.StoragePath, a.CreatedAt,
@@ -717,7 +776,7 @@ func (s *Store) CreateAttachment(ctx context.Context, a *Attachment, data []byte
 // GetAttachment retrieves attachment metadata by ID.
 func (s *Store) GetAttachment(ctx context.Context, id string) (*Attachment, error) {
 	var a Attachment
-	err := s.db.QueryRowContext(ctx,
+	err := s.queryRow(ctx,
 		`SELECT id, entry_id, filename, content_type, size, storage_path, created_at
 		 FROM attachments WHERE id = ?`, id,
 	).Scan(&a.ID, &a.EntryID, &a.Filename, &a.ContentType, &a.Size, &a.StoragePath, &a.CreatedAt)
@@ -742,7 +801,7 @@ func (s *Store) GetAttachmentData(ctx context.Context, id string) ([]byte, error
 
 // ListAttachments returns all attachments for a given entry.
 func (s *Store) ListAttachments(ctx context.Context, entryID string) ([]Attachment, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.query(ctx,
 		`SELECT id, entry_id, filename, content_type, size, storage_path, created_at
 		 FROM attachments WHERE entry_id = ? ORDER BY created_at`, entryID,
 	)
@@ -768,7 +827,7 @@ func (s *Store) ListAttachments(ctx context.Context, entryID string) ([]Attachme
 func (s *Store) CreateConversation(ctx context.Context, title string) (*Conversation, error) {
 	now := time.Now().UTC()
 	id := newUUID()
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.exec(ctx,
 		`INSERT INTO conversations (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)`,
 		id, title, now, now,
 	)
@@ -781,14 +840,14 @@ func (s *Store) CreateConversation(ctx context.Context, title string) (*Conversa
 // GetConversation retrieves a conversation by ID, including its messages.
 func (s *Store) GetConversation(ctx context.Context, id string) (*Conversation, error) {
 	var c Conversation
-	err := s.db.QueryRowContext(ctx,
+	err := s.queryRow(ctx,
 		`SELECT id, title, created_at, updated_at FROM conversations WHERE id = ?`, id,
 	).Scan(&c.ID, &c.Title, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("get conversation: %w", err)
 	}
 
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.query(ctx,
 		`SELECT id, conversation_id, role, content, sources, created_at
 		 FROM messages WHERE conversation_id = ? ORDER BY created_at`, id,
 	)
@@ -815,7 +874,7 @@ func (s *Store) ListConversations(ctx context.Context, limit, offset int) ([]Con
 	if limit <= 0 {
 		limit = 50
 	}
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.query(ctx,
 		`SELECT id, title, created_at, updated_at FROM conversations ORDER BY updated_at DESC LIMIT ? OFFSET ?`,
 		limit, offset,
 	)
@@ -848,7 +907,7 @@ func (s *Store) AddMessage(ctx context.Context, conversationID, role, content, s
 		sourcesJSON = "[]"
 	}
 
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.exec(ctx,
 		`INSERT INTO messages (id, conversation_id, role, content, sources, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
 		id, conversationID, role, content, sourcesJSON, now,
 	)
@@ -856,7 +915,7 @@ func (s *Store) AddMessage(ctx context.Context, conversationID, role, content, s
 		return nil, fmt.Errorf("add message: %w", err)
 	}
 
-	_, err = s.db.ExecContext(ctx,
+	_, err = s.exec(ctx,
 		`UPDATE conversations SET updated_at = ? WHERE id = ?`, now, conversationID,
 	)
 	if err != nil {
@@ -875,7 +934,7 @@ func (s *Store) AddMessage(ctx context.Context, conversationID, role, content, s
 
 // UpdateConversationTitle updates the title of a conversation.
 func (s *Store) UpdateConversationTitle(ctx context.Context, id, title string) error {
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.exec(ctx,
 		`UPDATE conversations SET title = ?, updated_at = ? WHERE id = ?`,
 		title, time.Now().UTC(), id,
 	)
@@ -915,7 +974,7 @@ func (s *Store) CreateImportJob(ctx context.Context, job *ImportJob) error {
 	if job.Result == "" {
 		job.Result = "{}"
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.exec(ctx,
 		`INSERT INTO import_jobs (id, status, filename, file_type, file_path, source, progress, total_steps, result, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		job.ID, job.Status, job.Filename, job.FileType, job.FilePath, job.Source,
@@ -929,7 +988,7 @@ func (s *Store) CreateImportJob(ctx context.Context, job *ImportJob) error {
 
 // GetImportJob retrieves a single import job by ID.
 func (s *Store) GetImportJob(ctx context.Context, id string) (*ImportJob, error) {
-	row := s.db.QueryRowContext(ctx,
+	row := s.queryRow(ctx,
 		`SELECT id, status, filename, file_type, file_path, source, progress, total_steps, result, created_at, updated_at
 		 FROM import_jobs WHERE id = ?`, id)
 	return scanImportJob(row)
@@ -966,7 +1025,7 @@ func (s *Store) ListImportJobs(ctx context.Context, ids []string, activeOnly boo
 		query.WriteString(" LIMIT 50")
 	}
 
-	rows, err := s.db.QueryContext(ctx, query.String(), args...)
+	rows, err := s.query(ctx, query.String(), args...)
 	if err != nil {
 		return nil, fmt.Errorf("list import jobs: %w", err)
 	}
@@ -986,7 +1045,7 @@ func (s *Store) ListImportJobs(ctx context.Context, ids []string, activeOnly boo
 
 // UpdateImportJobStatus sets the status of an import job.
 func (s *Store) UpdateImportJobStatus(ctx context.Context, id, status string) error {
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.exec(ctx,
 		`UPDATE import_jobs SET status = ?, updated_at = ? WHERE id = ?`,
 		status, time.Now().UTC(), id,
 	)
@@ -1002,7 +1061,7 @@ func (s *Store) UpdateImportJobStatus(ctx context.Context, id, status string) er
 
 // UpdateImportJobProgress updates the progress counters of an import job.
 func (s *Store) UpdateImportJobProgress(ctx context.Context, id string, progress, totalSteps int) error {
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.exec(ctx,
 		`UPDATE import_jobs SET progress = ?, total_steps = ?, updated_at = ? WHERE id = ?`,
 		progress, totalSteps, time.Now().UTC(), id,
 	)
@@ -1018,7 +1077,7 @@ func (s *Store) UpdateImportJobProgress(ctx context.Context, id string, progress
 
 // UpdateImportJobResult sets the result JSON of an import job.
 func (s *Store) UpdateImportJobResult(ctx context.Context, id, result string) error {
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.exec(ctx,
 		`UPDATE import_jobs SET result = ?, updated_at = ? WHERE id = ?`,
 		result, time.Now().UTC(), id,
 	)
@@ -1036,7 +1095,7 @@ func (s *Store) UpdateImportJobResult(ctx context.Context, id, result string) er
 func (s *Store) DeleteImportJob(ctx context.Context, id string) error {
 	// Look up the file path so we can clean up the staging file.
 	var filePath string
-	err := s.db.QueryRowContext(ctx, `SELECT file_path FROM import_jobs WHERE id = ?`, id).Scan(&filePath)
+	err := s.queryRow(ctx, `SELECT file_path FROM import_jobs WHERE id = ?`, id).Scan(&filePath)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return fmt.Errorf("delete import job: not found")
@@ -1044,7 +1103,7 @@ func (s *Store) DeleteImportJob(ctx context.Context, id string) error {
 		return fmt.Errorf("delete import job: %w", err)
 	}
 
-	res, err := s.db.ExecContext(ctx, `DELETE FROM import_jobs WHERE id = ?`, id)
+	res, err := s.exec(ctx, `DELETE FROM import_jobs WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("delete import job: %w", err)
 	}
@@ -1066,8 +1125,12 @@ func (s *Store) DeleteImportJob(ctx context.Context, id string) error {
 // ClaimNextPendingJob atomically transitions the oldest pending job to processing and returns it.
 // Returns nil, nil if no pending jobs exist.
 func (s *Store) ClaimNextPendingJob(ctx context.Context) (*ImportJob, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
+	var tx *sql.Tx
+	if err := RetryOnBusy(ctx, func() error {
+		var e error
+		tx, e = s.writeDB.BeginTx(ctx, nil)
+		return e
+	}); err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback() //nolint:errcheck
@@ -1085,9 +1148,8 @@ func (s *Store) ClaimNextPendingJob(ctx context.Context) (*ImportJob, error) {
 
 	// Transition to processing.
 	now := time.Now().UTC()
-	_, err = tx.ExecContext(ctx,
-		`UPDATE import_jobs SET status = 'processing', updated_at = ? WHERE id = ?`, now, id)
-	if err != nil {
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE import_jobs SET status = 'processing', updated_at = ? WHERE id = ?`, now, id); err != nil {
 		return nil, fmt.Errorf("claim job: %w", err)
 	}
 
@@ -1109,7 +1171,7 @@ func (s *Store) ClaimNextPendingJob(ctx context.Context) (*ImportJob, error) {
 // ResetProcessingJobs transitions any processing jobs back to pending.
 // Call on startup to recover from crashes.
 func (s *Store) ResetProcessingJobs(ctx context.Context) error {
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.exec(ctx,
 		`UPDATE import_jobs SET status = 'pending', updated_at = ? WHERE status = 'processing'`,
 		time.Now().UTC(),
 	)
@@ -1143,7 +1205,7 @@ type WatchedFile struct {
 // GetWatchedFile retrieves a watched file record by path.
 func (s *Store) GetWatchedFile(ctx context.Context, path string) (*WatchedFile, error) {
 	var wf WatchedFile
-	err := s.db.QueryRowContext(ctx,
+	err := s.queryRow(ctx,
 		`SELECT path, hash, job_id, processed_at FROM watched_files WHERE path = ?`, path,
 	).Scan(&wf.Path, &wf.Hash, &wf.JobID, &wf.ProcessedAt)
 	if err != nil {
@@ -1160,7 +1222,7 @@ func (s *Store) UpsertWatchedFile(ctx context.Context, wf *WatchedFile) error {
 	if wf.ProcessedAt.IsZero() {
 		wf.ProcessedAt = time.Now().UTC()
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.exec(ctx,
 		`INSERT INTO watched_files (path, hash, job_id, processed_at)
 		 VALUES (?, ?, ?, ?)
 		 ON CONFLICT(path) DO UPDATE SET hash = excluded.hash, job_id = excluded.job_id, processed_at = excluded.processed_at`,
@@ -1177,7 +1239,7 @@ func (s *Store) UpsertWatchedFile(ctx context.Context, wf *WatchedFile) error {
 // IsTelegramChatAuthorized checks if a chat ID is in the authorized list.
 func (s *Store) IsTelegramChatAuthorized(ctx context.Context, chatID int64) (bool, error) {
 	var count int
-	err := s.db.QueryRowContext(ctx,
+	err := s.queryRow(ctx,
 		`SELECT COUNT(*) FROM telegram_authorized_chats WHERE chat_id = ?`, chatID,
 	).Scan(&count)
 	if err != nil {
@@ -1188,7 +1250,7 @@ func (s *Store) IsTelegramChatAuthorized(ctx context.Context, chatID int64) (boo
 
 // AuthorizeTelegramChat adds a chat ID to the authorized list.
 func (s *Store) AuthorizeTelegramChat(ctx context.Context, chatID int64) error {
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.exec(ctx,
 		`INSERT INTO telegram_authorized_chats (chat_id) VALUES (?) ON CONFLICT(chat_id) DO NOTHING`,
 		chatID,
 	)
@@ -1200,7 +1262,7 @@ func (s *Store) AuthorizeTelegramChat(ctx context.Context, chatID int64) error {
 
 // RevokeTelegramChat removes a chat ID from the authorized list.
 func (s *Store) RevokeTelegramChat(ctx context.Context, chatID int64) error {
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.exec(ctx,
 		`DELETE FROM telegram_authorized_chats WHERE chat_id = ?`, chatID,
 	)
 	if err != nil {
@@ -1211,7 +1273,7 @@ func (s *Store) RevokeTelegramChat(ctx context.Context, chatID int64) error {
 
 // ListTelegramAuthorizedChats returns all authorized chat IDs.
 func (s *Store) ListTelegramAuthorizedChats(ctx context.Context) ([]int64, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT chat_id FROM telegram_authorized_chats`)
+	rows, err := s.query(ctx, `SELECT chat_id FROM telegram_authorized_chats`)
 	if err != nil {
 		return nil, fmt.Errorf("list telegram authorized chats: %w", err)
 	}
@@ -1241,7 +1303,7 @@ type GranolaSyncState struct {
 // GetGranolaSyncState retrieves the sync state for a Granola note.
 func (s *Store) GetGranolaSyncState(ctx context.Context, noteID string) (*GranolaSyncState, error) {
 	var gs GranolaSyncState
-	err := s.db.QueryRowContext(ctx,
+	err := s.queryRow(ctx,
 		`SELECT note_id, entry_id, updated_at, synced_at FROM granola_sync_state WHERE note_id = ?`, noteID,
 	).Scan(&gs.NoteID, &gs.EntryID, &gs.UpdatedAt, &gs.SyncedAt)
 	if err != nil {
@@ -1255,7 +1317,7 @@ func (s *Store) UpsertGranolaSyncState(ctx context.Context, gs *GranolaSyncState
 	if gs.SyncedAt.IsZero() {
 		gs.SyncedAt = time.Now().UTC()
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.exec(ctx,
 		`INSERT INTO granola_sync_state (note_id, entry_id, updated_at, synced_at)
 		 VALUES (?, ?, ?, ?)
 		 ON CONFLICT(note_id) DO UPDATE SET entry_id = excluded.entry_id, updated_at = excluded.updated_at, synced_at = excluded.synced_at`,
@@ -1272,7 +1334,7 @@ func (s *Store) UpsertGranolaSyncState(ctx context.Context, gs *GranolaSyncState
 // GetPreference returns the value for a preference key, or defaultVal if not set.
 func (s *Store) GetPreference(ctx context.Context, key string, defaultVal string) (string, error) {
 	var val string
-	err := s.db.QueryRowContext(ctx, `SELECT value FROM user_preferences WHERE key = ?`, key).Scan(&val)
+	err := s.queryRow(ctx, `SELECT value FROM user_preferences WHERE key = ?`, key).Scan(&val)
 	if err == sql.ErrNoRows {
 		return defaultVal, nil
 	}
@@ -1284,7 +1346,7 @@ func (s *Store) GetPreference(ctx context.Context, key string, defaultVal string
 
 // SetPreference sets a preference key to the given value.
 func (s *Store) SetPreference(ctx context.Context, key, value string) error {
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.exec(ctx,
 		`INSERT INTO user_preferences (key, value, updated_at) VALUES (?, ?, ?)
 		 ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
 		key, value, time.Now().UTC(),
@@ -1297,7 +1359,7 @@ func (s *Store) SetPreference(ctx context.Context, key, value string) error {
 
 // GetAllPreferences returns all stored preferences as a map.
 func (s *Store) GetAllPreferences(ctx context.Context) (map[string]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT key, value FROM user_preferences`)
+	rows, err := s.query(ctx, `SELECT key, value FROM user_preferences`)
 	if err != nil {
 		return nil, fmt.Errorf("list preferences: %w", err)
 	}
