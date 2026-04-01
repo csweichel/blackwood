@@ -103,9 +103,7 @@ func (h *ImportHandler) ImportViwoods(ctx context.Context, req *connect.Request[
 			if err != nil {
 				slog.Warn("OCR failed for page", "page", i+1, "noteID", note.ID, "error", err)
 			} else {
-				for _, line := range strings.Split(text, "\n") {
-					md.WriteString("> " + line + "\n")
-				}
+				md.WriteString(text + "\n")
 			}
 		}
 	}

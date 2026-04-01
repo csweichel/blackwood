@@ -49,13 +49,14 @@ func Generate(w io.Writer, markdown string, opts Options) error {
 	pdf := fpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(marginL, marginT, marginR)
 	pdf.SetAutoPageBreak(true, marginB)
+	tr := pdf.UnicodeTranslatorFromDescriptor("")
 	pdf.AddPage()
 
 	// Title: formatted date
 	title := formatDateTitle(opts.Date)
 	pdf.SetFont(fontFamily, "B", 20)
 	pdf.SetTextColor(30, 30, 30)
-	pdf.CellFormat(contentW, 10, title, "", 1, "L", false, 0, "")
+	pdf.CellFormat(contentW, 10, tr(title), "", 1, "L", false, 0, "")
 	pdf.Ln(4)
 
 	// Thin rule under title
@@ -75,6 +76,7 @@ func Generate(w io.Writer, markdown string, opts Options) error {
 		pdf:    pdf,
 		source: source,
 		opts:   opts,
+		tr:     tr,
 	}
 	r.render(doc)
 
@@ -89,6 +91,7 @@ type renderer struct {
 	pdf    *fpdf.Fpdf
 	source []byte
 	opts   Options
+	tr     func(string) string
 
 	bold      int
 	italic    int
@@ -175,7 +178,7 @@ func (r *renderer) enterNode(n ast.Node) bool {
 			if line == "" {
 				line = " "
 			}
-			r.pdf.CellFormat(contentW-4, lineHeight, line, "", 1, "L", true, 0, "")
+			r.pdf.CellFormat(contentW-4, lineHeight, r.tr(line), "", 1, "L", true, 0, "")
 		}
 		r.pdf.Ln(2)
 		r.setBodyFont()
@@ -194,10 +197,10 @@ func (r *renderer) enterNode(n ast.Node) bool {
 		if list.IsOrdered() {
 			bullet := fmt.Sprintf("%d. ", r.listItem)
 			r.pdf.SetFont(fontFamily, "", 10)
-			r.pdf.Write(lineHeight, bullet)
+			r.pdf.Write(lineHeight, r.tr(bullet))
 		} else {
 			r.pdf.SetFont(fontFamily, "", 10)
-			r.pdf.Write(lineHeight, "• ")
+			r.pdf.Write(lineHeight, r.tr("• "))
 		}
 
 	case ast.KindThematicBreak:
@@ -212,7 +215,7 @@ func (r *renderer) enterNode(n ast.Node) bool {
 		link := n.(*ast.Link)
 		r.pdf.SetTextColor(0, 0, 180)
 		linkText := extractText(n, r.source)
-		r.pdf.WriteLinkString(lineHeight, linkText, string(link.Destination))
+		r.pdf.WriteLinkString(lineHeight, r.tr(linkText), string(link.Destination))
 		r.pdf.SetTextColor(30, 30, 30)
 		return true
 
@@ -220,7 +223,7 @@ func (r *renderer) enterNode(n ast.Node) bool {
 		link := n.(*ast.AutoLink)
 		url := string(link.URL(r.source))
 		r.pdf.SetTextColor(0, 0, 180)
-		r.pdf.WriteLinkString(lineHeight, url, url)
+		r.pdf.WriteLinkString(lineHeight, r.tr(url), url)
 		r.pdf.SetTextColor(30, 30, 30)
 		return true
 
@@ -284,6 +287,7 @@ func (r *renderer) exitNode(n ast.Node) {
 }
 
 func (r *renderer) writeText(s string) {
+	s = r.tr(s)
 	if r.inCode {
 		// Inline code: draw with background
 		r.pdf.CellFormat(r.pdf.GetStringWidth(s)+2, lineHeight, s, "", 0, "L", true, 0, "")
@@ -405,7 +409,7 @@ func (r *renderer) handleRawHTML(n ast.Node) {
 	if audioTagRe.MatchString(raw) {
 		r.pdf.SetFont(fontFamily, "I", 9)
 		r.pdf.SetTextColor(120, 120, 120)
-		r.pdf.Write(lineHeight, "[Voice memo]")
+		r.pdf.Write(lineHeight, r.tr("[Voice memo]"))
 		r.setBodyFont()
 		return
 	}
@@ -414,7 +418,7 @@ func (r *renderer) handleRawHTML(n ast.Node) {
 	stripped := stripHTMLTags(raw)
 	stripped = strings.TrimSpace(stripped)
 	if stripped != "" {
-		r.pdf.Write(lineHeight, stripped)
+		r.pdf.Write(lineHeight, r.tr(stripped))
 	}
 }
 
