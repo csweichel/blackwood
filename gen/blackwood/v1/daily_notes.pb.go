@@ -588,6 +588,7 @@ type CreateEntryRequest struct {
 	AttachmentData         [][]byte               `protobuf:"bytes,6,rep,name=attachment_data,json=attachmentData,proto3" json:"attachment_data,omitempty"`
 	AttachmentFilenames    []string               `protobuf:"bytes,7,rep,name=attachment_filenames,json=attachmentFilenames,proto3" json:"attachment_filenames,omitempty"`
 	AttachmentContentTypes []string               `protobuf:"bytes,8,rep,name=attachment_content_types,json=attachmentContentTypes,proto3" json:"attachment_content_types,omitempty"`
+	ClientRequestId        string                 `protobuf:"bytes,9,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -676,6 +677,13 @@ func (x *CreateEntryRequest) GetAttachmentContentTypes() []string {
 		return x.AttachmentContentTypes
 	}
 	return nil
+}
+
+func (x *CreateEntryRequest) GetClientRequestId() string {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return ""
 }
 
 type UpdateEntryRequest struct {
@@ -1101,7 +1109,7 @@ const file_blackwood_v1_daily_notes_proto_rawDesc = "" +
 	"\bend_date\x18\x04 \x01(\tR\aendDate\"R\n" +
 	"\x16ListDailyNotesResponse\x128\n" +
 	"\vdaily_notes\x18\x01 \x03(\v2\x17.blackwood.v1.DailyNoteR\n" +
-	"dailyNotes\"\xd4\x02\n" +
+	"dailyNotes\"\x80\x03\n" +
 	"\x12CreateEntryRequest\x12\x12\n" +
 	"\x04date\x18\x01 \x01(\tR\x04date\x12+\n" +
 	"\x04type\x18\x02 \x01(\x0e2\x17.blackwood.v1.EntryTypeR\x04type\x12\x18\n" +
@@ -1110,7 +1118,8 @@ const file_blackwood_v1_daily_notes_proto_rawDesc = "" +
 	"\bmetadata\x18\x05 \x01(\tR\bmetadata\x12'\n" +
 	"\x0fattachment_data\x18\x06 \x03(\fR\x0eattachmentData\x121\n" +
 	"\x14attachment_filenames\x18\a \x03(\tR\x13attachmentFilenames\x128\n" +
-	"\x18attachment_content_types\x18\b \x03(\tR\x16attachmentContentTypes\"Z\n" +
+	"\x18attachment_content_types\x18\b \x03(\tR\x16attachmentContentTypes\x12*\n" +
+	"\x11client_request_id\x18\t \x01(\tR\x0fclientRequestId\"Z\n" +
 	"\x12UpdateEntryRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
 	"\acontent\x18\x02 \x01(\tR\acontent\x12\x1a\n" +

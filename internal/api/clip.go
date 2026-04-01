@@ -59,7 +59,7 @@ func (h *ClipHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("opengraph fetch failed, using URL only", "url", req.URL, "error", err)
 	}
 
-	today := time.Now().Format("2006-01-02")
+	today := UserTimezoneNowDate(ctx, h.store)
 	note, err := h.store.GetOrCreateDailyNote(ctx, today)
 	if err != nil {
 		slog.Error("get or create daily note", "error", err)

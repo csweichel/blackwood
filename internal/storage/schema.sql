@@ -89,3 +89,9 @@ CREATE TABLE IF NOT EXISTS granola_sync_state (
     updated_at TEXT NOT NULL,
     synced_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS user_preferences (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

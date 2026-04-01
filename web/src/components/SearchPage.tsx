@@ -67,6 +67,18 @@ export default function SearchPage() {
     return () => window.removeEventListener("focus-search", handleFocus);
   }, []);
 
+  // Esc → go back to daily view.
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        navigate(-1);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [navigate]);
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSearchParams(query.trim() ? { q: query.trim() } : {});

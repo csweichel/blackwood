@@ -24,8 +24,9 @@
 }
 
 /* Dark mode — ink & parchment */
+/* Applied via prefers-color-scheme (system) or explicit .dark class */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.light) {
     --background: #141A24;
     --foreground: #E8E2D5;
     --card: #1C2433;
@@ -45,6 +46,28 @@
     --primary: #6B9BD2;
     --primary-foreground: #141A24;
   }
+}
+
+/* Explicit dark class override (user chose "dark") */
+:root.dark {
+  --background: #141A24;
+  --foreground: #E8E2D5;
+  --card: #1C2433;
+  --card-foreground: #E8E2D5;
+  --muted: #1C2433;
+  --muted-foreground: #6A7489;
+  --tertiary: #4D566A;
+  --accent: #6B9BD2;
+  --accent-foreground: #141A24;
+  --accent-hover: #85ADE0;
+  --accent-subtle: #1E2D42;
+  --border: #2A3448;
+  --border-strong: #3A4660;
+  --destructive: #D4594C;
+  --success: #5EAD72;
+  --warning: #E8A93E;
+  --primary: #6B9BD2;
+  --primary-foreground: #141A24;
 }
 
 @theme inline {

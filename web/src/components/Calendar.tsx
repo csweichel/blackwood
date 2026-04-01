@@ -1,13 +1,11 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { listDatesWithContent } from "../api/client";
+import { usePreferences } from "../hooks/usePreferences";
+import { todayInTimezone } from "../lib/dateUtils";
 
 interface CalendarProps {
   selectedDate: string;
   onSelectDate: (date: string) => void;
-}
-
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
 }
 
 function pad(n: number): string {
@@ -50,7 +48,9 @@ function buildDays(year: number, month: number): DayItem[] {
 }
 
 export default function Calendar({ selectedDate, onSelectDate }: CalendarProps) {
-  const today = todayStr();
+  const { preferences, detectedTimezone } = usePreferences();
+  const tz = preferences.timezone || detectedTimezone;
+  const today = todayInTimezone(tz);
   const scrollRef = useRef<HTMLDivElement>(null);
   const selectedRef = useRef<HTMLButtonElement>(null);
 
@@ -110,10 +110,11 @@ export default function Calendar({ selectedDate, onSelectDate }: CalendarProps) 
   }
 
   function goToday() {
-    const now = new Date();
-    setYear(now.getFullYear());
-    setMonth(now.getMonth());
-    onSelectDate(todayStr());
+    const t = todayInTimezone(tz);
+    const [y, m] = t.split("-").map(Number);
+    setYear(y);
+    setMonth(m - 1);
+    onSelectDate(t);
   }
 
   const days = buildDays(year, month);

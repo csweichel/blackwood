@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package blackwood.v1;
+
+option go_package = "github.com/csweichel/blackwood/gen/blackwood/v1;blackwoodv1";
+
+enum ColorTheme {
+  COLOR_THEME_UNSPECIFIED = 0;
+  COLOR_THEME_LIGHT = 1;
+  COLOR_THEME_DARK = 2;
+  COLOR_THEME_SYSTEM = 3;
+}
+
+message UserPreferences {
+  // IANA timezone name, e.g. "America/New_York". Empty means not yet configured.
+  string timezone = 1;
+  ColorTheme color_theme = 2;
+}
+
+message GetPreferencesRequest {}
+
+message UpdatePreferencesRequest {
+  // Only set fields are updated.
+  optional string timezone = 1;
+  optional ColorTheme color_theme = 2;
+}
+
+service PreferencesService {
+  rpc GetPreferences(GetPreferencesRequest) returns (UserPreferences);
+  rpc UpdatePreferences(UpdatePreferencesRequest) returns (UserPreferences);
+}

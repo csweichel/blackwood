@@ -149,6 +149,10 @@ func main() {
 	chatPath, chatHandler := blackwoodv1connect.NewChatServiceHandler(api.NewChatHandler(ragEngine, store))
 	srv.Handle(chatPath, chatHandler)
 
+	// Register the preferences service.
+	prefsPath, prefsHandler := blackwoodv1connect.NewPreferencesServiceHandler(api.NewPreferencesHandler(store))
+	srv.Handle(prefsPath, prefsHandler)
+
 	// WhatsApp webhook.
 	if cfg.WhatsApp.Enabled {
 		waCfg := whatsapp.WebhookConfig{

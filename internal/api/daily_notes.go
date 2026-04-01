@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -114,7 +113,7 @@ func (h *DailyNotesHandler) ListDailyNotes(ctx context.Context, req *connect.Req
 func (h *DailyNotesHandler) CreateEntry(ctx context.Context, req *connect.Request[blackwoodv1.CreateEntryRequest]) (*connect.Response[blackwoodv1.Entry], error) {
 	date := req.Msg.Date
 	if date == "" {
-		date = time.Now().UTC().Format("2006-01-02")
+		date = UserTimezoneNowDate(ctx, h.store)
 	}
 
 	note, err := h.store.GetOrCreateDailyNote(ctx, date)
@@ -188,7 +187,7 @@ func (h *DailyNotesHandler) CreateEntry(ctx context.Context, req *connect.Reques
 	}
 
 	// Append to the daily note's markdown content.
-	now := time.Now().UTC()
+	now := UserTimezoneNow(ctx, h.store)
 	ts := now.Format("15:04")
 	var snippet string
 	switch entry.Type {

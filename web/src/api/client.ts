@@ -10,6 +10,8 @@ import type {
   Conversation,
   SourceReference,
   ImportJobStatus,
+  UserPreferences,
+  UpdatePreferencesRequest,
 } from "./types";
 import { type EntryType, type EntrySource } from "./types";
 import {
@@ -23,6 +25,7 @@ import { notifyPendingChange } from "../lib/syncEngine";
 const DAILY_NOTES_SERVICE = "/blackwood.v1.DailyNotesService";
 const CHAT_SERVICE = "/blackwood.v1.ChatService";
 const IMPORT_SERVICE = "/blackwood.v1.ImportService";
+const PREFERENCES_SERVICE = "/blackwood.v1.PreferencesService";
 
 // Connect-go uses POST with JSON body and Content-Type: application/json.
 // Field names use camelCase in the JSON wire format (protobuf JSON mapping).
@@ -365,3 +368,14 @@ export async function* streamChat(
     }
   }
 }
+
+// --- Preferences API ---
+
+export async function getPreferences(): Promise<UserPreferences> {
+  return rpc<Record<string, never>, UserPreferences>("GetPreferences", {}, PREFERENCES_SERVICE);
+}
+
+export async function updatePreferences(req: UpdatePreferencesRequest): Promise<UserPreferences> {
+  return rpc<UpdatePreferencesRequest, UserPreferences>("UpdatePreferences", req, PREFERENCES_SERVICE);
+}
+

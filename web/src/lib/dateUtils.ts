@@ -1,3 +1,23 @@
+/** Returns today's date as YYYY-MM-DD in the given IANA timezone (or local if omitted). */
+export function todayInTimezone(tz?: string): string {
+  const now = new Date();
+  if (!tz) {
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  // Use Intl to get the date parts in the target timezone.
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  // en-CA formats as YYYY-MM-DD.
+  return parts;
+}
+
 /** ISO week number for a date. */
 export function getISOWeek(d: Date): number {
   const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));

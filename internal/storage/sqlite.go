@@ -1266,3 +1266,52 @@ func (s *Store) UpsertGranolaSyncState(ctx context.Context, gs *GranolaSyncState
 	}
 	return nil
 }
+
+// --- User Preferences ---
+
+// GetPreference returns the value for a preference key, or defaultVal if not set.
+func (s *Store) GetPreference(ctx context.Context, key string, defaultVal string) (string, error) {
+	var val string
+	err := s.db.QueryRowContext(ctx, `SELECT value FROM user_preferences WHERE key = ?`, key).Scan(&val)
+	if err == sql.ErrNoRows {
+		return defaultVal, nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("get preference %s: %w", key, err)
+	}
+	return val, nil
+}
+
+// SetPreference sets a preference key to the given value.
+func (s *Store) SetPreference(ctx context.Context, key, value string) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO user_preferences (key, value, updated_at) VALUES (?, ?, ?)
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+		key, value, time.Now().UTC(),
+	)
+	if err != nil {
+		return fmt.Errorf("set preference %s: %w", key, err)
+	}
+	return nil
+}
+
+// GetAllPreferences returns all stored preferences as a map.
+func (s *Store) GetAllPreferences(ctx context.Context) (map[string]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT key, value FROM user_preferences`)
+	if err != nil {
+		return nil, fmt.Errorf("list preferences: %w", err)
+	}
+	defer rows.Close()
+
+	prefs := make(map[string]string)
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			return nil, fmt.Errorf("scan preference: %w", err)
+		}
+		prefs[k] = v
+	}
+	return prefs, rows.Err()
+}
+
+

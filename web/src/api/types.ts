@@ -137,3 +137,24 @@ export interface Conversation {
 export interface ListConversationsResponse {
   conversations: Conversation[];
 }
+
+// Preferences types
+
+/** Proto enum values as returned by Connect-go JSON serialization. */
+export const ColorTheme = {
+  UNSPECIFIED: "COLOR_THEME_UNSPECIFIED",
+  LIGHT: "COLOR_THEME_LIGHT",
+  DARK: "COLOR_THEME_DARK",
+  SYSTEM: "COLOR_THEME_SYSTEM",
+} as const;
+export type ColorTheme = (typeof ColorTheme)[keyof typeof ColorTheme];
+
+export interface UserPreferences {
+  timezone: string;
+  colorTheme: ColorTheme;
+}
+
+export interface UpdatePreferencesRequest {
+  timezone?: string;
+  colorTheme?: ColorTheme;
+}

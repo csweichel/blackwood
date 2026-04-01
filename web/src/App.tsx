@@ -18,18 +18,26 @@ import SearchPage from "./components/SearchPage";
 import ImportModal from "./components/ImportModal";
 import ImportBanner from "./components/ImportBanner";
 import OfflineBanner from "./components/OfflineBanner";
+import SettingsPanel from "./components/SettingsPanel";
+import TimezoneBanner from "./components/TimezoneBanner";
+import { PreferencesProvider, usePreferences } from "./hooks/usePreferences";
 import { useImportJobs } from "./hooks/useImportJobs";
 import { jobToFileResult } from "./components/importUtils";
-import { getCurrentWeekId, getCurrentMonthId } from "./lib/dateUtils";
+import { getCurrentWeekId, getCurrentMonthId, todayInTimezone } from "./lib/dateUtils";
+import { ColorTheme } from "./api/types";
 
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
+/** Hook that returns today's date string in the user's configured timezone. */
+function useTodayStr(): string {
+  const { preferences, detectedTimezone } = usePreferences();
+  const tz = preferences.timezone || detectedTimezone;
+  return todayInTimezone(tz);
 }
 
 function DailyNotePage() {
   const { date } = useParams<{ date: string }>();
   const navigate = useNavigate();
-  const selectedDate = date || todayStr();
+  const today = useTodayStr();
+  const selectedDate = date || today;
 
   function handleSelectDate(d: string) {
     navigate(`/day/${d}`);
@@ -67,7 +75,26 @@ function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const { jobs, activeCount, submit, deleteJob } = useImportJobs();
+  const { preferences } = usePreferences();
+  const today = useTodayStr();
+
+  // Apply color theme to <html> element.
+  useEffect(() => {
+    const root = document.documentElement;
+    const theme = preferences.colorTheme;
+    if (theme === ColorTheme.DARK) {
+      root.classList.add("dark");
+      root.classList.remove("light");
+    } else if (theme === ColorTheme.LIGHT) {
+      root.classList.add("light");
+      root.classList.remove("dark");
+    } else {
+      // System: remove overrides, let prefers-color-scheme handle it.
+      root.classList.remove("dark", "light");
+    }
+  }, [preferences.colorTheme]);
 
   async function handleImportFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
@@ -87,11 +114,11 @@ function AppLayout() {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === "d") {
         e.preventDefault();
-        navigate(`/day/${todayStr()}`);
+        navigate(`/day/${today}`);
       }
       if ((e.metaKey || e.ctrlKey) && e.key === "/") {
         e.preventDefault();
-        navigate(isChat ? `/day/${todayStr()}` : "/chat");
+        navigate(isChat ? `/day/${today}` : "/chat");
       }
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
@@ -106,7 +133,7 @@ function AppLayout() {
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [navigate, isChat, location.pathname]);
+  }, [navigate, isChat, location.pathname, today]);
 
   return (
     <div className="flex flex-col bg-background" style={{ height: "100dvh" }}>
@@ -144,6 +171,17 @@ function AppLayout() {
               </svg>
             </button>
 
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg transition-colors"
+              title="Settings"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </button>
+
             <OfflineBanner />
 
             <ImportBanner
@@ -154,7 +192,7 @@ function AppLayout() {
             {/* View toggle */}
             <div className="flex items-center bg-muted rounded-lg p-0.5">
               <button
-                onClick={() => navigate(`/day/${todayStr()}`)}
+                onClick={() => navigate(`/day/${today}`)}
                 className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                   isDay
                     ? "bg-card text-foreground shadow-sm"
@@ -198,9 +236,11 @@ function AppLayout() {
         </div>
       </header>
 
+      <TimezoneBanner />
+
       {/* Body */}
       <Routes>
-        <Route path="/" element={<Navigate to={`/day/${todayStr()}`} replace />} />
+        <Route path="/" element={<Navigate to={`/day/${today}`} replace />} />
         <Route path="/day/:date" element={<DailyNotePage />} />
         <Route path="/week" element={<WeekView />} />
         <Route path="/week/:weekId" element={<WeekView />} />
@@ -210,7 +250,7 @@ function AppLayout() {
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/chat/:slug" element={<ChatPage />} />
         <Route path="/clip" element={<ClipPage />} />
-        <Route path="*" element={<Navigate to={`/day/${todayStr()}`} replace />} />
+        <Route path="*" element={<Navigate to={`/day/${today}`} replace />} />
       </Routes>
 
       <ImportModal
@@ -223,6 +263,8 @@ function AppLayout() {
         }}
         onDeleteJob={deleteJob}
       />
+
+      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }
@@ -230,7 +272,9 @@ function AppLayout() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AppLayout />
+      <PreferencesProvider>
+        <AppLayout />
+      </PreferencesProvider>
     </BrowserRouter>
   );
 }

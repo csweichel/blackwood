@@ -11,16 +11,17 @@ import (
 )
 
 // StartNightlyDigest runs a background goroutine that generates a summary for
-// the day that just ended at local midnight. It skips notes that are empty or
-// already have a "# Summary" section.
+// the day that just ended at midnight in the user's configured timezone.
+// It skips notes that are empty or already have a "# Summary" section.
 func StartNightlyDigest(ctx context.Context, store *storage.Store, engine *rag.Engine) {
 	for {
-		now := time.Now()
-		// Next midnight in local time.
-		tomorrow := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
+		loc := UserTimezone(ctx, store)
+		now := time.Now().In(loc)
+		// Next midnight in the user's timezone.
+		tomorrow := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, loc)
 		delay := time.Until(tomorrow)
 
-		slog.Info("nightly digest scheduled", "next_run", tomorrow.Format(time.RFC3339), "delay", delay)
+		slog.Info("nightly digest scheduled", "next_run", tomorrow.Format(time.RFC3339), "timezone", loc.String(), "delay", delay)
 
 		select {
 		case <-ctx.Done():
@@ -29,8 +30,9 @@ func StartNightlyDigest(ctx context.Context, store *storage.Store, engine *rag.E
 		case <-time.After(delay):
 		}
 
-		// Summarize the day that just ended.
-		yesterday := time.Now().Add(-1 * time.Second).Format("2006-01-02")
+		// Summarize the day that just ended (in the user's timezone).
+		loc = UserTimezone(ctx, store) // re-read in case it changed
+		yesterday := time.Now().In(loc).Add(-1 * time.Second).Format("2006-01-02")
 		generateDigest(ctx, store, engine, yesterday)
 	}
 }
