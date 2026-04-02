@@ -37,3 +37,11 @@ web-install:
 .PHONY: web-build
 web-build:
 	cd web && npm run build
+
+.PHONY: desktop-install
+desktop-install:
+	cd electron && npm ci
+
+.PHONY: desktop-build
+desktop-build:
+	cd electron && npx electron-builder --mac --x64 --arm64

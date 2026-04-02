@@ -1,0 +1,77 @@
+name: Release Desktop
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        working-directory: electron
+        run: npm ci
+
+      - name: Set version from tag
+        working-directory: electron
+        run: |
+          VERSION="${GITHUB_REF_NAME#desktop-v}"
+          npm version "$VERSION" --no-git-tag-version
+
+      - name: Build macOS (x64 + arm64)
+        working-directory: electron
+        run: npx electron-builder --mac --x64 --arm64
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Code signing (set these secrets to enable):
+          # CSC_LINK: ${{ secrets.MAC_CERTIFICATE }}
+          # CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-macos
+          path: |
+            electron/dist/*.dmg
+            electron/dist/*.zip
+          if-no-files-found: error
+
+  release:
+    needs: build-macos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: desktop-macos
+          path: artifacts
+
+      - name: List artifacts
+        run: ls -lh artifacts/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Blackwood Desktop ${{ github.ref_name }}"
+          draft: true
+          files: artifacts/*
+          body: |
+            ## Blackwood Desktop ${{ github.ref_name }}
+
+            ### macOS
+            - **Apple Silicon (arm64):** `Blackwood-*-arm64-mac.zip` / `.dmg`
+            - **Intel (x64):** `Blackwood-*-mac.zip` / `.dmg`
+
+            > **Note:** The app is not code-signed. On first launch, right-click → Open, or allow it in System Settings → Privacy & Security.
