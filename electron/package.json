@@ -10,6 +10,10 @@
   },
   "author": "Christian Weichel",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/csweichel/blackwood.git"
+  },
   "devDependencies": {
     "electron": "^35.7.5",
     "electron-builder": "^26.8.1"
