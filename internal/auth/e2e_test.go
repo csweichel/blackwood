@@ -63,7 +63,7 @@ func rpc(t *testing.T, client *http.Client, base, method, body string) (int, map
 	if err != nil {
 		t.Fatalf("POST %s: %v", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
 
 	var result map[string]any
@@ -92,7 +92,7 @@ func TestE2E_FullSetupAndLoginFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("protected endpoint: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != 401 {
 		t.Errorf("protected endpoint: got %d, want 401", resp.StatusCode)
 	}
@@ -134,11 +134,10 @@ func TestE2E_FullSetupAndLoginFlow(t *testing.T) {
 	}
 
 	// --- Step 6: GetSetupInfo should now fail (secret exists) ---
-	code, _ = rpc(t, client, ts.URL, "GetSetupInfo", `{}`)
-	if code == 200 {
-		// Connect may return 200 with error envelope or non-200.
-		// Either way, it should not return a new secret.
-	}
+	// GetSetupInfo should now fail (secret exists).
+	// Connect may return 200 with error envelope or non-200.
+	// Either way, it should not return a new secret.
+	_, _ = rpc(t, client, ts.URL, "GetSetupInfo", `{}`)
 
 	// --- Step 7: Login with invalid code ---
 	code, result = rpc(t, client, ts.URL, "Login", `{"code":"000000"}`)
@@ -161,7 +160,7 @@ func TestE2E_FullSetupAndLoginFlow(t *testing.T) {
 		t.Fatalf("Login POST: %v", err)
 	}
 	loginRespBody, _ := io.ReadAll(loginResp.Body)
-	loginResp.Body.Close()
+	_ = loginResp.Body.Close()
 
 	if loginResp.StatusCode != 200 {
 		t.Fatalf("Login (valid): got %d, want 200; body: %s", loginResp.StatusCode, string(loginRespBody))
@@ -199,7 +198,7 @@ func TestE2E_FullSetupAndLoginFlow(t *testing.T) {
 		t.Fatalf("Status (authenticated): %v", err)
 	}
 	statusBody, _ := io.ReadAll(statusResp.Body)
-	statusResp.Body.Close()
+	_ = statusResp.Body.Close()
 
 	var statusResult map[string]any
 	_ = json.Unmarshal(statusBody, &statusResult)
@@ -215,7 +214,7 @@ func TestE2E_FullSetupAndLoginFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Logout: %v", err)
 	}
-	logoutResp.Body.Close()
+	_ = logoutResp.Body.Close()
 
 	if logoutResp.StatusCode != 200 {
 		t.Errorf("Logout: got %d, want 200", logoutResp.StatusCode)
@@ -230,7 +229,7 @@ func TestE2E_FullSetupAndLoginFlow(t *testing.T) {
 		t.Fatalf("Status (post-logout): %v", err)
 	}
 	statusBody2, _ := io.ReadAll(statusResp2.Body)
-	statusResp2.Body.Close()
+	_ = statusResp2.Body.Close()
 
 	var statusResult2 map[string]any
 	_ = json.Unmarshal(statusBody2, &statusResult2)
