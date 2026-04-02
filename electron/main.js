@@ -25,6 +25,30 @@ function createMainWindow() {
 
   mainWindow.loadURL(cfg.url);
 
+  // Inject a draggable title bar region so the window can be moved.
+  // The strip sits behind the traffic lights and spans the full width.
+  mainWindow.webContents.on("did-finish-load", () => {
+    mainWindow.webContents.insertCSS(`
+      body::before {
+        content: "";
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 48px;
+        -webkit-app-region: drag;
+        z-index: 99999;
+        pointer-events: auto;
+      }
+      /* Let clickable elements inside the drag region still work */
+      body a, body button, body input, body select, body textarea,
+      body [role="button"], body [contenteditable] {
+        -webkit-app-region: no-drag;
+      }
+    `);
+  });
+
   // Open external links in the system browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
