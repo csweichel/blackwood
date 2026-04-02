@@ -26,7 +26,7 @@ jobs:
         working-directory: electron
         run: |
           VERSION="${GITHUB_REF_NAME#desktop-v}"
-          npm version "$VERSION" --no-git-tag-version
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
 
       - name: Build macOS (x64 + arm64)
         working-directory: electron
