@@ -29,7 +29,7 @@ const noteEditorTheme = EditorView.theme({
   "&": {
     fontSize: "0.9375rem",
     lineHeight: "1.75",
-    fontFamily: "'Source Serif 4', Georgia, serif",
+    fontFamily: "'JetBrains Mono', Menlo, Consolas, monospace",
   },
   "&.cm-focused": {
     outline: "none",

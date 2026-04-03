@@ -544,7 +544,7 @@ body {
 }
 
 .note-editor .cm-scroller {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'JetBrains Mono', Menlo, Consolas, monospace;
 }
 
 @media (max-width: 767px) {
