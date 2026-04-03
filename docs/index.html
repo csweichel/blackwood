@@ -444,7 +444,7 @@
         <div class="feature-card">
           <span class="icon" aria-hidden="true">&#x1F4DD;</span>
           <h3>Markdown Daily Notes</h3>
-          <p>One document per day. Write, edit, auto-save.</p>
+          <p>One document per day. Write, edit, auto-save. Collapsible sections for easy scanning.</p>
         </div>
         <div class="feature-card">
           <span class="icon" aria-hidden="true">&#x1F3A4;</span>
@@ -452,14 +452,54 @@
           <p>Record audio or snap photos. Automatically transcribed and described by AI.</p>
         </div>
         <div class="feature-card">
-          <span class="icon" aria-hidden="true">&#x270D;&#xFE0F;</span>
-          <h3>Viwoods Handwriting</h3>
-          <p>Import handwritten notes from Viwoods AIPaper. OCR'd automatically.</p>
+          <span class="icon" aria-hidden="true">&#x1F50D;</span>
+          <h3>Semantic Search</h3>
+          <p>Find anything across your notes with AI-powered semantic search. Cmd+K to open.</p>
         </div>
         <div class="feature-card">
           <span class="icon" aria-hidden="true">&#x1F4AC;</span>
-          <h3>WhatsApp Integration</h3>
-          <p>Send text, voice, or photos via WhatsApp. They appear in today's note.</p>
+          <h3>RAG Chat</h3>
+          <p>Ask questions about your notes in natural language. Get answers with source citations.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" aria-hidden="true">&#x1F4C5;</span>
+          <h3>Weekly &amp; Monthly Views</h3>
+          <p>See your notes aggregated by week or month with AI-generated range summaries.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" aria-hidden="true">&#x1F4E8;</span>
+          <h3>Daily Digest</h3>
+          <p>Automatic nightly summaries of each day. On-demand summarize for any note.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" aria-hidden="true">&#x1F4CD;</span>
+          <h3>Location Tagging</h3>
+          <p>Tag daily notes with your location. Reverse-geocoded to show address names.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" aria-hidden="true">&#x1F4CE;</span>
+          <h3>Web Clipping</h3>
+          <p>Clip any web page into today's note via bookmarklet. Fetches Open Graph metadata.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" aria-hidden="true">&#x1F4F1;</span>
+          <h3>iOS App</h3>
+          <p>Native iOS client for capturing notes, voice memos, and photos on the go.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" aria-hidden="true">&#x1F5A5;</span>
+          <h3>Desktop App</h3>
+          <p>Electron wrapper for macOS. Runs Blackwood as a native desktop application.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" aria-hidden="true">&#x1F680;</span>
+          <h3>Raycast Extension</h3>
+          <p>Create daily notes directly from Raycast without switching apps.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" aria-hidden="true">&#x1F4E5;</span>
+          <h3>Obsidian Import</h3>
+          <p>Bulk import your existing daily notes from Obsidian into Blackwood.</p>
         </div>
         <div class="feature-card">
           <span class="icon" aria-hidden="true">&#x2708;&#xFE0F;</span>
@@ -467,19 +507,24 @@
           <p>Text, voice, and photos from Telegram. Uses long polling &mdash; no public URL needed.</p>
         </div>
         <div class="feature-card">
-          <span class="icon" aria-hidden="true">&#x1F4C5;</span>
+          <span class="icon" aria-hidden="true">&#x1F4AC;</span>
+          <h3>WhatsApp Integration</h3>
+          <p>Send text, voice, or photos via WhatsApp. They appear in today's note.</p>
+        </div>
+        <div class="feature-card">
+          <span class="icon" aria-hidden="true">&#x1F91D;</span>
           <h3>Granola Meeting Notes</h3>
           <p>Auto-import meeting notes from Granola via MCP with summaries, attendees, and transcripts.</p>
         </div>
         <div class="feature-card">
-          <span class="icon" aria-hidden="true">&#x1F50D;</span>
-          <h3>RAG Chat</h3>
-          <p>Ask questions about your notes. Get answers with source citations.</p>
+          <span class="icon" aria-hidden="true">&#x270D;&#xFE0F;</span>
+          <h3>Viwoods Handwriting</h3>
+          <p>Import handwritten notes from Viwoods AIPaper. OCR'd automatically.</p>
         </div>
         <div class="feature-card">
           <span class="icon" aria-hidden="true">&#x1F512;</span>
-          <h3>Local-First</h3>
-          <p>SQLite database. Runs on your machine. Your data stays yours.</p>
+          <h3>Local-First &amp; Secure</h3>
+          <p>SQLite + markdown on disk. TOTP authentication. Optional HTTPS/TLS. Your data stays yours.</p>
         </div>
         <div class="feature-card">
           <span class="icon" aria-hidden="true">&#x1F4C4;</span>
@@ -492,14 +537,9 @@
           <p>Works offline. Entries are queued and synced when the server is reachable.</p>
         </div>
         <div class="feature-card">
-          <span class="icon" aria-hidden="true">&#x1F510;</span>
-          <h3>HTTPS / TLS</h3>
-          <p>Optional TLS with configurable cert and key paths.</p>
-        </div>
-        <div class="feature-card">
-          <span class="icon" aria-hidden="true">&#x2328;</span>
-          <h3>Keyboard Shortcuts</h3>
-          <p>Cmd+D today, Cmd+/ chat, Cmd+T timestamp, Cmd+Enter save.</p>
+          <span class="icon" aria-hidden="true">&#x1F3A8;</span>
+          <h3>Themes &amp; Preferences</h3>
+          <p>Dark, light, or system theme. Timezone-aware dates. Configurable per user.</p>
         </div>
       </div>
     </div>
@@ -512,29 +552,29 @@
       <div class="steps">
         <div class="step">
           <div class="step-number">1</div>
-          <h3>Download the binary</h3>
-          <p>Grab the latest release for your platform from GitHub.</p>
+          <h3>Download</h3>
+          <p>Grab the latest release for your platform &mdash; CLI binary, desktop app, or iOS.</p>
         </div>
         <div class="step">
           <div class="step-number">2</div>
-          <h3>Set your OpenAI API key</h3>
-          <p>Export your key so Blackwood can transcribe, describe, and search.</p>
+          <h3>Run setup</h3>
+          <p>Run <code>blackwood setup</code> to create directories, store your API key, and generate a config.</p>
         </div>
         <div class="step">
           <div class="step-number">3</div>
-          <h3>Run and open</h3>
-          <p>Start <code>blackwood</code> and open localhost:8080.</p>
+          <h3>Open and capture</h3>
+          <p>Open the web UI, desktop app, or iOS app and start writing.</p>
         </div>
       </div>
       <div class="code-block">
 <span class="comment"># Download the latest release</span>
 <span class="command">curl -L https://github.com/csweichel/blackwood/releases/latest/download/blackwood_darwin_arm64.tar.gz | tar xz</span>
 
-<span class="comment"># Set your API key</span>
-<span class="command">export OPENAI_API_KEY=sk-...</span>
+<span class="comment"># Interactive setup (creates config, stores API key)</span>
+<span class="command">./blackwood setup</span>
 
 <span class="comment"># Start the server</span>
-<span class="command">./blackwood --data-dir ~/.blackwood</span>
+<span class="command">./blackwood --config ~/.blackwood/config.yaml</span>
       </div>
     </div>
   </section>
@@ -542,27 +582,28 @@
   <section id="architecture">
     <div class="container">
       <h2 class="section-title">Architecture</h2>
-      <p class="section-subtitle">A Go backend serving a React frontend over a single port.</p>
+      <p class="section-subtitle">A Go backend serving web, desktop, and mobile clients over a single port.</p>
       <div class="architecture-diagram">&#x250C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2510;
-&#x2502;                  Web UI (React)                 &#x2502;
-&#x2502;  Calendar &#xB7; Markdown Editor &#xB7; Audio &#xB7; Chat      &#x2502;
+&#x2502;              Clients                             &#x2502;
+&#x2502;  Web UI (React) &#xB7; Electron &#xB7; iOS &#xB7; Raycast      &#x2502;
+&#x2502;  Calendar &#xB7; Editor &#xB7; Search &#xB7; Chat &#xB7; Week/Month &#x2502;
 &#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x252C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2518;
                        &#x2502; Connect-RPC
 &#x250C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2534;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2510;
 &#x2502;               Go API Server                     &#x2502;
 &#x2502;                                                 &#x2502;
 &#x2502;  DailyNotesService &#xB7; ChatService &#xB7; ImportService&#x2502;
-&#x2502;  WhatsApp Webhook &#xB7; Telegram Bot                &#x2502;
-&#x2502;  Attachment Serving                             &#x2502;
+&#x2502;  SearchService &#xB7; DigestService &#xB7; AuthService    &#x2502;
+&#x2502;  WhatsApp &#xB7; Telegram &#xB7; Granola Sync &#xB7; Clipper   &#x2502;
 &#x251C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2524;
 &#x2502;  AI Pipelines                                   &#x2502;
-&#x2502;  Whisper (audio) &#xB7; GPT-5.2 (vision/chat/OCR)    &#x2502;
+&#x2502;  Whisper (audio) &#xB7; gpt-5.2 (vision/chat/OCR)   &#x2502;
 &#x2502;  text-embedding-3-small (semantic index)        &#x2502;
 &#x251C;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2524;
 &#x2502;  Storage                                        &#x2502;
-&#x2502;  SQLite (notes, entries, conversations)         &#x2502;
-&#x2502;  Embeddings (cosine similarity in Go)           &#x2502;
-&#x2502;  File system (attachments)                      &#x2502;
+&#x2502;  Markdown files  notes/YYYY/MM/DD/index.md      &#x2502;
+&#x2502;  Attachments     notes/YYYY/MM/DD/&lt;file&gt;        &#x2502;
+&#x2502;  SQLite (entries, conversations, embeddings)    &#x2502;
 &#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2518;</div>
     </div>
   </section>
@@ -570,19 +611,24 @@
   <section id="install">
     <div class="container">
       <h2 class="section-title">Installation</h2>
-      <p class="section-subtitle">Download the pre-built binary for your platform.</p>
+      <p class="section-subtitle">Download the pre-built binary, desktop app, or iOS app.</p>
       <div class="install-tabs">
         <button class="install-tab active" onclick="showTab('macos-arm')">macOS (Apple Silicon)</button>
         <button class="install-tab" onclick="showTab('macos-intel')">macOS (Intel)</button>
         <button class="install-tab" onclick="showTab('linux')">Linux (x86_64)</button>
+        <button class="install-tab" onclick="showTab('desktop')">Desktop App</button>
+        <button class="install-tab" onclick="showTab('ios')">iOS</button>
       </div>
       <div id="tab-macos-arm" class="install-panel active">
         <div class="code-block">
 <span class="comment"># macOS (Apple Silicon)</span>
 <span class="command">curl -L https://github.com/csweichel/blackwood/releases/latest/download/blackwood_darwin_arm64.tar.gz | tar xz</span>
 
+<span class="comment"># Interactive setup</span>
+<span class="command">./blackwood setup</span>
+
 <span class="comment"># Run the server</span>
-<span class="command">./blackwood --data-dir ~/.blackwood</span>
+<span class="command">./blackwood --config ~/.blackwood/config.yaml</span>
         </div>
       </div>
       <div id="tab-macos-intel" class="install-panel">
@@ -590,8 +636,11 @@
 <span class="comment"># macOS (Intel)</span>
 <span class="command">curl -L https://github.com/csweichel/blackwood/releases/latest/download/blackwood_darwin_amd64.tar.gz | tar xz</span>
 
+<span class="comment"># Interactive setup</span>
+<span class="command">./blackwood setup</span>
+
 <span class="comment"># Run the server</span>
-<span class="command">./blackwood --data-dir ~/.blackwood</span>
+<span class="command">./blackwood --config ~/.blackwood/config.yaml</span>
         </div>
       </div>
       <div id="tab-linux" class="install-panel">
@@ -599,8 +648,29 @@
 <span class="comment"># Linux (x86_64)</span>
 <span class="command">curl -L https://github.com/csweichel/blackwood/releases/latest/download/blackwood_linux_amd64.tar.gz | tar xz</span>
 
+<span class="comment"># Interactive setup</span>
+<span class="command">./blackwood setup</span>
+
 <span class="comment"># Run the server</span>
-<span class="command">./blackwood --data-dir ~/.blackwood</span>
+<span class="command">./blackwood --config ~/.blackwood/config.yaml</span>
+        </div>
+      </div>
+      <div id="tab-desktop" class="install-panel">
+        <div class="code-block">
+<span class="comment"># Download the macOS desktop app (.dmg) from GitHub Releases</span>
+<span class="command"><a href="https://github.com/csweichel/blackwood/releases" style="color: #7dd3fc;">github.com/csweichel/blackwood/releases</a></span>
+
+<span class="comment"># The Electron wrapper connects to your running Blackwood server.</span>
+<span class="comment"># Start the server first, then open the desktop app.</span>
+        </div>
+      </div>
+      <div id="tab-ios" class="install-panel">
+        <div class="code-block">
+<span class="comment"># Build from source (requires Xcode)</span>
+<span class="command">cd ios && open Blackwood.xcodeproj</span>
+
+<span class="comment"># The iOS app connects to your Blackwood server over your local network.</span>
+<span class="comment"># Configure the server address in the app settings.</span>
         </div>
       </div>
     </div>

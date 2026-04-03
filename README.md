@@ -11,19 +11,29 @@ Blackwood runs entirely on your machine. Your data stays local.
 - **Markdown daily notes** — one document per day (`notes/YYYY/MM/DD/index.md`), editable in the browser with auto-save
 - **Voice memos** — record audio in the web UI or send via WhatsApp; transcribed via Whisper and kept as playable audio files
 - **Photo capture** — upload or snap photos; described via gpt-5.2 vision and rendered inline in the daily note
+- **Semantic search** — find anything across your notes with AI-powered semantic search (`Cmd+K`)
+- **RAG chat** — ask questions about your notes in natural language; get answers with source citations
+- **Weekly & monthly views** — see notes aggregated by week or month with AI-generated range summaries
+- **Daily digest** — automatic nightly summaries; on-demand summarize for any note
+- **Location tagging** — tag daily notes with your location; reverse-geocoded to show address names
+- **Web clipping** — clip any web page into today's note via bookmarklet; fetches Open Graph metadata
+- **iOS app** — native iOS client for capturing notes, voice memos, and photos on the go
+- **Desktop app** — Electron wrapper for macOS; runs Blackwood as a native desktop application
+- **Raycast extension** — quick capture daily notes from Raycast
+- **Telegram bot** — send text, voice, and photos from Telegram; uses long polling so no public URL is needed
+- **WhatsApp integration** — text, voice messages, and photos sent to your bot appear in today's note
+- **Granola meeting notes** — automatically imports meeting notes from [Granola](https://granola.ai) via MCP every hour, including summaries, attendees, and transcripts
 - **Viwoods handwriting** — import `.note` files from Viwoods AIPaper; pages are OCR'd and added to your daily note
 - **Obsidian import** — bulk import your existing daily notes from Obsidian
-- **WhatsApp integration** — text, voice messages, and photos sent to your bot appear in today's note
-- **Telegram bot** — send text, voice, and photos from Telegram; uses long polling so no public URL is needed
-- **Semantic search & RAG chat** — ask questions about your notes in natural language; get answers with source citations
+- **TOTP authentication** — authenticator-based login to protect your notes
+- **Themes & preferences** — dark, light, or system theme; timezone-aware dates; configurable per user
 - **Calendar view** — monthly grid showing which days have content; click to navigate
 - **Collapsible sections** — headings and nested list items are collapsible (expanded by default) for easier scanning of long notes
 - **PDF export** — download any daily note as a PDF from the note header
 - **Offline support** — service worker caches the app shell; entries created offline are queued and synced when the server is reachable
 - **Bookmarkable URLs** — `/day/2025-01-15` for daily notes, `/chat/2025-01-15-my-question` for conversations; browser back/forward works
-- **Keyboard shortcuts** — `Cmd+D` jump to today, `Cmd+/` toggle chat, `Cmd+T` insert timestamp, `Cmd+Enter` save edit
+- **Keyboard shortcuts** — `Cmd+D` jump to today, `Cmd+/` toggle chat, `Cmd+K` search, `Cmd+T` insert timestamp, `Cmd+Enter` save edit
 - **HTTPS/TLS** — optional TLS with configurable cert/key paths; plain HTTP remains the default
-- **Granola meeting notes** — automatically imports meeting notes from [Granola](https://granola.ai) via MCP every hour, including summaries, attendees, and transcripts
 - **File watcher** — optionally watches a directory for new Viwoods `.note` files and auto-imports them
 - **Local-first** — runs on your machine, no cloud dependency
 
@@ -96,16 +106,17 @@ Blackwood is a single Go binary (`blackwood`) serving a React frontend over a si
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                  Web UI (React)                 │
-│  Calendar · Markdown Editor · Audio · Chat      │
+│              Clients                            │
+│  Web UI (React) · Electron · iOS · Raycast      │
+│  Calendar · Editor · Search · Chat · Week/Month │
 └──────────────────────┬──────────────────────────┘
                        │ Connect-RPC
 ┌──────────────────────┴──────────────────────────┐
 │               Go API Server                     │
 │                                                 │
 │  DailyNotesService · ChatService · ImportService│
-│  WhatsApp Webhook · Telegram Bot · Granola Sync │
-│  Attachment Serving                             │
+│  SearchService · DigestService · AuthService    │
+│  WhatsApp · Telegram · Granola Sync · Clipper   │
 ├─────────────────────────────────────────────────┤
 │  AI Pipelines                                   │
 │  Whisper (audio) · gpt-5.2 (vision/chat/OCR)   │
@@ -356,6 +367,7 @@ Attachments (photos, audio recordings) are stored alongside the daily note in th
 |----------|--------|
 | `Cmd+D` | Jump to today's note |
 | `Cmd+/` | Toggle between notes and chat |
+| `Cmd+K` | Open search |
 | `Cmd+T` | Insert current time (in edit mode) |
 | `Cmd+Enter` | Save and exit edit mode |
 | `Esc` | Exit edit mode without saving |
@@ -372,8 +384,16 @@ On Windows/Linux, use `Ctrl` instead of `Cmd`.
 - [x] Collapsible sections
 - [x] Keyboard shortcuts
 - [x] Web clipper (bookmarklet)
-- [ ] iOS app
-- [ ] Mac app (menu bar quick capture)
+- [x] Semantic search
+- [x] Weekly & monthly views with range summaries
+- [x] Daily digest (nightly generation)
+- [x] Location tagging with reverse geocoding
+- [x] TOTP authentication
+- [x] User preferences (timezone, color theme)
+- [x] Granola meeting notes via MCP
+- [x] Raycast extension
+- [x] iOS app
+- [x] Mac app (Electron desktop wrapper)
 
 ## License
 
