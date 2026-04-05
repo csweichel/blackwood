@@ -57,6 +57,15 @@ const (
 	// DailyNotesServiceListDatesWithContentProcedure is the fully-qualified name of the
 	// DailyNotesService's ListDatesWithContent RPC.
 	DailyNotesServiceListDatesWithContentProcedure = "/blackwood.v1.DailyNotesService/ListDatesWithContent"
+	// DailyNotesServiceGetSubpageProcedure is the fully-qualified name of the DailyNotesService's
+	// GetSubpage RPC.
+	DailyNotesServiceGetSubpageProcedure = "/blackwood.v1.DailyNotesService/GetSubpage"
+	// DailyNotesServiceUpdateSubpageContentProcedure is the fully-qualified name of the
+	// DailyNotesService's UpdateSubpageContent RPC.
+	DailyNotesServiceUpdateSubpageContentProcedure = "/blackwood.v1.DailyNotesService/UpdateSubpageContent"
+	// DailyNotesServiceListSubpagesProcedure is the fully-qualified name of the DailyNotesService's
+	// ListSubpages RPC.
+	DailyNotesServiceListSubpagesProcedure = "/blackwood.v1.DailyNotesService/ListSubpages"
 )
 
 // DailyNotesServiceClient is a client for the blackwood.v1.DailyNotesService service.
@@ -69,6 +78,9 @@ type DailyNotesServiceClient interface {
 	ListEntries(context.Context, *connect.Request[v1.ListEntriesRequest]) (*connect.Response[v1.ListEntriesResponse], error)
 	UpdateDailyNoteContent(context.Context, *connect.Request[v1.UpdateDailyNoteContentRequest]) (*connect.Response[v1.DailyNote], error)
 	ListDatesWithContent(context.Context, *connect.Request[v1.ListDatesWithContentRequest]) (*connect.Response[v1.ListDatesWithContentResponse], error)
+	GetSubpage(context.Context, *connect.Request[v1.GetSubpageRequest]) (*connect.Response[v1.Subpage], error)
+	UpdateSubpageContent(context.Context, *connect.Request[v1.UpdateSubpageContentRequest]) (*connect.Response[v1.Subpage], error)
+	ListSubpages(context.Context, *connect.Request[v1.ListSubpagesRequest]) (*connect.Response[v1.ListSubpagesResponse], error)
 }
 
 // NewDailyNotesServiceClient constructs a client for the blackwood.v1.DailyNotesService service. By
@@ -130,6 +142,24 @@ func NewDailyNotesServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(dailyNotesServiceMethods.ByName("ListDatesWithContent")),
 			connect.WithClientOptions(opts...),
 		),
+		getSubpage: connect.NewClient[v1.GetSubpageRequest, v1.Subpage](
+			httpClient,
+			baseURL+DailyNotesServiceGetSubpageProcedure,
+			connect.WithSchema(dailyNotesServiceMethods.ByName("GetSubpage")),
+			connect.WithClientOptions(opts...),
+		),
+		updateSubpageContent: connect.NewClient[v1.UpdateSubpageContentRequest, v1.Subpage](
+			httpClient,
+			baseURL+DailyNotesServiceUpdateSubpageContentProcedure,
+			connect.WithSchema(dailyNotesServiceMethods.ByName("UpdateSubpageContent")),
+			connect.WithClientOptions(opts...),
+		),
+		listSubpages: connect.NewClient[v1.ListSubpagesRequest, v1.ListSubpagesResponse](
+			httpClient,
+			baseURL+DailyNotesServiceListSubpagesProcedure,
+			connect.WithSchema(dailyNotesServiceMethods.ByName("ListSubpages")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -143,6 +173,9 @@ type dailyNotesServiceClient struct {
 	listEntries            *connect.Client[v1.ListEntriesRequest, v1.ListEntriesResponse]
 	updateDailyNoteContent *connect.Client[v1.UpdateDailyNoteContentRequest, v1.DailyNote]
 	listDatesWithContent   *connect.Client[v1.ListDatesWithContentRequest, v1.ListDatesWithContentResponse]
+	getSubpage             *connect.Client[v1.GetSubpageRequest, v1.Subpage]
+	updateSubpageContent   *connect.Client[v1.UpdateSubpageContentRequest, v1.Subpage]
+	listSubpages           *connect.Client[v1.ListSubpagesRequest, v1.ListSubpagesResponse]
 }
 
 // GetDailyNote calls blackwood.v1.DailyNotesService.GetDailyNote.
@@ -185,6 +218,21 @@ func (c *dailyNotesServiceClient) ListDatesWithContent(ctx context.Context, req 
 	return c.listDatesWithContent.CallUnary(ctx, req)
 }
 
+// GetSubpage calls blackwood.v1.DailyNotesService.GetSubpage.
+func (c *dailyNotesServiceClient) GetSubpage(ctx context.Context, req *connect.Request[v1.GetSubpageRequest]) (*connect.Response[v1.Subpage], error) {
+	return c.getSubpage.CallUnary(ctx, req)
+}
+
+// UpdateSubpageContent calls blackwood.v1.DailyNotesService.UpdateSubpageContent.
+func (c *dailyNotesServiceClient) UpdateSubpageContent(ctx context.Context, req *connect.Request[v1.UpdateSubpageContentRequest]) (*connect.Response[v1.Subpage], error) {
+	return c.updateSubpageContent.CallUnary(ctx, req)
+}
+
+// ListSubpages calls blackwood.v1.DailyNotesService.ListSubpages.
+func (c *dailyNotesServiceClient) ListSubpages(ctx context.Context, req *connect.Request[v1.ListSubpagesRequest]) (*connect.Response[v1.ListSubpagesResponse], error) {
+	return c.listSubpages.CallUnary(ctx, req)
+}
+
 // DailyNotesServiceHandler is an implementation of the blackwood.v1.DailyNotesService service.
 type DailyNotesServiceHandler interface {
 	GetDailyNote(context.Context, *connect.Request[v1.GetDailyNoteRequest]) (*connect.Response[v1.DailyNote], error)
@@ -195,6 +243,9 @@ type DailyNotesServiceHandler interface {
 	ListEntries(context.Context, *connect.Request[v1.ListEntriesRequest]) (*connect.Response[v1.ListEntriesResponse], error)
 	UpdateDailyNoteContent(context.Context, *connect.Request[v1.UpdateDailyNoteContentRequest]) (*connect.Response[v1.DailyNote], error)
 	ListDatesWithContent(context.Context, *connect.Request[v1.ListDatesWithContentRequest]) (*connect.Response[v1.ListDatesWithContentResponse], error)
+	GetSubpage(context.Context, *connect.Request[v1.GetSubpageRequest]) (*connect.Response[v1.Subpage], error)
+	UpdateSubpageContent(context.Context, *connect.Request[v1.UpdateSubpageContentRequest]) (*connect.Response[v1.Subpage], error)
+	ListSubpages(context.Context, *connect.Request[v1.ListSubpagesRequest]) (*connect.Response[v1.ListSubpagesResponse], error)
 }
 
 // NewDailyNotesServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -252,6 +303,24 @@ func NewDailyNotesServiceHandler(svc DailyNotesServiceHandler, opts ...connect.H
 		connect.WithSchema(dailyNotesServiceMethods.ByName("ListDatesWithContent")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dailyNotesServiceGetSubpageHandler := connect.NewUnaryHandler(
+		DailyNotesServiceGetSubpageProcedure,
+		svc.GetSubpage,
+		connect.WithSchema(dailyNotesServiceMethods.ByName("GetSubpage")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dailyNotesServiceUpdateSubpageContentHandler := connect.NewUnaryHandler(
+		DailyNotesServiceUpdateSubpageContentProcedure,
+		svc.UpdateSubpageContent,
+		connect.WithSchema(dailyNotesServiceMethods.ByName("UpdateSubpageContent")),
+		connect.WithHandlerOptions(opts...),
+	)
+	dailyNotesServiceListSubpagesHandler := connect.NewUnaryHandler(
+		DailyNotesServiceListSubpagesProcedure,
+		svc.ListSubpages,
+		connect.WithSchema(dailyNotesServiceMethods.ByName("ListSubpages")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/blackwood.v1.DailyNotesService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DailyNotesServiceGetDailyNoteProcedure:
@@ -270,6 +339,12 @@ func NewDailyNotesServiceHandler(svc DailyNotesServiceHandler, opts ...connect.H
 			dailyNotesServiceUpdateDailyNoteContentHandler.ServeHTTP(w, r)
 		case DailyNotesServiceListDatesWithContentProcedure:
 			dailyNotesServiceListDatesWithContentHandler.ServeHTTP(w, r)
+		case DailyNotesServiceGetSubpageProcedure:
+			dailyNotesServiceGetSubpageHandler.ServeHTTP(w, r)
+		case DailyNotesServiceUpdateSubpageContentProcedure:
+			dailyNotesServiceUpdateSubpageContentHandler.ServeHTTP(w, r)
+		case DailyNotesServiceListSubpagesProcedure:
+			dailyNotesServiceListSubpagesHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -309,4 +384,16 @@ func (UnimplementedDailyNotesServiceHandler) UpdateDailyNoteContent(context.Cont
 
 func (UnimplementedDailyNotesServiceHandler) ListDatesWithContent(context.Context, *connect.Request[v1.ListDatesWithContentRequest]) (*connect.Response[v1.ListDatesWithContentResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blackwood.v1.DailyNotesService.ListDatesWithContent is not implemented"))
+}
+
+func (UnimplementedDailyNotesServiceHandler) GetSubpage(context.Context, *connect.Request[v1.GetSubpageRequest]) (*connect.Response[v1.Subpage], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blackwood.v1.DailyNotesService.GetSubpage is not implemented"))
+}
+
+func (UnimplementedDailyNotesServiceHandler) UpdateSubpageContent(context.Context, *connect.Request[v1.UpdateSubpageContentRequest]) (*connect.Response[v1.Subpage], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blackwood.v1.DailyNotesService.UpdateSubpageContent is not implemented"))
+}
+
+func (UnimplementedDailyNotesServiceHandler) ListSubpages(context.Context, *connect.Request[v1.ListSubpagesRequest]) (*connect.Response[v1.ListSubpagesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blackwood.v1.DailyNotesService.ListSubpages is not implemented"))
 }

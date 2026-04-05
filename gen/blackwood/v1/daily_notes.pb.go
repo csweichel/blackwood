@@ -1062,6 +1062,266 @@ func (x *ListDatesWithContentResponse) GetDates() []string {
 	return nil
 }
 
+type Subpage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Content       string                 `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
+	Date          string                 `protobuf:"bytes,3,opt,name=date,proto3" json:"date,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Subpage) Reset() {
+	*x = Subpage{}
+	mi := &file_blackwood_v1_daily_notes_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Subpage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Subpage) ProtoMessage() {}
+
+func (x *Subpage) ProtoReflect() protoreflect.Message {
+	mi := &file_blackwood_v1_daily_notes_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Subpage.ProtoReflect.Descriptor instead.
+func (*Subpage) Descriptor() ([]byte, []int) {
+	return file_blackwood_v1_daily_notes_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *Subpage) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Subpage) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+func (x *Subpage) GetDate() string {
+	if x != nil {
+		return x.Date
+	}
+	return ""
+}
+
+type GetSubpageRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Date          string                 `protobuf:"bytes,1,opt,name=date,proto3" json:"date,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSubpageRequest) Reset() {
+	*x = GetSubpageRequest{}
+	mi := &file_blackwood_v1_daily_notes_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSubpageRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSubpageRequest) ProtoMessage() {}
+
+func (x *GetSubpageRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blackwood_v1_daily_notes_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSubpageRequest.ProtoReflect.Descriptor instead.
+func (*GetSubpageRequest) Descriptor() ([]byte, []int) {
+	return file_blackwood_v1_daily_notes_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *GetSubpageRequest) GetDate() string {
+	if x != nil {
+		return x.Date
+	}
+	return ""
+}
+
+func (x *GetSubpageRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type UpdateSubpageContentRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Date          string                 `protobuf:"bytes,1,opt,name=date,proto3" json:"date,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Content       string                 `protobuf:"bytes,3,opt,name=content,proto3" json:"content,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateSubpageContentRequest) Reset() {
+	*x = UpdateSubpageContentRequest{}
+	mi := &file_blackwood_v1_daily_notes_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateSubpageContentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateSubpageContentRequest) ProtoMessage() {}
+
+func (x *UpdateSubpageContentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blackwood_v1_daily_notes_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateSubpageContentRequest.ProtoReflect.Descriptor instead.
+func (*UpdateSubpageContentRequest) Descriptor() ([]byte, []int) {
+	return file_blackwood_v1_daily_notes_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *UpdateSubpageContentRequest) GetDate() string {
+	if x != nil {
+		return x.Date
+	}
+	return ""
+}
+
+func (x *UpdateSubpageContentRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UpdateSubpageContentRequest) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+type ListSubpagesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Date          string                 `protobuf:"bytes,1,opt,name=date,proto3" json:"date,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSubpagesRequest) Reset() {
+	*x = ListSubpagesRequest{}
+	mi := &file_blackwood_v1_daily_notes_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSubpagesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSubpagesRequest) ProtoMessage() {}
+
+func (x *ListSubpagesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_blackwood_v1_daily_notes_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSubpagesRequest.ProtoReflect.Descriptor instead.
+func (*ListSubpagesRequest) Descriptor() ([]byte, []int) {
+	return file_blackwood_v1_daily_notes_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ListSubpagesRequest) GetDate() string {
+	if x != nil {
+		return x.Date
+	}
+	return ""
+}
+
+type ListSubpagesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Names         []string               `protobuf:"bytes,1,rep,name=names,proto3" json:"names,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSubpagesResponse) Reset() {
+	*x = ListSubpagesResponse{}
+	mi := &file_blackwood_v1_daily_notes_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSubpagesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSubpagesResponse) ProtoMessage() {}
+
+func (x *ListSubpagesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_blackwood_v1_daily_notes_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSubpagesResponse.ProtoReflect.Descriptor instead.
+func (*ListSubpagesResponse) Descriptor() ([]byte, []int) {
+	return file_blackwood_v1_daily_notes_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *ListSubpagesResponse) GetNames() []string {
+	if x != nil {
+		return x.Names
+	}
+	return nil
+}
+
 var File_blackwood_v1_daily_notes_proto protoreflect.FileDescriptor
 
 const file_blackwood_v1_daily_notes_proto_rawDesc = "" +
@@ -1139,7 +1399,22 @@ const file_blackwood_v1_daily_notes_proto_rawDesc = "" +
 	"start_date\x18\x01 \x01(\tR\tstartDate\x12\x19\n" +
 	"\bend_date\x18\x02 \x01(\tR\aendDate\"4\n" +
 	"\x1cListDatesWithContentResponse\x12\x14\n" +
-	"\x05dates\x18\x01 \x03(\tR\x05dates*\x98\x01\n" +
+	"\x05dates\x18\x01 \x03(\tR\x05dates\"K\n" +
+	"\aSubpage\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
+	"\acontent\x18\x02 \x01(\tR\acontent\x12\x12\n" +
+	"\x04date\x18\x03 \x01(\tR\x04date\";\n" +
+	"\x11GetSubpageRequest\x12\x12\n" +
+	"\x04date\x18\x01 \x01(\tR\x04date\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\"_\n" +
+	"\x1bUpdateSubpageContentRequest\x12\x12\n" +
+	"\x04date\x18\x01 \x01(\tR\x04date\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
+	"\acontent\x18\x03 \x01(\tR\acontent\")\n" +
+	"\x13ListSubpagesRequest\x12\x12\n" +
+	"\x04date\x18\x01 \x01(\tR\x04date\",\n" +
+	"\x14ListSubpagesResponse\x12\x14\n" +
+	"\x05names\x18\x01 \x03(\tR\x05names*\x98\x01\n" +
 	"\tEntryType\x12\x1a\n" +
 	"\x16ENTRY_TYPE_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fENTRY_TYPE_TEXT\x10\x01\x12\x14\n" +
@@ -1153,7 +1428,7 @@ const file_blackwood_v1_daily_notes_proto_rawDesc = "" +
 	"\x15ENTRY_SOURCE_TELEGRAM\x10\x02\x12\x19\n" +
 	"\x15ENTRY_SOURCE_WHATSAPP\x10\x03\x12\x14\n" +
 	"\x10ENTRY_SOURCE_API\x10\x04\x12\x17\n" +
-	"\x13ENTRY_SOURCE_IMPORT\x10\x052\xbf\x05\n" +
+	"\x13ENTRY_SOURCE_IMPORT\x10\x052\xb6\a\n" +
 	"\x11DailyNotesService\x12J\n" +
 	"\fGetDailyNote\x12!.blackwood.v1.GetDailyNoteRequest\x1a\x17.blackwood.v1.DailyNote\x12[\n" +
 	"\x0eListDailyNotes\x12#.blackwood.v1.ListDailyNotesRequest\x1a$.blackwood.v1.ListDailyNotesResponse\x12D\n" +
@@ -1162,7 +1437,11 @@ const file_blackwood_v1_daily_notes_proto_rawDesc = "" +
 	"\vDeleteEntry\x12 .blackwood.v1.DeleteEntryRequest\x1a!.blackwood.v1.DeleteEntryResponse\x12R\n" +
 	"\vListEntries\x12 .blackwood.v1.ListEntriesRequest\x1a!.blackwood.v1.ListEntriesResponse\x12^\n" +
 	"\x16UpdateDailyNoteContent\x12+.blackwood.v1.UpdateDailyNoteContentRequest\x1a\x17.blackwood.v1.DailyNote\x12m\n" +
-	"\x14ListDatesWithContent\x12).blackwood.v1.ListDatesWithContentRequest\x1a*.blackwood.v1.ListDatesWithContentResponseB=Z;github.com/csweichel/blackwood/gen/blackwood/v1;blackwoodv1b\x06proto3"
+	"\x14ListDatesWithContent\x12).blackwood.v1.ListDatesWithContentRequest\x1a*.blackwood.v1.ListDatesWithContentResponse\x12D\n" +
+	"\n" +
+	"GetSubpage\x12\x1f.blackwood.v1.GetSubpageRequest\x1a\x15.blackwood.v1.Subpage\x12X\n" +
+	"\x14UpdateSubpageContent\x12).blackwood.v1.UpdateSubpageContentRequest\x1a\x15.blackwood.v1.Subpage\x12U\n" +
+	"\fListSubpages\x12!.blackwood.v1.ListSubpagesRequest\x1a\".blackwood.v1.ListSubpagesResponseB=Z;github.com/csweichel/blackwood/gen/blackwood/v1;blackwoodv1b\x06proto3"
 
 var (
 	file_blackwood_v1_daily_notes_proto_rawDescOnce sync.Once
@@ -1177,7 +1456,7 @@ func file_blackwood_v1_daily_notes_proto_rawDescGZIP() []byte {
 }
 
 var file_blackwood_v1_daily_notes_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_blackwood_v1_daily_notes_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_blackwood_v1_daily_notes_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_blackwood_v1_daily_notes_proto_goTypes = []any{
 	(EntryType)(0),                        // 0: blackwood.v1.EntryType
 	(EntrySource)(0),                      // 1: blackwood.v1.EntrySource
@@ -1196,17 +1475,22 @@ var file_blackwood_v1_daily_notes_proto_goTypes = []any{
 	(*UpdateDailyNoteContentRequest)(nil), // 14: blackwood.v1.UpdateDailyNoteContentRequest
 	(*ListDatesWithContentRequest)(nil),   // 15: blackwood.v1.ListDatesWithContentRequest
 	(*ListDatesWithContentResponse)(nil),  // 16: blackwood.v1.ListDatesWithContentResponse
-	(*timestamppb.Timestamp)(nil),         // 17: google.protobuf.Timestamp
+	(*Subpage)(nil),                       // 17: blackwood.v1.Subpage
+	(*GetSubpageRequest)(nil),             // 18: blackwood.v1.GetSubpageRequest
+	(*UpdateSubpageContentRequest)(nil),   // 19: blackwood.v1.UpdateSubpageContentRequest
+	(*ListSubpagesRequest)(nil),           // 20: blackwood.v1.ListSubpagesRequest
+	(*ListSubpagesResponse)(nil),          // 21: blackwood.v1.ListSubpagesResponse
+	(*timestamppb.Timestamp)(nil),         // 22: google.protobuf.Timestamp
 }
 var file_blackwood_v1_daily_notes_proto_depIdxs = []int32{
 	0,  // 0: blackwood.v1.Entry.type:type_name -> blackwood.v1.EntryType
 	1,  // 1: blackwood.v1.Entry.source:type_name -> blackwood.v1.EntrySource
 	2,  // 2: blackwood.v1.Entry.attachments:type_name -> blackwood.v1.Attachment
-	17, // 3: blackwood.v1.Entry.created_at:type_name -> google.protobuf.Timestamp
-	17, // 4: blackwood.v1.Entry.updated_at:type_name -> google.protobuf.Timestamp
+	22, // 3: blackwood.v1.Entry.created_at:type_name -> google.protobuf.Timestamp
+	22, // 4: blackwood.v1.Entry.updated_at:type_name -> google.protobuf.Timestamp
 	3,  // 5: blackwood.v1.DailyNote.entries:type_name -> blackwood.v1.Entry
-	17, // 6: blackwood.v1.DailyNote.created_at:type_name -> google.protobuf.Timestamp
-	17, // 7: blackwood.v1.DailyNote.updated_at:type_name -> google.protobuf.Timestamp
+	22, // 6: blackwood.v1.DailyNote.created_at:type_name -> google.protobuf.Timestamp
+	22, // 7: blackwood.v1.DailyNote.updated_at:type_name -> google.protobuf.Timestamp
 	4,  // 8: blackwood.v1.ListDailyNotesResponse.daily_notes:type_name -> blackwood.v1.DailyNote
 	0,  // 9: blackwood.v1.CreateEntryRequest.type:type_name -> blackwood.v1.EntryType
 	1,  // 10: blackwood.v1.CreateEntryRequest.source:type_name -> blackwood.v1.EntrySource
@@ -1219,16 +1503,22 @@ var file_blackwood_v1_daily_notes_proto_depIdxs = []int32{
 	12, // 17: blackwood.v1.DailyNotesService.ListEntries:input_type -> blackwood.v1.ListEntriesRequest
 	14, // 18: blackwood.v1.DailyNotesService.UpdateDailyNoteContent:input_type -> blackwood.v1.UpdateDailyNoteContentRequest
 	15, // 19: blackwood.v1.DailyNotesService.ListDatesWithContent:input_type -> blackwood.v1.ListDatesWithContentRequest
-	4,  // 20: blackwood.v1.DailyNotesService.GetDailyNote:output_type -> blackwood.v1.DailyNote
-	7,  // 21: blackwood.v1.DailyNotesService.ListDailyNotes:output_type -> blackwood.v1.ListDailyNotesResponse
-	3,  // 22: blackwood.v1.DailyNotesService.CreateEntry:output_type -> blackwood.v1.Entry
-	3,  // 23: blackwood.v1.DailyNotesService.UpdateEntry:output_type -> blackwood.v1.Entry
-	11, // 24: blackwood.v1.DailyNotesService.DeleteEntry:output_type -> blackwood.v1.DeleteEntryResponse
-	13, // 25: blackwood.v1.DailyNotesService.ListEntries:output_type -> blackwood.v1.ListEntriesResponse
-	4,  // 26: blackwood.v1.DailyNotesService.UpdateDailyNoteContent:output_type -> blackwood.v1.DailyNote
-	16, // 27: blackwood.v1.DailyNotesService.ListDatesWithContent:output_type -> blackwood.v1.ListDatesWithContentResponse
-	20, // [20:28] is the sub-list for method output_type
-	12, // [12:20] is the sub-list for method input_type
+	18, // 20: blackwood.v1.DailyNotesService.GetSubpage:input_type -> blackwood.v1.GetSubpageRequest
+	19, // 21: blackwood.v1.DailyNotesService.UpdateSubpageContent:input_type -> blackwood.v1.UpdateSubpageContentRequest
+	20, // 22: blackwood.v1.DailyNotesService.ListSubpages:input_type -> blackwood.v1.ListSubpagesRequest
+	4,  // 23: blackwood.v1.DailyNotesService.GetDailyNote:output_type -> blackwood.v1.DailyNote
+	7,  // 24: blackwood.v1.DailyNotesService.ListDailyNotes:output_type -> blackwood.v1.ListDailyNotesResponse
+	3,  // 25: blackwood.v1.DailyNotesService.CreateEntry:output_type -> blackwood.v1.Entry
+	3,  // 26: blackwood.v1.DailyNotesService.UpdateEntry:output_type -> blackwood.v1.Entry
+	11, // 27: blackwood.v1.DailyNotesService.DeleteEntry:output_type -> blackwood.v1.DeleteEntryResponse
+	13, // 28: blackwood.v1.DailyNotesService.ListEntries:output_type -> blackwood.v1.ListEntriesResponse
+	4,  // 29: blackwood.v1.DailyNotesService.UpdateDailyNoteContent:output_type -> blackwood.v1.DailyNote
+	16, // 30: blackwood.v1.DailyNotesService.ListDatesWithContent:output_type -> blackwood.v1.ListDatesWithContentResponse
+	17, // 31: blackwood.v1.DailyNotesService.GetSubpage:output_type -> blackwood.v1.Subpage
+	17, // 32: blackwood.v1.DailyNotesService.UpdateSubpageContent:output_type -> blackwood.v1.Subpage
+	21, // 33: blackwood.v1.DailyNotesService.ListSubpages:output_type -> blackwood.v1.ListSubpagesResponse
+	23, // [23:34] is the sub-list for method output_type
+	12, // [12:23] is the sub-list for method input_type
 	12, // [12:12] is the sub-list for extension type_name
 	12, // [12:12] is the sub-list for extension extendee
 	0,  // [0:12] is the sub-list for field type_name
@@ -1245,7 +1535,7 @@ func file_blackwood_v1_daily_notes_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_blackwood_v1_daily_notes_proto_rawDesc), len(file_blackwood_v1_daily_notes_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   15,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

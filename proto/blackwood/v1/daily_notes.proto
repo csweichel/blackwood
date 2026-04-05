@@ -116,6 +116,31 @@ message ListDatesWithContentResponse {
   repeated string dates = 1;
 }
 
+message Subpage {
+  string name = 1;
+  string content = 2;
+  string date = 3;
+}
+
+message GetSubpageRequest {
+  string date = 1;
+  string name = 2;
+}
+
+message UpdateSubpageContentRequest {
+  string date = 1;
+  string name = 2;
+  string content = 3;
+}
+
+message ListSubpagesRequest {
+  string date = 1;
+}
+
+message ListSubpagesResponse {
+  repeated string names = 1;
+}
+
 service DailyNotesService {
   rpc GetDailyNote(GetDailyNoteRequest) returns (DailyNote);
   rpc ListDailyNotes(ListDailyNotesRequest) returns (ListDailyNotesResponse);
@@ -125,4 +150,7 @@ service DailyNotesService {
   rpc ListEntries(ListEntriesRequest) returns (ListEntriesResponse);
   rpc UpdateDailyNoteContent(UpdateDailyNoteContentRequest) returns (DailyNote);
   rpc ListDatesWithContent(ListDatesWithContentRequest) returns (ListDatesWithContentResponse);
+  rpc GetSubpage(GetSubpageRequest) returns (Subpage);
+  rpc UpdateSubpageContent(UpdateSubpageContentRequest) returns (Subpage);
+  rpc ListSubpages(ListSubpagesRequest) returns (ListSubpagesResponse);
 }

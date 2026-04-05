@@ -1,12 +1,9 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import Markdown from "react-markdown";
-import rehypeRaw from "rehype-raw";
-import remarkGfm from "remark-gfm";
 import { visit } from "unist-util-visit";
-import { getDailyNote, updateDailyNoteContent } from "../api/client";
+import { getDailyNote, updateDailyNoteContent, listSubpages } from "../api/client";
 import { useGeolocation } from "../hooks/useGeolocation";
 
-import MarkdownEditor from "./MarkdownEditor";
+import NoteEditor from "./NoteEditor";
 import AudioRecorder from "./AudioRecorder";
 import PhotoCapture from "./PhotoCapture";
 
@@ -14,7 +11,7 @@ import PhotoCapture from "./PhotoCapture";
  * Rehype plugin that converts standalone YouTube URLs in paragraphs
  * into responsive embedded iframes using youtube-nocookie.com.
  */
-function rehypeYoutubeEmbed() {
+export function rehypeYoutubeEmbed() {
   const YT_REGEX =
     /^https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)(?:[&?].*)?$/;
 
@@ -95,7 +92,7 @@ function rehypeYoutubeEmbed() {
  * Rehype plugin that makes headings and nested list items collapsible
  * by wrapping them in <details open> / <summary> elements.
  */
-function rehypeCollapsible() {
+export function rehypeCollapsible() {
   const HEADING_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6"]);
 
   function headingLevel(tagName: string): number {
@@ -227,10 +224,12 @@ function rehypeCollapsible() {
 
 /**
  * Remark plugin that converts Obsidian-style [[wikilinks]] into
- * <span class="wikilink"> elements for styled rendering.
+ * clickable <a> elements that navigate to subpages within the same day.
+ * Links to existing subpages get class "wikilink"; missing ones get
+ * "wikilink wikilink-missing".
  */
-function remarkWikilinks() {
-  return (tree: any) => {
+export function remarkWikilinks(date: string, existingSubpages: Set<string>) {
+  return () => (tree: any) => {
     visit(tree, "text", (node: any, index: number | undefined, parent: any) => {
       if (index === undefined || !parent) return;
       const regex = /\[\[([^\]]+)\]\]/g;
@@ -248,10 +247,13 @@ function remarkWikilinks() {
         if (match.index > lastIndex) {
           children.push({ type: "text", value: value.slice(lastIndex, match.index) });
         }
-        // The wikilink as an inline HTML node
+        const name = match[1];
+        const exists = existingSubpages.has(name);
+        const cls = exists ? "wikilink" : "wikilink wikilink-missing";
+        const href = `/day/${date}/${encodeURIComponent(name)}`;
         children.push({
           type: "html",
-          value: `<span class="wikilink">${match[1]}</span>`,
+          value: `<a class="${cls}" href="${href}" data-subpage="${name}">${name}</a>`,
         });
         lastIndex = regex.lastIndex;
       }
@@ -271,7 +273,7 @@ function remarkWikilinks() {
 /**
  * React SVG icons for section headings, injected via component overrides.
  */
-const SECTION_ICONS_JSX: Record<string, React.ReactNode> = {
+export const SECTION_ICONS_JSX: Record<string, React.ReactNode> = {
   Summary: (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>
@@ -295,7 +297,7 @@ const SECTION_ICONS_JSX: Record<string, React.ReactNode> = {
  * inside <summary> (collapsible).
  * Also marks the paragraph after # Summary with a special class.
  */
-function rehypeSectionLabels() {
+export function rehypeSectionLabels() {
   return (tree: any) => {
     visit(tree, "element", (node: any, index: number | undefined, parent: any) => {
       if (index === undefined || !parent) return;
@@ -350,7 +352,7 @@ function getTextContent(node: any): string {
  * Rehype plugin that assigns a sequential data-checkbox-index to each
  * checkbox input so we can map a click back to the raw markdown.
  */
-function rehypeCheckboxIndex() {
+export function rehypeCheckboxIndex() {
   return (tree: any) => {
     let idx = 0;
     visit(tree, "element", (node: any) => {
@@ -371,7 +373,7 @@ function rehypeCheckboxIndex() {
  * relative filenames (e.g. "photo-abc12345.jpg") written into the markdown
  * resolve correctly in the web UI.
  */
-function rehypeAttachmentUrls(date: string) {
+export function rehypeAttachmentUrls(date: string) {
   return () => (tree: any) => {
     visit(tree, "element", (node: any) => {
       if (node.tagName !== "img" && node.tagName !== "audio") return;
@@ -398,23 +400,22 @@ function formatDateHeading(dateStr: string): string {
   });
 }
 
-type SaveStatus = "idle" | "saving" | "saved" | "error";
-
 export default function DailyNoteView({ date }: DailyNoteViewProps) {
   const [content, setContent] = useState("");
-  const [editContent, setEditContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [existingSubpages, setExistingSubpages] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await getDailyNote({ date });
+      const [data, subpagesResp] = await Promise.all([
+        getDailyNote({ date }),
+        listSubpages(date).catch(() => ({ names: [] as string[] })),
+      ]);
       setContent(data.content ?? "");
+      setExistingSubpages(new Set(subpagesResp.names ?? []));
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to load";
       if (msg.includes("404") || msg.includes("not found") || msg.includes("not_found")) {
@@ -429,9 +430,6 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
 
   useEffect(() => {
     load();
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
   }, [load]);
 
   const [showRecorder, setShowRecorder] = useState(false);
@@ -476,9 +474,8 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     }
   }, [showOverflowMenu]);
 
-  // Reset editing state when date changes
+  // Reset UI state when date changes
   useEffect(() => {
-    setEditing(false);
     setShowRecorder(false);
     setShowCamera(false);
     setShowAttachMenu(false);
@@ -487,17 +484,9 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     setShowOverflowMenu(false);
   }, [date]);
 
-
-  const doSave = useCallback(
+  const handleSave = useCallback(
     async (text: string) => {
-      setSaveStatus("saving");
-      try {
-        await updateDailyNoteContent(date, text);
-        setSaveStatus("saved");
-        setTimeout(() => setSaveStatus((s) => (s === "saved" ? "idle" : s)), 2000);
-      } catch {
-        setSaveStatus("error");
-      }
+      await updateDailyNoteContent(date, text);
     },
     [date]
   );
@@ -549,34 +538,9 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     const snippet = `\n\n---\n*${ts} — 📍 [${locationLabel}](${mapUrl})*\n`;
     const newContent = content + snippet;
     setContent(newContent);
-    doSave(newContent);
-  }, [geoPosition, locationTagged, content, doSave]);
+    handleSave(newContent);
+  }, [geoPosition, locationTagged, content, handleSave]);
 
-  function handleEditChange(text: string) {
-    setEditContent(text);
-    setSaveStatus("idle");
-
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      doSave(text);
-    }, 1000);
-  }
-
-  /** Toggle the nth checkbox in the raw markdown between [ ] and [x]. */
-  function toggleCheckbox(index: number) {
-    const checkboxRe = /- \[([ xX])\]/g;
-    let count = 0;
-    const newContent = content.replace(checkboxRe, (match, mark) => {
-      if (count++ === index) {
-        return mark.trim() ? "- [ ]" : "- [x]";
-      }
-      return match;
-    });
-    setContent(newContent);
-    doSave(newContent);
-  }
-
-  /** Collapse or expand all <details> section headings in the rendered note. */
   function toggleAllSections() {
     if (!proseRef.current) return;
     const next = !sectionsCollapsed;
@@ -586,27 +550,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     setSectionsCollapsed(next);
   }
 
-  function startEditing() {
-    const template = "# Summary\n\n# Notes\n\n# Links\n";
-    setEditContent(content.trim() ? content : template);
-    setEditing(true);
-  }
-
-  function handleSave() {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    setContent(editContent);
-    setEditing(false);
-    doSave(editContent);
-  }
-
-  function handleCancel() {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    setEditing(false);
-    setSaveStatus("idle");
-  }
-
   async function handleEntryCreated() {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     await load();
   }
 
@@ -626,34 +570,8 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     );
   }
 
-  return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between mb-3 md:mb-4">
-        <h2 className="text-lg md:text-xl font-semibold text-foreground">
-          {formatDateHeading(date)}
-        </h2>
-        <div className="flex items-center gap-3">
-          <span
-            className={`text-xs transition-opacity ${editing ? "hidden md:inline" : ""} ${
-              saveStatus === "idle" ? "opacity-0" : "opacity-100"
-            } ${
-              saveStatus === "saving"
-                ? "text-muted-foreground"
-                : saveStatus === "saved"
-                ? "text-accent"
-                : saveStatus === "error"
-                ? "text-destructive"
-                : ""
-            }`}
-          >
-            {saveStatus === "saving"
-              ? "Saving..."
-              : saveStatus === "saved"
-              ? "Saved"
-              : saveStatus === "error"
-              ? "Save failed"
-              : ""}
-          </span>
+  const toolbarExtra = (
+    <>
           {content.trim() && (
             <button
               onClick={toggleAllSections}
@@ -740,32 +658,11 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
               </div>
             )}
           </div>
-          {!editing ? (
-            <button
-              onClick={startEditing}
-              className="px-3 py-1.5 text-xs font-medium text-muted-foreground bg-muted rounded-md hover:bg-border transition-colors"
-            >
-              Edit
-            </button>
-          ) : (
-            <div className="hidden md:flex items-center gap-2">
-              <button
-                onClick={handleCancel}
-                className="px-3 py-1.5 text-xs font-medium text-muted-foreground bg-muted rounded-md hover:bg-border transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                className="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:opacity-90 transition-colors"
-              >
-                Done
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
+    </>
+  );
 
+  const beforeContent = (
+    <>
       {showRecorder && (
         <div className="mb-4">
           <AudioRecorder
@@ -840,127 +737,41 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
           </form>
         </div>
       )}
+    </>
+  );
 
-      <div className="flex-1 min-h-0 overflow-y-auto mb-4">
-        {editing ? (
-          <MarkdownEditor
-            value={editContent}
-            onChange={handleEditChange}
-            onSubmit={handleSave}
-            placeholder="Start writing..."
-            autoFocus
-          />
-        ) : content.trim() ? (
-          <div
-            ref={proseRef}
-            className="prose prose-sm max-w-none note-prose note-container"
-            onClick={(e) => {
-              const target = e.target as HTMLElement;
-              // Handle checkbox toggle without entering edit mode.
-              if (target.tagName === "INPUT" && (target as HTMLInputElement).type === "checkbox") {
-                e.preventDefault();
-                const idx = target.getAttribute("data-checkbox-index");
-                if (idx != null) toggleCheckbox(parseInt(idx, 10));
-                return;
-              }
-              // Don't enter edit mode when clicking interactive elements
-              if (target.closest("summary, details, a, audio, button, video, iframe, input")) return;
-              startEditing();
-            }}
-          >
-            <Markdown
-              remarkPlugins={[remarkGfm, remarkWikilinks]}
-              rehypePlugins={[rehypeRaw, rehypeYoutubeEmbed, rehypeCollapsible, rehypeSectionLabels, rehypeCheckboxIndex, rehypeAttachmentUrls(date)]}
-              components={{
-                h1: ({ className, children, ...props }) => {
-                  const cls = typeof className === "string" ? className : "";
-                  if (cls.includes("note-section-label")) {
-                    const text = typeof children === "string" ? children : String(children ?? "");
-                    const icon = SECTION_ICONS_JSX[text.trim()];
-                    return (
-                      <h1 className={cls} {...props}>
-                        {icon && <span className="note-section-icon">{icon}</span>}
-                        {children}
-                      </h1>
-                    );
-                  }
-                  return <h1 className={className} {...props}>{children}</h1>;
-                },
-                input: ({ type, checked, disabled: _disabled, ...props }) => {
-                  if (type === "checkbox") {
-                    // Render without disabled so click events fire.
-                    return <input type="checkbox" checked={checked} readOnly {...props} />;
-                  }
-                  return <input type={type} checked={checked} {...props} />;
-                },
-              }}
-            >
-              {content}
-            </Markdown>
-          </div>
-        ) : (
-          <div className="note-empty" onClick={startEditing}>
-            <p className="text-muted-foreground text-sm">
-              No entries yet. Click to start writing, or add an entry below.
-            </p>
-          </div>
-        )}
-      </div>
+  const afterContent = (
+    <div className="hidden md:block mt-12 pt-6 border-t border-border">
+      <p className="text-xs text-muted-foreground">
+        <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Cmd+D</kbd> today
+        <span className="mx-2">&middot;</span>
+        <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Cmd+/</kbd> chat
+        <span className="mx-2">&middot;</span>
+        <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Cmd+T</kbd> insert time
+        <span className="mx-2">&middot;</span>
+        <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Cmd+Enter</kbd> done editing
+        <span className="mx-2">&middot;</span>
+        <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Esc</kbd> exit edit
+      </p>
+    </div>
+  );
 
-      <div className="hidden md:block mt-12 pt-6 border-t border-border">
-        <p className="text-xs text-muted-foreground">
-          <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Cmd+D</kbd> today
-          <span className="mx-2">&middot;</span>
-          <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Cmd+/</kbd> chat
-          <span className="mx-2">&middot;</span>
-          <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Cmd+T</kbd> insert time
-          <span className="mx-2">&middot;</span>
-          <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Cmd+Enter</kbd> done editing
-          <span className="mx-2">&middot;</span>
-          <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Esc</kbd> exit edit
-        </p>
-      </div>
-
-      {/* Mobile bottom bar for save status + Cancel/Done when editing */}
-      {editing && (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border px-4 py-3 flex items-center justify-between z-40">
-          <span
-            className={`text-xs transition-opacity ${
-              saveStatus === "idle" ? "opacity-0" : "opacity-100"
-            } ${
-              saveStatus === "saving"
-                ? "text-muted-foreground"
-                : saveStatus === "saved"
-                ? "text-accent"
-                : saveStatus === "error"
-                ? "text-destructive"
-                : ""
-            }`}
-          >
-            {saveStatus === "saving"
-              ? "Saving..."
-              : saveStatus === "saved"
-              ? "Saved"
-              : saveStatus === "error"
-              ? "Save failed"
-              : ""}
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleCancel}
-              className="px-4 py-2 text-sm font-medium text-muted-foreground bg-muted rounded-md hover:bg-border transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:opacity-90 transition-colors"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      )}
+  return (
+    <div className="flex flex-col h-full">
+      <NoteEditor
+        title={<h2 className="text-lg md:text-xl font-semibold text-foreground truncate">{formatDateHeading(date)}</h2>}
+        content={content}
+        onContentChange={setContent}
+        onSave={handleSave}
+        date={date}
+        existingSubpages={existingSubpages}
+        emptyMessage="No entries yet. Click to start writing, or add an entry below."
+        emptyTemplate={"# Summary\n\n# Notes\n\n# Links\n"}
+        toolbarExtra={toolbarExtra}
+        beforeContent={beforeContent}
+        afterContent={afterContent}
+        proseRef={proseRef}
+      />
     </div>
   );
 }

@@ -10,6 +10,7 @@ import {
 } from "react-router-dom";
 import Calendar from "./components/Calendar";
 import DailyNoteView from "./components/DailyNote";
+import SubpageView from "./components/SubpageView";
 import ChatView from "./components/ChatView";
 import ClipPage from "./components/ClipPage";
 import WeekView from "./components/WeekView";
@@ -52,6 +53,32 @@ function DailyNotePage() {
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-4xl mx-auto px-4 md:px-6 py-6">
           <DailyNoteView key={selectedDate} date={selectedDate} />
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function SubpagePage() {
+  const { date, subpage } = useParams<{ date: string; subpage: string }>();
+  const navigate = useNavigate();
+  const today = useTodayStr();
+  const selectedDate = date || today;
+
+  function handleSelectDate(d: string) {
+    navigate(`/day/${d}`);
+  }
+
+  if (!subpage) {
+    return <Navigate to={`/day/${selectedDate}`} replace />;
+  }
+
+  return (
+    <div className="flex flex-col flex-1 overflow-hidden">
+      <Calendar selectedDate={selectedDate} onSelectDate={handleSelectDate} />
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-4xl mx-auto px-4 md:px-6 py-6">
+          <SubpageView key={`${selectedDate}-${subpage}`} date={selectedDate} name={decodeURIComponent(subpage)} />
         </div>
       </main>
     </div>
@@ -248,6 +275,7 @@ function AppLayout() {
       {/* Body */}
       <Routes>
         <Route path="/" element={<Navigate to={`/day/${today}`} replace />} />
+        <Route path="/day/:date/:subpage" element={<SubpagePage />} />
         <Route path="/day/:date" element={<DailyNotePage />} />
         <Route path="/week" element={<WeekView />} />
         <Route path="/week/:weekId" element={<WeekView />} />

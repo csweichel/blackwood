@@ -12,6 +12,8 @@ import type {
   ImportJobStatus,
   UserPreferences,
   UpdatePreferencesRequest,
+  Subpage,
+  ListSubpagesResponse,
 } from "./types";
 import { type EntryType, type EntrySource } from "./types";
 import {
@@ -385,5 +387,19 @@ export async function getPreferences(): Promise<UserPreferences> {
 
 export async function updatePreferences(req: UpdatePreferencesRequest): Promise<UserPreferences> {
   return rpc<UpdatePreferencesRequest, UserPreferences>("UpdatePreferences", req, PREFERENCES_SERVICE);
+}
+
+// --- Subpage API ---
+
+export async function getSubpage(date: string, name: string): Promise<Subpage> {
+  return rpc<{ date: string; name: string }, Subpage>("GetSubpage", { date, name });
+}
+
+export async function updateSubpageContent(date: string, name: string, content: string): Promise<Subpage> {
+  return rpc<{ date: string; name: string; content: string }, Subpage>("UpdateSubpageContent", { date, name, content });
+}
+
+export async function listSubpages(date: string): Promise<ListSubpagesResponse> {
+  return rpc<{ date: string }, ListSubpagesResponse>("ListSubpages", { date });
 }
 

@@ -197,6 +197,48 @@ func (s *Store) AttachmentPath(date, filename string) (string, error) {
 	return filepath.Join(s.dayDir(date), clean), nil
 }
 
+// SubpagePath returns the absolute path to a subpage markdown file within the
+// day directory for the given date. It validates the name the same way as
+// AttachmentPath and appends ".md".
+func (s *Store) SubpagePath(date, name string) (string, error) {
+	if name == "" {
+		return "", fmt.Errorf("invalid subpage name")
+	}
+	if strings.ContainsAny(name, "/\\") || strings.Contains(name, "..") || strings.ContainsRune(name, 0) {
+		return "", fmt.Errorf("invalid subpage name")
+	}
+	clean := filepath.Base(name)
+	if clean == "." || clean == string(filepath.Separator) {
+		return "", fmt.Errorf("invalid subpage name")
+	}
+	return filepath.Join(s.dayDir(date), clean+".md"), nil
+}
+
+// ListSubpageNames returns the names of all subpage .md files in the day
+// directory, excluding index.md. Names are returned without the .md extension.
+func (s *Store) ListSubpageNames(date string) ([]string, error) {
+	dir := s.dayDir(date)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read day directory: %w", err)
+	}
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasSuffix(name, ".md") || name == "index.md" {
+			continue
+		}
+		names = append(names, strings.TrimSuffix(name, ".md"))
+	}
+	return names, nil
+}
+
 // notePath returns the filesystem path for a daily note's markdown file.
 // Date format is "YYYY-MM-DD", stored as notes/YYYY/MM/DD/index.md.
 func (s *Store) notePath(date string) string {

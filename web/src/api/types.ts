@@ -158,3 +158,15 @@ export interface UpdatePreferencesRequest {
   timezone?: string;
   colorTheme?: ColorTheme;
 }
+
+// Subpage types
+
+export interface Subpage {
+  name: string;
+  content: string;
+  date: string;
+}
+
+export interface ListSubpagesResponse {
+  names: string[];
+}
