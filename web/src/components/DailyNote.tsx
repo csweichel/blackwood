@@ -4,8 +4,6 @@ import { getDailyNote, updateDailyNoteContent, listSubpages } from "../api/clien
 import { useGeolocation } from "../hooks/useGeolocation";
 
 import NoteEditor from "./NoteEditor";
-import AudioRecorder from "./AudioRecorder";
-import PhotoCapture from "./PhotoCapture";
 
 /**
  * Rehype plugin that converts standalone YouTube URLs in paragraphs
@@ -432,34 +430,12 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     load();
   }, [load]);
 
-  const [showRecorder, setShowRecorder] = useState(false);
-  const [showCamera, setShowCamera] = useState(false);
-  const [showAttachMenu, setShowAttachMenu] = useState(false);
-  const [showClipForm, setShowClipForm] = useState(false);
-  const [sectionsCollapsed, setSectionsCollapsed] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
-  const proseRef = useRef<HTMLDivElement>(null);
-  const [clipUrl, setClipUrl] = useState("");
-  const [clipLoading, setClipLoading] = useState(false);
-  const attachRef = useRef<HTMLDivElement>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
   const { position: geoPosition, loading: geoLoading, error: geoError, requestLocation } = useGeolocation();
   const [locationTagged, setLocationTagged] = useState(false);
-
-  // Close attach menu on outside click
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (attachRef.current && !attachRef.current.contains(e.target as Node)) {
-        setShowAttachMenu(false);
-      }
-    }
-    if (showAttachMenu) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [showAttachMenu]);
 
   // Close overflow menu on outside click
   useEffect(() => {
@@ -476,11 +452,6 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
 
   // Reset UI state when date changes
   useEffect(() => {
-    setShowRecorder(false);
-    setShowCamera(false);
-    setShowAttachMenu(false);
-    setShowClipForm(false);
-    setSectionsCollapsed(false);
     setShowOverflowMenu(false);
   }, [date]);
 
@@ -541,18 +512,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     handleSave(newContent);
   }, [geoPosition, locationTagged, content, handleSave]);
 
-  function toggleAllSections() {
-    if (!proseRef.current) return;
-    const next = !sectionsCollapsed;
-    proseRef.current.querySelectorAll("details").forEach((d) => {
-      d.open = !next;
-    });
-    setSectionsCollapsed(next);
-  }
 
-  async function handleEntryCreated() {
-    await load();
-  }
 
   if (loading) {
     return (
@@ -572,172 +532,49 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
 
   const toolbarExtra = (
     <>
-          {content.trim() && (
-            <button
-              onClick={toggleAllSections}
-              className="p-1.5 rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
-              title={sectionsCollapsed ? "Expand all sections" : "Collapse all sections"}
-            >
-              {sectionsCollapsed ? (
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7 20 5-5 5 5"/><path d="m7 4 5 5 5-5"/></svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
-              )}
-            </button>
-          )}
-          {content.trim() && (
-            <div className="relative" ref={overflowRef}>
+      {content.trim() && (
+        <div className="relative" ref={overflowRef}>
+          <button
+            onClick={() => setShowOverflowMenu((v) => !v)}
+            className={`p-1.5 rounded-md transition-colors ${showOverflowMenu ? "text-accent bg-muted" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+            title="More actions"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+          </button>
+          {showOverflowMenu && (
+            <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg z-50 min-w-[180px]">
               <button
-                onClick={() => setShowOverflowMenu((v) => !v)}
-                className={`p-1.5 rounded-md transition-colors ${showOverflowMenu ? "text-accent bg-muted" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
-                title="More actions"
+                onClick={() => { setShowOverflowMenu(false); generateSummary(); }}
+                disabled={summarizing}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left disabled:opacity-50"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z"/></svg>
+                {summarizing ? "Summarising…" : "Generate summary"}
               </button>
-              {showOverflowMenu && (
-                <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg z-50 min-w-[180px]">
-                  <button
-                    onClick={() => { setShowOverflowMenu(false); generateSummary(); }}
-                    disabled={summarizing}
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left disabled:opacity-50"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z"/></svg>
-                    {summarizing ? "Summarising…" : "Generate summary"}
-                  </button>
-                  <button
-                    onClick={() => { setShowOverflowMenu(false); downloadPdf(); }}
-                    disabled={pdfLoading}
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left disabled:opacity-50"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" x2="12" y1="18" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
-                    {pdfLoading ? "Exporting…" : "Export as PDF"}
-                  </button>
-                </div>
-              )}
+              <button
+                onClick={() => { setShowOverflowMenu(false); downloadPdf(); }}
+                disabled={pdfLoading}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left disabled:opacity-50"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" x2="12" y1="18" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
+                {pdfLoading ? "Exporting…" : "Export as PDF"}
+              </button>
             </div>
           )}
-          <div className="relative" ref={attachRef}>
-            <button
-              onClick={() => setShowAttachMenu((v) => !v)}
-              className={`p-1.5 rounded-md transition-colors ${showAttachMenu ? "text-accent bg-muted" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
-              title="Attach"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-            </button>
-            {showAttachMenu && (
-              <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg z-50 min-w-[160px]">
-                <button
-                  onClick={() => { setShowAttachMenu(false); setShowCamera(false); setShowRecorder(true); }}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
-                  Voice memo
-                </button>
-                <button
-                  onClick={() => { setShowAttachMenu(false); setShowRecorder(false); setShowCamera(true); }}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
-                  Photo
-                </button>
-                <button
-                  onClick={() => { setShowAttachMenu(false); requestLocation(); }}
-                  disabled={geoLoading || locationTagged}
-                  className={`flex items-center gap-2 px-3 py-2 text-sm w-full text-left ${locationTagged ? "text-accent" : geoLoading ? "text-muted-foreground opacity-50 cursor-wait" : geoError ? "text-destructive" : "text-foreground hover:bg-muted"}`}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-                  {locationTagged ? "Location tagged" : geoError ? geoError : "Location"}
-                </button>
-                <button
-                  onClick={() => { setShowAttachMenu(false); setShowClipForm(true); }}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                  Clip page
-                </button>
-              </div>
-            )}
-          </div>
+        </div>
+      )}
     </>
   );
 
-  const beforeContent = (
-    <>
-      {showRecorder && (
-        <div className="mb-4">
-          <AudioRecorder
-            date={date}
-            onCreated={() => { setShowRecorder(false); handleEntryCreated(); }}
-            onClose={() => setShowRecorder(false)}
-            autoStart
-          />
-        </div>
-      )}
-
-      {showCamera && (
-        <div className="mb-4">
-          <PhotoCapture
-            date={date}
-            onCreated={() => { setShowCamera(false); handleEntryCreated(); }}
-            onClose={() => setShowCamera(false)}
-          />
-        </div>
-      )}
-
-      {showClipForm && (
-        <div className="mb-4 bg-card border border-border rounded-lg p-3">
-          <form
-            className="flex items-center gap-2"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              if (!clipUrl.trim()) return;
-              setClipLoading(true);
-              try {
-                const resp = await fetch("/api/clip", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ url: clipUrl.trim() }),
-                });
-                if (!resp.ok) throw new Error("Clip failed");
-                setClipUrl("");
-                setShowClipForm(false);
-                await load();
-              } catch (err) {
-                console.error("Clip page failed:", err);
-              } finally {
-                setClipLoading(false);
-              }
-            }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground shrink-0"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-            <input
-              type="url"
-              value={clipUrl}
-              onChange={(e) => setClipUrl(e.target.value)}
-              placeholder="Paste URL to clip..."
-              className="flex-1 bg-transparent border border-border rounded-md px-2 py-1 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-              autoFocus
-              disabled={clipLoading}
-            />
-            <button
-              type="submit"
-              disabled={clipLoading || !clipUrl.trim()}
-              className="px-3 py-1 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:opacity-90 transition-colors disabled:opacity-50"
-            >
-              {clipLoading ? "Clipping..." : "Clip"}
-            </button>
-            <button
-              type="button"
-              onClick={() => { setShowClipForm(false); setClipUrl(""); }}
-              className="p-1 text-muted-foreground hover:text-foreground transition-colors"
-              title="Cancel"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
-            </button>
-          </form>
-        </div>
-      )}
-    </>
+  const attachMenuExtra = (
+    <button
+      onClick={() => requestLocation()}
+      disabled={geoLoading || locationTagged}
+      className={`flex items-center gap-2 px-3 py-2 text-sm w-full text-left ${locationTagged ? "text-accent" : geoLoading ? "text-muted-foreground opacity-50 cursor-wait" : geoError ? "text-destructive" : "text-foreground hover:bg-muted"}`}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+      {locationTagged ? "Location tagged" : geoError ? geoError : "Location"}
+    </button>
   );
 
   const afterContent = (
@@ -763,14 +600,14 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
         content={content}
         onContentChange={setContent}
         onSave={handleSave}
+        onEntryCreated={load}
         date={date}
         existingSubpages={existingSubpages}
         emptyMessage="No entries yet. Click to start writing, or add an entry below."
         emptyTemplate={"# Summary\n\n# Notes\n\n# Links\n"}
         toolbarExtra={toolbarExtra}
-        beforeContent={beforeContent}
+        attachMenuExtra={attachMenuExtra}
         afterContent={afterContent}
-        proseRef={proseRef}
       />
     </div>
   );

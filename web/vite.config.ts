@@ -5,9 +5,10 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
+    allowedHosts: true,
     proxy: {
-      '/blackwood.v1': 'http://localhost:8080',
-      '/api': 'http://localhost:8080',
+      '/blackwood.v1': 'http://localhost:8090',
+      '/api': 'http://localhost:8090',
     }
   }
 })

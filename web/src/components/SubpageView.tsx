@@ -49,7 +49,6 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
         msg.includes("not found") ||
         msg.includes("404")
       ) {
-        // Auto-create the subpage and enter edit mode.
         try {
           await updateSubpageContent(date, name, "");
           setContent("");
@@ -98,7 +97,6 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-sm text-muted-foreground mb-3">
         <Link
           to={`/day/${date}`}
@@ -115,10 +113,12 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
         content={content}
         onContentChange={setContent}
         onSave={handleSave}
+        onEntryCreated={load}
         date={date}
         existingSubpages={existingSubpages}
         emptyMessage="No content yet. Click to start writing."
         startInEditMode={autoEdit}
+        showAttach={false}
       />
     </div>
   );

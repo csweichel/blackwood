@@ -1,9 +1,11 @@
-import { useState, useCallback, useRef, type RefObject } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Markdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
 import MarkdownEditor from "./MarkdownEditor";
+import AudioRecorder from "./AudioRecorder";
+import PhotoCapture from "./PhotoCapture";
 import {
   rehypeYoutubeEmbed,
   rehypeCollapsible,
@@ -17,35 +19,27 @@ import {
 export type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 interface NoteEditorProps {
-  /** Markdown content to display/edit. */
   content: string;
-  /** Called when content changes (debounced saves are handled internally). */
   onContentChange: (content: string) => void;
-  /** Persist content to the backend. */
   onSave: (content: string) => Promise<void>;
-  /** Date for resolving attachment URLs and wikilinks. */
+  /** Called after an attachment (voice/photo/clip) is created. */
+  onEntryCreated?: () => void;
   date: string;
-  /** Set of subpage names that exist for this date. */
   existingSubpages: Set<string>;
-  /** Placeholder for the editor when content is empty. */
   emptyMessage?: string;
-  /** If true, start in edit mode immediately. */
   startInEditMode?: boolean;
-  /** Extra toolbar elements rendered before the edit/cancel/done buttons. */
+  /** Extra toolbar buttons rendered before the collapse/attach/edit buttons. */
   toolbarExtra?: React.ReactNode;
-  /** Extra content rendered between the toolbar and the editor/viewer. */
-  beforeContent?: React.ReactNode;
-  /** Extra content rendered after the editor/viewer. */
+  /** Extra items rendered inside the attach dropdown (e.g. location). */
+  attachMenuExtra?: React.ReactNode;
   afterContent?: React.ReactNode;
-  /** Optional ref forwarded to the prose container div for DOM operations. */
-  proseRef?: RefObject<HTMLDivElement | null>;
-  /** Template content used when starting to edit an empty note. */
   emptyTemplate?: string;
-  /** Title rendered on the left side of the toolbar row. */
   title?: React.ReactNode;
+  /** Show the attach button and panels (voice/photo/clip). Defaults to true. */
+  showAttach?: boolean;
 }
 
-function SaveStatusIndicator({ status, editing, className }: { status: SaveStatus; editing: boolean; className?: string }) {
+function SaveStatusIndicator({ status, editing }: { status: SaveStatus; editing: boolean }) {
   return (
     <span
       className={`text-xs transition-opacity ${editing ? "hidden md:inline" : ""} ${
@@ -58,7 +52,7 @@ function SaveStatusIndicator({ status, editing, className }: { status: SaveStatu
             : status === "error"
               ? "text-destructive"
               : ""
-      } ${className ?? ""}`}
+      }`}
     >
       {status === "saving"
         ? "Saving..."
@@ -71,34 +65,55 @@ function SaveStatusIndicator({ status, editing, className }: { status: SaveStatu
   );
 }
 
-/**
- * Shared markdown view/edit component used by DailyNoteView and SubpageView.
- * Handles the edit toggle, CodeMirror editor, markdown rendering with all
- * plugins, checkbox toggling, auto-save with debounce, and the mobile
- * editing bar.
- */
 export default function NoteEditor({
   content,
   onContentChange,
   onSave,
+  onEntryCreated,
   date,
   existingSubpages,
   emptyMessage = "No content yet. Click to start writing.",
   startInEditMode = false,
   toolbarExtra,
-  beforeContent,
+  attachMenuExtra,
   afterContent,
-  proseRef: externalProseRef,
   emptyTemplate,
   title,
+  showAttach = true,
 }: NoteEditorProps) {
   const navigate = useNavigate();
+
+  // Edit state
   const [editContent, setEditContent] = useState("");
   const [editing, setEditing] = useState(startInEditMode);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const internalProseRef = useRef<HTMLDivElement>(null);
-  const proseRef = externalProseRef ?? internalProseRef;
+  const proseRef = useRef<HTMLDivElement>(null);
+
+  // Collapse state
+  const [sectionsCollapsed, setSectionsCollapsed] = useState(false);
+
+  // Attach state
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [showRecorder, setShowRecorder] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+  const [showClipForm, setShowClipForm] = useState(false);
+  const [clipUrl, setClipUrl] = useState("");
+  const [clipLoading, setClipLoading] = useState(false);
+  const attachRef = useRef<HTMLDivElement>(null);
+
+  // Close attach menu on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (attachRef.current && !attachRef.current.contains(e.target as Node)) {
+        setShowAttachMenu(false);
+      }
+    }
+    if (showAttachMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showAttachMenu]);
 
   const doSave = useCallback(
     async (text: string) => {
@@ -118,22 +133,25 @@ export default function NoteEditor({
     setEditContent(text);
     setSaveStatus("idle");
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      doSave(text);
-    }, 1000);
+    saveTimerRef.current = setTimeout(() => doSave(text), 1000);
   }
 
   function toggleCheckbox(index: number) {
     const checkboxRe = /- \[([ xX])\]/g;
     let count = 0;
     const newContent = content.replace(checkboxRe, (match, mark) => {
-      if (count++ === index) {
-        return mark.trim() ? "- [ ]" : "- [x]";
-      }
+      if (count++ === index) return mark.trim() ? "- [ ]" : "- [x]";
       return match;
     });
     onContentChange(newContent);
     doSave(newContent);
+  }
+
+  function toggleAllSections() {
+    if (!proseRef.current) return;
+    const next = !sectionsCollapsed;
+    proseRef.current.querySelectorAll("details").forEach((d) => { d.open = !next; });
+    setSectionsCollapsed(next);
   }
 
   function startEditing() {
@@ -154,14 +172,69 @@ export default function NoteEditor({
     setSaveStatus("idle");
   }
 
+  function handleAttachmentCreated() {
+    setShowRecorder(false);
+    setShowCamera(false);
+    onEntryCreated?.();
+  }
+
   return (
     <>
-      {/* Toolbar row: title + save status + extra buttons + edit/cancel/done */}
+      {/* Toolbar */}
       <div className="flex items-center gap-3 mb-3 md:mb-4">
-        {title && <div className="flex-1 min-w-0">{title}</div>}
-        {!title && <div className="flex-1" />}
+        {title ? <div className="flex-1 min-w-0">{title}</div> : <div className="flex-1" />}
         <SaveStatusIndicator status={saveStatus} editing={editing} />
         {toolbarExtra}
+        {content.trim() && (
+          <button
+            onClick={toggleAllSections}
+            className="p-1.5 rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
+            title={sectionsCollapsed ? "Expand all sections" : "Collapse all sections"}
+          >
+            {sectionsCollapsed ? (
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7 20 5-5 5 5"/><path d="m7 4 5 5 5-5"/></svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
+            )}
+          </button>
+        )}
+        {showAttach && (
+          <div className="relative" ref={attachRef}>
+            <button
+              onClick={() => setShowAttachMenu((v) => !v)}
+              className={`p-1.5 rounded-md transition-colors ${showAttachMenu ? "text-accent bg-muted" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+              title="Attach"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            </button>
+            {showAttachMenu && (
+              <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg z-50 min-w-[160px]">
+                <button
+                  onClick={() => { setShowAttachMenu(false); setShowCamera(false); setShowRecorder(true); }}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                  Voice memo
+                </button>
+                <button
+                  onClick={() => { setShowAttachMenu(false); setShowRecorder(false); setShowCamera(true); }}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+                  Photo
+                </button>
+                {attachMenuExtra}
+                <button
+                  onClick={() => { setShowAttachMenu(false); setShowClipForm(true); }}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                  Clip page
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         {!editing ? (
           <button
             onClick={startEditing}
@@ -187,7 +260,79 @@ export default function NoteEditor({
         )}
       </div>
 
-      {beforeContent}
+      {/* Attachment panels */}
+      {showRecorder && (
+        <div className="mb-4">
+          <AudioRecorder
+            date={date}
+            onCreated={handleAttachmentCreated}
+            onClose={() => setShowRecorder(false)}
+            autoStart
+          />
+        </div>
+      )}
+      {showCamera && (
+        <div className="mb-4">
+          <PhotoCapture
+            date={date}
+            onCreated={handleAttachmentCreated}
+            onClose={() => setShowCamera(false)}
+          />
+        </div>
+      )}
+      {showClipForm && (
+        <div className="mb-4 bg-card border border-border rounded-lg p-3">
+          <form
+            className="flex items-center gap-2"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!clipUrl.trim()) return;
+              setClipLoading(true);
+              try {
+                const resp = await fetch("/api/clip", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ url: clipUrl.trim() }),
+                });
+                if (!resp.ok) throw new Error("Clip failed");
+                setClipUrl("");
+                setShowClipForm(false);
+                onEntryCreated?.();
+              } catch (err) {
+                console.error("Clip page failed:", err);
+              } finally {
+                setClipLoading(false);
+              }
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground shrink-0"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            <input
+              type="url"
+              value={clipUrl}
+              onChange={(e) => setClipUrl(e.target.value)}
+              placeholder="Paste URL to clip..."
+              className="flex-1 bg-transparent border border-border rounded-md px-2 py-1 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+              autoFocus
+              disabled={clipLoading}
+            />
+            <button
+              type="submit"
+              disabled={clipLoading || !clipUrl.trim()}
+              className="px-3 py-1 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:opacity-90 transition-colors disabled:opacity-50"
+            >
+              {clipLoading ? "Clipping..." : "Clip"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowClipForm(false); setClipUrl(""); }}
+              className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+              title="Cancel"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* Content area */}
       <div className="flex-1 min-h-0 overflow-y-auto mb-4">

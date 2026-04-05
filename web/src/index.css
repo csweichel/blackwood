@@ -314,14 +314,10 @@ body {
 
 /* Details containing section labels get spacing */
 .note-prose > details:has(> summary .note-section-label) {
-  margin-top: 1.75rem;
+  padding-top: 1.75rem;
 }
 
-.note-prose > details:first-child {
-  margin-top: 0;
-}
-
-/* Content inside section details gets left indent */
+/* Content inside section details gets left indent aligned with heading text */
 .note-prose > details:has(> summary .note-section-label) > *:not(summary) {
   padding-left: 1.5rem;
 }
@@ -335,11 +331,12 @@ body {
 }
 
 .note-prose > details:has(> summary .note-section-label) details:not(.list-collapse) {
-  margin-top: 0.75rem;
+  margin-top: 1em;
 }
 
+/* Nested details content aligns with its heading text (no extra indent) */
 .note-prose > details:has(> summary .note-section-label) details > *:not(summary) {
-  padding-left: 1rem;
+  padding-left: 0;
 }
 
 /* Summary text — the paragraph right after the Summary label */
@@ -352,7 +349,7 @@ body {
 
 /* --- Collapsible sections --- */
 
-.note-prose details { /* no extra margin — inherits from content */ }
+.note-prose details:has(> summary > h1, > summary > h2, > summary > h3, > summary > h4) { padding-top: 1em; }
 .note-prose summary { cursor: pointer; list-style: none; }
 .note-prose summary::-webkit-details-marker { display: none; }
 .note-prose summary::marker { display: none; }
