@@ -64,11 +64,19 @@ func TestListSubpageNames(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	// index.md should be excluded.
-	os.WriteFile(filepath.Join(dayDir, "index.md"), []byte("# Notes"), 0o644)
-	os.WriteFile(filepath.Join(dayDir, "Foobar.md"), []byte("hello"), 0o644)
-	os.WriteFile(filepath.Join(dayDir, "Meeting.md"), []byte("world"), 0o644)
-	// Non-.md files should be excluded.
-	os.WriteFile(filepath.Join(dayDir, "photo.jpg"), []byte{0xff}, 0o644)
+	for _, f := range []struct {
+		name    string
+		content []byte
+	}{
+		{"index.md", []byte("# Notes")},
+		{"Foobar.md", []byte("hello")},
+		{"Meeting.md", []byte("world")},
+		{"photo.jpg", []byte{0xff}}, // non-.md files should be excluded
+	} {
+		if err := os.WriteFile(filepath.Join(dayDir, f.name), f.content, 0o644); err != nil {
+			t.Fatalf("write %s: %v", f.name, err)
+		}
+	}
 
 	names, err = s.ListSubpageNames(date)
 	if err != nil {
