@@ -1,12 +1,48 @@
 import { useRef, useEffect } from "react";
 import { EditorView, keymap, placeholder as phPlugin } from "@codemirror/view";
-import { EditorState } from "@codemirror/state";
+import { EditorState, EditorSelection } from "@codemirror/state";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { defaultKeymap, indentWithTab, history, historyKeymap } from "@codemirror/commands";
 import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { searchKeymap } from "@codemirror/search";
+
+/** Toggle a markdown inline marker (e.g. `**` for bold, `*` for italic) around the selection. */
+function toggleMarkdownMarker(view: EditorView, marker: string): boolean {
+  const { state } = view;
+  const changes = state.changeByRange((range) => {
+    const selected = state.sliceDoc(range.from, range.to);
+    if (
+      range.from >= marker.length &&
+      range.to + marker.length <= state.doc.length &&
+      state.sliceDoc(range.from - marker.length, range.from) === marker &&
+      state.sliceDoc(range.to, range.to + marker.length) === marker
+    ) {
+      // Already wrapped — remove markers
+      return {
+        changes: [
+          { from: range.from - marker.length, to: range.from, insert: "" },
+          { from: range.to, to: range.to + marker.length, insert: "" },
+        ],
+        range: EditorSelection.range(
+          range.from - marker.length,
+          range.to - marker.length,
+        ),
+      };
+    }
+    // Wrap selection (or insert empty markers when nothing is selected)
+    const insert = `${marker}${selected}${marker}`;
+    return {
+      changes: { from: range.from, to: range.to, insert },
+      range: selected
+        ? EditorSelection.range(range.from, range.from + insert.length)
+        : EditorSelection.cursor(range.from + marker.length),
+    };
+  });
+  view.dispatch(state.update(changes, { userEvent: "input.format" }));
+  return true;
+}
 
 // Minimal highlight style that makes markdown structure visible while editing
 const markdownHighlight = HighlightStyle.define([
@@ -118,6 +154,14 @@ export default function MarkdownEditor({
               onSubmitRef.current?.();
               return true;
             },
+          },
+          {
+            key: "Mod-b",
+            run: (view) => toggleMarkdownMarker(view, "**"),
+          },
+          {
+            key: "Mod-i",
+            run: (view) => toggleMarkdownMarker(view, "*"),
           },
           ...defaultKeymap,
           ...historyKeymap,
