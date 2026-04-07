@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/csweichel/blackwood/internal/storage"
@@ -57,11 +58,27 @@ func ValidateSession(ctx context.Context, store *storage.Store, token string) bo
 	return time.Now().Before(expiresAt)
 }
 
-// GetSessionToken extracts the session token from the request cookie.
+// GetSessionToken extracts the session token from the request.
+// It checks the Authorization header first (Bearer token), then falls
+// back to the session cookie. This allows API clients like browser
+// extensions to authenticate without cookies.
 func GetSessionToken(r *http.Request) string {
+	if token := getBearerToken(r); token != "" {
+		return token
+	}
 	c, err := r.Cookie(SessionCookieName)
 	if err != nil {
 		return ""
 	}
 	return c.Value
+}
+
+// getBearerToken extracts a Bearer token from the Authorization header.
+func getBearerToken(r *http.Request) string {
+	auth := r.Header.Get("Authorization")
+	const prefix = "Bearer "
+	if len(auth) > len(prefix) && strings.EqualFold(auth[:len(prefix)], prefix) {
+		return auth[len(prefix):]
+	}
+	return ""
 }

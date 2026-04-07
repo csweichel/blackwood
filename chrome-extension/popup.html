@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 320px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 13px;
+      color: #1a1a1a;
+      background: #fff;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-bottom: 1px solid #e5e5e5;
+    }
+
+    .header h1 { font-size: 14px; font-weight: 600; }
+
+    .icon-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      color: #666;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+    }
+    .icon-btn:hover { background: #f0f0f0; }
+
+    .content { padding: 14px; }
+
+    .page-info {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .page-favicon {
+      width: 20px;
+      height: 20px;
+      border-radius: 3px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .page-title {
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.3;
+      word-break: break-word;
+    }
+
+    .page-url {
+      font-size: 11px;
+      color: #888;
+      margin-top: 2px;
+      word-break: break-all;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 9px 0;
+      font-size: 13px;
+      font-weight: 500;
+      color: #fff;
+      background: #2d372d;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn:hover { background: #3d4d3d; }
+    .btn:disabled { background: #ccc; cursor: default; }
+
+    .btn-danger {
+      background: none;
+      color: #c0392b;
+      border: 1px solid #e5e5e5;
+      margin-top: 8px;
+    }
+    .btn-danger:hover { background: #fdf0ef; }
+
+    .status {
+      margin-top: 10px;
+      font-size: 12px;
+      text-align: center;
+    }
+    .status.error { color: #c0392b; }
+    .status.success { color: #27ae60; }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: #555;
+      margin-bottom: 4px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 7px 10px;
+      font-size: 13px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      outline: none;
+    }
+    input[type="text"]:focus { border-color: #2d372d; }
+
+    .hint {
+      font-size: 11px;
+      color: #999;
+      margin-top: 4px;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-bottom: 10px;
+      font-size: 12px;
+      color: #666;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .back-link:hover { color: #333; }
+
+    .login-desc {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 12px;
+    }
+
+    .code-input {
+      text-align: center;
+      letter-spacing: 0.4em;
+      font-size: 18px;
+      font-weight: 500;
+      margin-bottom: 10px;
+    }
+
+    .auth-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 500;
+    }
+    .auth-badge.ok { background: #e8f5e9; color: #2e7d32; }
+    .auth-badge.none { background: #f5f5f5; color: #999; }
+
+    .field-group + .field-group { margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Blackwood Clipper</h1>
+    <button class="icon-btn" id="settingsToggle" title="Settings">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
+        <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.421 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.421-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.116l.094-.318z"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Clip view -->
+  <div class="content view active" id="clipView">
+    <div class="page-info">
+      <img class="page-favicon" id="favicon" src="" alt="">
+      <div>
+        <div class="page-title" id="pageTitle">Loading…</div>
+        <div class="page-url" id="pageUrl"></div>
+      </div>
+    </div>
+    <button class="btn" id="clipBtn" disabled>Clip this page</button>
+    <div class="status" id="clipStatus"></div>
+  </div>
+
+  <!-- Login view -->
+  <div class="content view" id="loginView">
+    <a class="back-link" id="loginBack">← Back</a>
+    <div class="login-desc">Enter the 6-digit code from your authenticator app to connect to Blackwood.</div>
+    <input type="text" id="totpCode" class="code-input" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" placeholder="000000" autocomplete="one-time-code">
+    <button class="btn" id="loginBtn" disabled>Login</button>
+    <div class="status" id="loginStatus"></div>
+  </div>
+
+  <!-- Settings view -->
+  <div class="content view" id="settingsView">
+    <a class="back-link" id="settingsBack">← Back</a>
+
+    <div class="field-group">
+      <label for="serverUrl">Blackwood Server URL</label>
+      <input type="text" id="serverUrl" placeholder="http://localhost:8080">
+      <div class="hint">Base URL of your Blackwood instance (no trailing slash).</div>
+    </div>
+
+    <div class="field-group">
+      <label>Authentication</label>
+      <div id="authStatus"></div>
+    </div>
+
+    <button class="btn" id="saveBtn">Save</button>
+    <div class="status" id="settingsStatus"></div>
+
+    <button class="btn btn-danger" id="logoutBtn" style="display:none">Logout</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

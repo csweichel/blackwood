@@ -214,6 +214,11 @@ func main() {
 			os.Exit(1)
 		}
 		srv.SetAuthMiddleware(authMiddleware)
+
+		// Token endpoint for API clients (browser extensions, CLI) that
+		// cannot use HttpOnly session cookies.
+		srv.Handle("POST /api/auth/token", auth.NewTokenHandler(store, auth.NewRateLimiter()))
+
 		slog.Info("TOTP authentication enabled")
 	} else {
 		if err := auth.Cleanup(store); err != nil {

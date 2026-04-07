@@ -18,8 +18,9 @@ func Middleware(store *storage.Store) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			path := r.URL.Path
 
-			// Always allow auth routes through (Connect service + any legacy paths).
-			if strings.HasPrefix(path, "/blackwood.v1.AuthService/") || strings.HasPrefix(path, "/auth/") {
+			// Always allow auth routes through (Connect service, legacy paths,
+			// and the token endpoint for API clients).
+			if strings.HasPrefix(path, "/blackwood.v1.AuthService/") || strings.HasPrefix(path, "/auth/") || strings.HasPrefix(path, "/api/auth/") {
 				next.ServeHTTP(w, r)
 				return
 			}
