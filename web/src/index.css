@@ -127,34 +127,35 @@ body {
   --tw-prose-code: var(--foreground);
   --tw-prose-pre-code: var(--foreground);
   --tw-prose-pre-bg: var(--muted);
-  line-height: 1.75;
+  line-height: 1.7;
   font-size: 0.9375rem;
 }
 
 .note-prose h1 {
-  font-size: 1.375rem;
-  font-weight: 600;
-  margin-top: 1.5em;
-  margin-bottom: 0.5em;
-  line-height: 1.3;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 2em;
+  margin-bottom: 0.25em;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
   color: var(--foreground);
 }
 
 .note-prose h2 {
-  font-size: 1.175rem;
+  font-size: 1.25rem;
   font-weight: 600;
-  margin-top: 1.4em;
-  margin-bottom: 0.4em;
-  line-height: 1.35;
+  margin-top: 1.75em;
+  margin-bottom: 0.25em;
+  line-height: 1.3;
   color: var(--foreground);
 }
 
 .note-prose h3 {
-  font-size: 1.05rem;
+  font-size: 1.0625rem;
   font-weight: 600;
-  margin-top: 1.25em;
-  margin-bottom: 0.35em;
-  line-height: 1.4;
+  margin-top: 1.5em;
+  margin-bottom: 0.25em;
+  line-height: 1.35;
   color: var(--foreground);
 }
 
@@ -165,20 +166,19 @@ body {
 }
 
 .note-prose p {
-  margin-top: 0.6em;
-  margin-bottom: 0.6em;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
 }
 
 .note-prose blockquote {
-  border-left: 2px solid var(--accent);
-  padding: 0.75em 1em;
+  border-left: 3px solid var(--foreground);
+  padding: 0.125em 0 0.125em 1em;
   margin-left: 0;
   margin-top: 0.75em;
   margin-bottom: 0.75em;
-  color: var(--muted-foreground);
+  color: var(--foreground);
   font-style: normal;
-  background: var(--muted);
-  border-radius: 0 0.375rem 0.375rem 0;
+  background: transparent;
 }
 
 .note-prose blockquote p {
@@ -188,11 +188,12 @@ body {
 
 .note-prose code:not(pre code) {
   background: var(--muted);
-  padding: 0.15em 0.35em;
-  border-radius: 0.25rem;
+  padding: 0.125em 0.375em;
+  border-radius: 0.1875rem;
   font-size: 0.85em;
   font-weight: 400;
   font-family: 'JetBrains Mono', Menlo, monospace;
+  color: var(--destructive);
 }
 
 .note-prose code::before,
@@ -202,9 +203,8 @@ body {
 
 .note-prose pre {
   background: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  padding: 0.875em 1em;
+  border-radius: 0.25rem;
+  padding: 1em 1.25em;
   overflow-x: auto;
   font-size: 0.8125rem;
   line-height: 1.6;
@@ -225,21 +225,28 @@ body {
 
 .note-prose ul,
 .note-prose ol {
-  margin-top: 0.5em;
-  margin-bottom: 0.5em;
+  margin-top: 0.125em;
+  margin-bottom: 0.125em;
   padding-left: 1.5em;
 }
 
 .note-prose li {
-  margin-top: 0.2em;
-  margin-bottom: 0.2em;
+  margin-top: 1px;
+  margin-bottom: 1px;
+  padding-left: 0.125em;
+  line-height: 1.7;
+}
+
+.note-prose li > ul,
+.note-prose li > ol {
+  margin-top: 1px;
+  margin-bottom: 0;
 }
 
 .note-prose hr {
-  width: 2.5rem;
-  margin: 1.25em auto;
-  border-color: var(--border);
-  border-width: 0.5px;
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.5em 0;
 }
 
 .note-prose img {
@@ -334,10 +341,12 @@ body {
   margin-top: 1em;
 }
 
-/* Nested details content aligns with its heading text (no extra indent) */
+/* Align section content with heading text (after the chevron).
+   The chevron is 1rem wide + inline gap ≈ 1.25rem total offset. */
 .note-prose > details:has(> summary .note-section-label) details > *:not(summary) {
-  padding-left: 0;
+  margin-left: 1.25rem;
 }
+
 
 /* Summary text — the paragraph right after the Summary label */
 .note-summary {
@@ -350,7 +359,7 @@ body {
 /* --- Collapsible sections --- */
 
 .note-prose details:has(> summary > h1, > summary > h2, > summary > h3, > summary > h4) { padding-top: 1em; }
-.note-prose summary { cursor: pointer; list-style: none; }
+.note-prose summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 0.25rem; }
 .note-prose summary::-webkit-details-marker { display: none; }
 .note-prose summary::marker { display: none; }
 
@@ -390,22 +399,26 @@ body {
 .note-prose input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
-  width: 1.125rem;
-  height: 1.125rem;
+  width: 1rem;
+  height: 1rem;
   border: 1.5px solid var(--border-strong);
-  border-radius: 0.25rem;
+  border-radius: 0.1875rem;
   background: transparent;
   cursor: pointer;
   vertical-align: middle;
   position: relative;
-  margin-right: 0.5rem;
+  margin-right: 0.5em;
   flex-shrink: 0;
-  margin-top: 0;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.note-prose input[type="checkbox"]:hover {
+  border-color: var(--accent);
 }
 
 .note-prose input[type="checkbox"]:checked {
-  background: var(--foreground);
-  border-color: var(--foreground);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .note-prose input[type="checkbox"]:checked::after {
@@ -413,19 +426,24 @@ body {
   position: absolute;
   left: 50%;
   top: 45%;
-  width: 5px;
-  height: 9px;
-  border: solid var(--background);
-  border-width: 0 2px 2px 0;
+  width: 4px;
+  height: 8px;
+  border: solid var(--accent-foreground);
+  border-width: 0 1.5px 1.5px 0;
   transform: translate(-50%, -55%) rotate(45deg);
 }
 
 /* Task list items: flex layout for checkbox alignment */
 .note-prose li:has(> input[type="checkbox"]) {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   list-style: none;
   margin-left: -1.5em;
+  padding-left: 0;
+}
+
+.note-prose li:has(> input[type="checkbox"]) > input[type="checkbox"] {
+  margin-top: 0.3em;
 }
 
 /* Checked items get strikethrough + muted text */
@@ -434,13 +452,20 @@ body {
   color: var(--muted-foreground);
 }
 
-/* Bullet list styling — filled circles */
-.note-prose ul:not(:has(> li > input[type="checkbox"])) {
-  list-style-type: disc;
-}
+/* --- Bullet lists: disc → circle → square hierarchy --- */
+.note-prose ul { list-style-type: disc; }
+.note-prose ul ul { list-style-type: circle; }
+.note-prose ul ul ul { list-style-type: square; }
 
-.note-prose ul:not(:has(> li > input[type="checkbox"])) > li::marker {
+.note-prose ul > li::marker { color: var(--foreground); }
+
+/* --- Ordered lists --- */
+.note-prose ol { list-style-type: decimal; }
+.note-prose ol ol { list-style-type: lower-alpha; }
+
+.note-prose ol > li::marker {
   color: var(--foreground);
+  font-variant-numeric: tabular-nums;
 }
 
 
