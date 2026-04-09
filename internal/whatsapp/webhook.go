@@ -28,7 +28,7 @@ type WebhookHandler struct {
 	store       *storage.Store
 	transcriber transcribe.Transcriber // may be nil
 	describer   describe.Describer     // may be nil
-	indexer     *index.Index           // may be nil
+	indexer     index.Indexer           // may be nil
 }
 
 // WebhookConfig holds the configuration for the WhatsApp webhook.
@@ -39,7 +39,7 @@ type WebhookConfig struct {
 	PhoneNumberID string
 }
 
-func NewWebhookHandler(cfg WebhookConfig, store *storage.Store, transcriber transcribe.Transcriber, describer describe.Describer, indexer *index.Index) *WebhookHandler {
+func NewWebhookHandler(cfg WebhookConfig, store *storage.Store, transcriber transcribe.Transcriber, describer describe.Describer, indexer index.Indexer) *WebhookHandler {
 	return &WebhookHandler{
 		verifyToken: cfg.VerifyToken,
 		appSecret:   cfg.AppSecret,

@@ -115,18 +115,43 @@ func main() {
 		slog.Info("audio transcriber enabled")
 	}
 
-	// Set up the semantic index and RAG engine if OpenAI API key is configured.
-	var semanticIndex *index.Index
+	// Set up the semantic index and RAG engine.
+	// QMD (local) takes priority over OpenAI when enabled.
+	var semanticIndex index.Indexer
 	var ragEngine *rag.Engine
-	if apiKey := cfg.APIKey(); apiKey != "" {
+	if cfg.QMD.Enabled {
+		qmdDataDir := filepath.Join(dataDir, "qmd-entries")
+		qmdIdx, err := index.NewQMD(context.Background(), index.QMDConfig{
+			Collection: cfg.QMD.Collection,
+			DataDir:    qmdDataDir,
+			QMDPath:    cfg.QMD.QMDPath,
+		})
+		if err != nil {
+			slog.Error("create QMD index", "error", err)
+			os.Exit(1)
+		}
+		semanticIndex = qmdIdx
+		if err := reindexExistingEntries(context.Background(), store.DB(), semanticIndex); err != nil {
+			slog.Warn("initial reindex failed", "error", err)
+		}
+		slog.Info("QMD indexing enabled", "collection", cfg.QMD.Collection)
+
+		// RAG chat still requires an OpenAI API key for the LLM.
+		if apiKey := cfg.APIKey(); apiKey != "" {
+			ragEngine = rag.New(semanticIndex, store, apiKey, cfg.OpenAI.ChatModel)
+			slog.Info("chat service enabled", "model", cfg.OpenAI.ChatModel)
+		} else {
+			slog.Warn("chat disabled: QMD handles indexing but no OpenAI API key for LLM chat")
+		}
+	} else if apiKey := cfg.APIKey(); apiKey != "" {
 		embClient := index.NewOpenAIEmbeddingClient(apiKey).WithModel(cfg.OpenAI.EmbeddingModel)
 
-		var err error
-		semanticIndex, err = index.New(store.DB(), store.WriteDB(), embClient)
+		openaiIdx, err := index.New(store.DB(), store.WriteDB(), embClient)
 		if err != nil {
 			slog.Error("create index", "error", err)
 			os.Exit(1)
 		}
+		semanticIndex = openaiIdx
 		if err := reindexExistingEntries(context.Background(), store.DB(), semanticIndex); err != nil {
 			slog.Warn("initial reindex failed", "error", err)
 		}
@@ -134,7 +159,7 @@ func main() {
 		ragEngine = rag.New(semanticIndex, store, apiKey, cfg.OpenAI.ChatModel)
 		slog.Info("chat service enabled", "model", cfg.OpenAI.ChatModel)
 	} else {
-		slog.Warn("chat and indexing disabled: no OpenAI API key configured")
+		slog.Warn("chat and indexing disabled: no OpenAI API key or QMD configured")
 	}
 
 	// Register the daily notes service.
@@ -755,7 +780,7 @@ func runSetup() {
 	fmt.Println("To start Blackwood:")
 	fmt.Printf("  blackwood --config %s\n", configPath)
 }
-func reindexExistingEntries(ctx context.Context, db *sql.DB, idx *index.Index) error {
+func reindexExistingEntries(ctx context.Context, db *sql.DB, idx index.Indexer) error {
 	rows, err := db.QueryContext(ctx, `SELECT id, content FROM entries`)
 	if err != nil {
 		return fmt.Errorf("query entries for reindex: %w", err)

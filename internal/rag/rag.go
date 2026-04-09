@@ -37,14 +37,14 @@ type SourceReference struct {
 
 // Engine provides RAG-based chat over the user's daily notes.
 type Engine struct {
-	index  *index.Index
+	index  index.Indexer
 	store  *storage.Store
 	apiKey string
 	model  string
 }
 
 // New creates a new RAG engine.
-func New(idx *index.Index, store *storage.Store, apiKey, model string) *Engine {
+func New(idx index.Indexer, store *storage.Store, apiKey, model string) *Engine {
 	if model == "" {
 		model = "gpt-5.2"
 	}

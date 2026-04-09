@@ -87,7 +87,7 @@ type Bot struct {
 	store       *storage.Store
 	transcriber transcribe.Transcriber
 	describer   describe.Describer
-	indexer     *index.Index
+	indexer     index.Indexer
 }
 
 // BotConfig holds the configuration for the Telegram bot.
@@ -97,7 +97,7 @@ type BotConfig struct {
 }
 
 // NewBot creates a new Telegram bot.
-func NewBot(cfg BotConfig, store *storage.Store, transcriber transcribe.Transcriber, describer describe.Describer, indexer *index.Index) *Bot {
+func NewBot(cfg BotConfig, store *storage.Store, transcriber transcribe.Transcriber, describer describe.Describer, indexer index.Indexer) *Bot {
 	static := make(map[int64]bool, len(cfg.AllowedChatIDs))
 	for _, id := range cfg.AllowedChatIDs {
 		static[id] = true

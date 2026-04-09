@@ -20,13 +20,13 @@ import (
 type Worker struct {
 	store      *storage.Store
 	recognizer ocr.Recognizer
-	indexer    *index.Index
+	indexer    index.Indexer
 	dataDir    string
 	notify     chan struct{}
 }
 
 // New creates a new import queue worker.
-func New(store *storage.Store, recognizer ocr.Recognizer, indexer *index.Index, dataDir string) *Worker {
+func New(store *storage.Store, recognizer ocr.Recognizer, indexer index.Indexer, dataDir string) *Worker {
 	return &Worker{
 		store:      store,
 		recognizer: recognizer,

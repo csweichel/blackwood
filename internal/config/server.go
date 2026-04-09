@@ -13,6 +13,7 @@ import (
 type ServerConfig struct {
 	Server   ServerSettings   `yaml:"server"`
 	OpenAI   OpenAISettings   `yaml:"openai"`
+	QMD      QMDSettings      `yaml:"qmd"`
 	WhatsApp WhatsAppSettings `yaml:"whatsapp"`
 	Telegram TelegramSettings `yaml:"telegram"`
 	Watcher  WatcherSettings  `yaml:"watcher"`
@@ -64,6 +65,14 @@ type OpenAISettings struct {
 	ChatModel      string `yaml:"chat_model"`
 	EmbeddingModel string `yaml:"embedding_model"`
 	OCRPrompt      string `yaml:"ocr_prompt"`
+}
+
+// QMDSettings holds configuration for the QMD local search engine.
+// When enabled, QMD replaces OpenAI embeddings for indexing and search.
+type QMDSettings struct {
+	Enabled    bool   `yaml:"enabled"`
+	Collection string `yaml:"collection"` // qmd collection name (default: "blackwood")
+	QMDPath    string `yaml:"qmd_path"`   // path to qmd binary (default: "qmd")
 }
 
 // TelegramSettings holds Telegram bot configuration.
@@ -193,6 +202,21 @@ func (c *ServerConfig) Resolve() error {
 			c.OpenAI.OCRPrompt = p
 		} else {
 			c.OpenAI.OCRPrompt = "Transcribe the handwritten text in this image. Return only the transcribed text, no commentary."
+		}
+	}
+
+	// QMD defaults.
+	if q := os.Getenv("QMD_ENABLED"); q == "1" || q == "true" {
+		c.QMD.Enabled = true
+	}
+	if c.QMD.Collection == "" {
+		c.QMD.Collection = "blackwood"
+	}
+	if c.QMD.QMDPath == "" {
+		if p := os.Getenv("QMD_PATH"); p != "" {
+			c.QMD.QMDPath = p
+		} else {
+			c.QMD.QMDPath = "qmd"
 		}
 	}
 

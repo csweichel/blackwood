@@ -22,7 +22,7 @@ The API uses [Connect-RPC](https://connectrpc.com/) (gRPC-compatible, HTTP/JSON 
 | `internal/api` | Connect-RPC handlers + plain HTTP endpoints. One file per service/feature. |
 | `internal/storage` | SQLite storage layer. Schema in `schema.sql`, embedded via `//go:embed`. Separate read/write connection pools (WAL mode). |
 | `internal/config` | YAML config loading. Secrets read from files, env vars as fallback. |
-| `internal/index` | Semantic index — embeddings stored in SQLite, cosine similarity search. |
+| `internal/index` | Semantic index — `Indexer` interface with two backends: OpenAI embeddings (SQLite + cosine similarity) and QMD (local hybrid search via CLI). |
 | `internal/rag` | RAG engine — retrieves context from index, streams OpenAI chat completions. |
 | `internal/transcribe` | `Transcriber` interface + Whisper implementation. |
 | `internal/describe` | `Describer` interface + GPT vision implementation. |
@@ -97,6 +97,7 @@ Vite proxies API calls to `localhost:8080` by default. Adjust `vite.config.ts` i
 - **IDs**: Generated with `crypto/rand` hex encoding (see `storage.newID()`).
 - **Interfaces**: Defined in the consumer package, not the provider. Small interfaces (1-2 methods): `Transcriber`, `Describer`, `Recognizer`, `EntryIndexer`.
 - **Nil-safe optionals**: AI features (transcriber, indexer, describer) may be nil when no API key is configured. Always nil-check before use.
+- **Index backends**: The `index.Indexer` interface abstracts over OpenAI embeddings and QMD. Consumers should accept `index.Indexer`, not `*index.Index`. QMD is enabled via config (`qmd.enabled: true`) and takes priority over OpenAI for indexing/search. RAG chat still requires an OpenAI API key for the LLM.
 - **SQLite**: WAL mode, separate read/write pools. Write pool limited to 1 connection. Use `RetryOnBusy()` for write operations that may contend.
 - **Context**: Thread `context.Context` through all operations. Background goroutines use the signal-notify context from `main()`.
 - **No frameworks**: Standard library `net/http` with `http.ServeMux`. Connect-RPC handlers registered via generated `New*ServiceHandler()` functions.

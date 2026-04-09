@@ -24,7 +24,7 @@ type searchResponse struct {
 
 // ServeSearch returns an HTTP handler for GET /api/search?q=...&limit=20.
 // It performs semantic search and enriches results with dates.
-func ServeSearch(store *storage.Store, idx *index.Index) http.HandlerFunc {
+func ServeSearch(store *storage.Store, idx index.Indexer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query().Get("q")
 		if query == "" {

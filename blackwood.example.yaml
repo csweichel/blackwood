@@ -17,6 +17,14 @@ openai:
   embedding_model: text-embedding-3-small
   # ocr_prompt: "Custom OCR prompt here"
 
+# QMD local search engine (optional)
+# When enabled, QMD replaces OpenAI embeddings for indexing and search.
+# Requires the qmd CLI: https://github.com/tobi/qmd
+# qmd:
+#   enabled: true
+#   collection: blackwood       # qmd collection name
+#   qmd_path: qmd               # path to qmd binary
+
 # WhatsApp integration (optional)
 # whatsapp:
 #   verify_token: your-verify-token

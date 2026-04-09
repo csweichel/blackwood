@@ -329,12 +329,12 @@ type MeetingDetail struct {
 type Syncer struct {
 	mcp     *mcpClient
 	store   *storage.Store
-	indexer *index.Index // may be nil
+	indexer index.Indexer // may be nil
 	poll    time.Duration
 }
 
 // New creates a new Granola syncer.
-func New(ts *TokenSource, store *storage.Store, indexer *index.Index, pollInterval time.Duration) *Syncer {
+func New(ts *TokenSource, store *storage.Store, indexer index.Indexer, pollInterval time.Duration) *Syncer {
 	return &Syncer{
 		mcp:     newMCPClient(ts),
 		store:   store,
