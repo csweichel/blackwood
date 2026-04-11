@@ -4,6 +4,20 @@ import SwiftUI
 
 @MainActor
 final class AppModel: ObservableObject {
+    enum ServerReachability: Equatable {
+        case unknown
+        case checking
+        case reachable(version: String)
+        case unreachable(message: String)
+    }
+
+    enum PresentedSheet: String, Identifiable {
+        case recording
+        case settings
+
+        var id: String { rawValue }
+    }
+
     enum ConnectionTestState: Equatable {
         case idle
         case testing
@@ -15,7 +29,6 @@ final class AppModel: ObservableObject {
         case today
         case search
         case queue
-        case settings
     }
 
     @Published var selectedTab: Tab = .today
@@ -29,11 +42,12 @@ final class AppModel: ObservableObject {
     @Published var searchResults: [SearchResult] = []
     @Published var searchError: String?
     @Published var isSearching = false
-    @Published var isOnline = true
+    @Published var isNetworkAvailable = true
+    @Published var serverReachability: ServerReachability = .unknown
     @Published var queueSnapshot = QueueSnapshot(noteUpdateCount: 0, uploadCount: 0, failedUploadCount: 0)
     @Published var serverURLString = UserDefaults.standard.string(forKey: "blackwood.serverURL") ?? "http://127.0.0.1:8080"
     @Published var connectionTestState: ConnectionTestState = .idle
-    @Published var isRecordingSheetPresented = false
+    @Published var presentedSheet: PresentedSheet?
 
     let recorder = AudioRecorderController()
     let store = QueueStore()
@@ -41,6 +55,42 @@ final class AppModel: ObservableObject {
     private let monitor = NWPathMonitor()
     private let monitorQueue = DispatchQueue(label: "BlackwoodConnectivity")
     private var didStart = false
+    private var syncRetryAttempt = 0
+    private var nextAutomaticSyncAllowedAt = Date.distantPast
+
+    var isOnline: Bool {
+        isNetworkAvailable && isServerReachable
+    }
+
+    var connectionStatusLabel: String {
+        if !isNetworkAvailable {
+            return "Offline"
+        }
+        switch serverReachability {
+        case .unknown:
+            return "Checking"
+        case .checking:
+            return "Checking"
+        case .reachable:
+            return "Online"
+        case .unreachable:
+            return "Server down"
+        }
+    }
+
+    var connectionStatusTint: Color {
+        if !isNetworkAvailable {
+            return Color(red: 196/255, green: 136/255, blue: 45/255)
+        }
+        switch serverReachability {
+        case .reachable:
+            return Color(red: 74/255, green: 139/255, blue: 92/255)
+        case .unknown, .checking:
+            return Color(red: 74/255, green: 111/255, blue: 165/255)
+        case .unreachable:
+            return Color(red: 184/255, green: 69/255, blue: 58/255)
+        }
+    }
 
     func start() async {
         guard !didStart else { return }
@@ -50,54 +100,36 @@ final class AppModel: ObservableObject {
         }
         monitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor in
-                self?.isOnline = path.status == .satisfied
+                self?.isNetworkAvailable = path.status == .satisfied
                 if path.status == .satisfied {
+                    await self?.refreshServerReachability()
                     await self?.syncNow()
+                } else {
+                    self?.serverReachability = .unknown
                 }
             }
         }
         monitor.start(queue: monitorQueue)
-        await loadSelectedDate()
-        await refreshQueueSnapshot()
-        await handleShortcutIfNeeded()
-        await syncNow()
+        await hydrateLaunchState()
+        Task { [weak self] in
+            await self?.finishLaunchingInBackground()
+        }
     }
 
     func handleAppBecameActive() async {
         await handleShortcutIfNeeded()
         await refreshQueueSnapshot()
-        if isOnline {
+        if isNetworkAvailable {
+            await refreshServerReachability()
             await syncNow()
         }
     }
 
     func loadSelectedDate() async {
         let date = Self.dayString(from: selectedDate)
-        isLoadingNote = true
         noteError = nil
-
-        if let cached = try? await store.cachedDailyNote(date: date) {
-            noteContent = cached.content
-            draftContent = cached.content
-        }
-
-        guard let client = apiClient else {
-            isLoadingNote = false
-            return
-        }
-
-        do {
-            let note = try await client.fetchDailyNote(date: date)
-            noteContent = note.content
-            draftContent = note.content
-            try await store.cacheDailyNote(date: date, content: note.content)
-        } catch {
-            if noteContent.isEmpty {
-                noteError = error.localizedDescription
-            }
-        }
-
-        isLoadingNote = false
+        let hasCachedNote = await loadCachedNote(for: date)
+        await refreshSelectedDateFromServer(date: date, showLoadingState: !hasCachedNote)
     }
 
     func changeDate(to date: Date) {
@@ -146,8 +178,10 @@ final class AppModel: ObservableObject {
         searchError = nil
         do {
             searchResults = try await client.search(query: query, limit: 20)
+            markServerReachable()
         } catch {
-            searchError = error.localizedDescription
+            handleConnectionFailure(error)
+            searchError = userFacingMessage(for: error, fallback: "Search needs a reachable Blackwood server.")
             searchResults = []
         }
         isSearching = false
@@ -169,7 +203,8 @@ final class AppModel: ObservableObject {
         UserDefaults.standard.set(serverURLString, forKey: "blackwood.serverURL")
         connectionTestState = .idle
         await loadSelectedDate()
-        if isOnline {
+        await refreshServerReachability()
+        if isNetworkAvailable {
             await syncNow()
         }
     }
@@ -184,25 +219,41 @@ final class AppModel: ObservableObject {
                 return
             }
             let response = try await client.checkHealth()
+            markServerReachable(version: response.version)
             connectionTestState = .success(version: response.version)
         } catch {
-            connectionTestState = .failed(message: error.localizedDescription)
+            handleConnectionFailure(error)
+            connectionTestState = .failed(message: userFacingMessage(for: error, fallback: "Blackwood is unreachable right now."))
         }
     }
 
     func presentRecorder(autoStart: Bool = false) {
-        isRecordingSheetPresented = true
+        recorder.reset()
         recorder.autoStartOnAppear = autoStart
+        presentedSheet = .recording
     }
 
-    func syncNow() async {
-        guard isOnline, let client = apiClient else { return }
+    func presentSettings() {
+        presentedSheet = .settings
+    }
+
+    func syncNow(force: Bool = false) async {
+        guard isNetworkAvailable, let client = apiClient else { return }
+        guard force || Date() >= nextAutomaticSyncAllowedAt else { return }
         do {
             let engine = SyncEngine(store: store, remote: client)
             _ = try await engine.sync()
+            markServerReachable()
+            syncRetryAttempt = 0
+            nextAutomaticSyncAllowedAt = .distantPast
             await refreshQueueSnapshot()
         } catch {
-            noteError = error.localizedDescription
+            if isConnectivityFailure(error) {
+                handleConnectionFailure(error)
+                scheduleAutomaticSyncRetry()
+            } else {
+                noteError = userFacingMessage(for: error, fallback: "Blackwood couldn’t sync your queued changes.")
+            }
         }
     }
 
@@ -224,7 +275,7 @@ final class AppModel: ObservableObject {
         do {
             try await store.updateUpload(upload)
             await refreshQueueSnapshot()
-            await syncNow()
+            await syncNow(force: true)
         } catch {
             noteError = error.localizedDescription
         }
@@ -318,6 +369,58 @@ final class AppModel: ObservableObject {
         presentRecorder(autoStart: true)
     }
 
+    private func hydrateLaunchState() async {
+        let date = Self.dayString(from: selectedDate)
+        _ = await loadCachedNote(for: date)
+        await refreshQueueSnapshot()
+        await handleShortcutIfNeeded()
+    }
+
+    private func finishLaunchingInBackground() async {
+        let date = Self.dayString(from: selectedDate)
+        await refreshSelectedDateFromServer(date: date, showLoadingState: noteContent.isEmpty)
+        if isNetworkAvailable {
+            await refreshServerReachability()
+            await syncNow()
+        }
+    }
+
+    @discardableResult
+    private func loadCachedNote(for date: String) async -> Bool {
+        guard let cached = try? await store.cachedDailyNote(date: date) else {
+            return false
+        }
+        noteContent = cached.content
+        if !isEditing {
+            draftContent = cached.content
+        }
+        return true
+    }
+
+    private func refreshSelectedDateFromServer(date: String, showLoadingState: Bool) async {
+        if showLoadingState {
+            isLoadingNote = true
+        }
+        defer { isLoadingNote = false }
+
+        guard let client = apiClient else { return }
+
+        do {
+            let note = try await client.fetchDailyNote(date: date)
+            noteContent = note.content
+            if !isEditing {
+                draftContent = note.content
+            }
+            try await store.cacheDailyNote(date: date, content: note.content)
+            markServerReachable()
+        } catch {
+            handleConnectionFailure(error)
+            if noteContent.isEmpty {
+                noteError = userFacingMessage(for: error, fallback: "Blackwood is unreachable right now.")
+            }
+        }
+    }
+
     private func audioContentType(for fileURL: URL) -> String {
         switch fileURL.pathExtension.lowercased() {
         case "m4a":
@@ -343,5 +446,64 @@ final class AppModel: ObservableObject {
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.date(from: dayString)
+    }
+
+    private var isServerReachable: Bool {
+        if case .reachable = serverReachability {
+            return true
+        }
+        return false
+    }
+
+    private func refreshServerReachability() async {
+        guard isNetworkAvailable, let client = apiClient else {
+            serverReachability = .unknown
+            return
+        }
+
+        serverReachability = .checking
+        do {
+            let response = try await client.checkHealth()
+            markServerReachable(version: response.version)
+        } catch {
+            handleConnectionFailure(error)
+        }
+    }
+
+    private func markServerReachable(version: String = "") {
+        serverReachability = .reachable(version: version)
+    }
+
+    private func handleConnectionFailure(_ error: Error) {
+        guard isConnectivityFailure(error) else { return }
+        serverReachability = .unreachable(message: userFacingMessage(for: error, fallback: "Blackwood is unreachable right now."))
+    }
+
+    private func scheduleAutomaticSyncRetry() {
+        syncRetryAttempt += 1
+        let cappedAttempt = min(syncRetryAttempt, 5)
+        nextAutomaticSyncAllowedAt = Date().addingTimeInterval(pow(2, Double(cappedAttempt - 1)) * 5)
+    }
+
+    private func isConnectivityFailure(_ error: Error) -> Bool {
+        if let failure = error as? SyncFailure {
+            return failure.disposition == .retryable
+        }
+        if error is URLError {
+            return true
+        }
+        let nsError = error as NSError
+        return nsError.domain == NSURLErrorDomain
+    }
+
+    private func userFacingMessage(for error: Error, fallback: String) -> String {
+        if let failure = error as? SyncFailure, !failure.message.isEmpty {
+            return failure.message
+        }
+        if isConnectivityFailure(error) {
+            return fallback
+        }
+        let description = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        return description.isEmpty ? fallback : description
     }
 }
