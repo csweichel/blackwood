@@ -4,6 +4,26 @@ import SwiftUI
 
 @MainActor
 final class AppModel: ObservableObject {
+    enum AuthState: Equatable {
+        case authenticated
+        case needsLogin
+        case needsSetup
+    }
+
+    enum ServerReachability: Equatable {
+        case unknown
+        case checking
+        case reachable(version: String)
+        case unreachable(message: String)
+    }
+
+    enum PresentedSheet: String, Identifiable {
+        case recording
+        case settings
+
+        var id: String { rawValue }
+    }
+
     enum ConnectionTestState: Equatable {
         case idle
         case testing
@@ -15,8 +35,11 @@ final class AppModel: ObservableObject {
         case today
         case search
         case queue
-        case settings
     }
+
+    private static let lastAuthenticatedKey = "blackwood.auth.lastAuthenticated"
+    private static let lastSetupRequiredKey = "blackwood.auth.lastSetupRequired"
+    private static let shortcutStore = ShortcutStore.defaults
 
     @Published var selectedTab: Tab = .today
     @Published var selectedDate = Date()
@@ -29,11 +52,15 @@ final class AppModel: ObservableObject {
     @Published var searchResults: [SearchResult] = []
     @Published var searchError: String?
     @Published var isSearching = false
-    @Published var isOnline = true
+    @Published var authState: AuthState
+    @Published var authStatusMessage: String?
+    @Published var authSetupInfo: AuthSetupInfo?
+    @Published var isNetworkAvailable = true
+    @Published var serverReachability: ServerReachability = .unknown
     @Published var queueSnapshot = QueueSnapshot(noteUpdateCount: 0, uploadCount: 0, failedUploadCount: 0)
     @Published var serverURLString = UserDefaults.standard.string(forKey: "blackwood.serverURL") ?? "http://127.0.0.1:8080"
     @Published var connectionTestState: ConnectionTestState = .idle
-    @Published var isRecordingSheetPresented = false
+    @Published var presentedSheet: PresentedSheet?
 
     let recorder = AudioRecorderController()
     let store = QueueStore()
@@ -41,6 +68,52 @@ final class AppModel: ObservableObject {
     private let monitor = NWPathMonitor()
     private let monitorQueue = DispatchQueue(label: "BlackwoodConnectivity")
     private var didStart = false
+    private var syncRetryAttempt = 0
+    private var nextAutomaticSyncAllowedAt = Date.distantPast
+
+    init() {
+        authState = UserDefaults.standard.bool(forKey: Self.lastAuthenticatedKey)
+            ? .authenticated
+            : (UserDefaults.standard.bool(forKey: Self.lastSetupRequiredKey) ? .needsSetup : .needsLogin)
+    }
+
+    var isOnline: Bool {
+        isNetworkAvailable && isServerReachable
+    }
+
+    var isAuthenticated: Bool {
+        authState == .authenticated
+    }
+
+    var connectionStatusLabel: String {
+        if !isNetworkAvailable {
+            return "Offline"
+        }
+        switch serverReachability {
+        case .unknown:
+            return "Checking"
+        case .checking:
+            return "Checking"
+        case .reachable:
+            return "Online"
+        case .unreachable:
+            return "Server down"
+        }
+    }
+
+    var connectionStatusTint: Color {
+        if !isNetworkAvailable {
+            return Color(red: 196/255, green: 136/255, blue: 45/255)
+        }
+        switch serverReachability {
+        case .reachable:
+            return Color(red: 74/255, green: 139/255, blue: 92/255)
+        case .unknown, .checking:
+            return Color(red: 74/255, green: 111/255, blue: 165/255)
+        case .unreachable:
+            return Color(red: 184/255, green: 69/255, blue: 58/255)
+        }
+    }
 
     func start() async {
         guard !didStart else { return }
@@ -50,54 +123,43 @@ final class AppModel: ObservableObject {
         }
         monitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor in
-                self?.isOnline = path.status == .satisfied
+                self?.isNetworkAvailable = path.status == .satisfied
                 if path.status == .satisfied {
-                    await self?.syncNow()
+                    await self?.refreshAuthStatus()
+                    await self?.refreshServerReachability()
+                    if self?.isAuthenticated == true {
+                        await self?.syncNow()
+                    }
+                } else {
+                    self?.serverReachability = .unknown
                 }
             }
         }
         monitor.start(queue: monitorQueue)
-        await loadSelectedDate()
-        await refreshQueueSnapshot()
-        await handleShortcutIfNeeded()
-        await syncNow()
+        await refreshAuthStatus()
+        if isAuthenticated {
+            await enterAuthenticatedWorkspace()
+        } else {
+            await handlePendingLaunchActionIfNeeded()
+        }
     }
 
     func handleAppBecameActive() async {
-        await handleShortcutIfNeeded()
-        await refreshQueueSnapshot()
-        if isOnline {
+        await refreshAuthStatus()
+        await handlePendingLaunchActionIfNeeded()
+        if isAuthenticated {
+            await refreshQueueSnapshot()
+            await refreshServerReachability()
             await syncNow()
         }
     }
 
     func loadSelectedDate() async {
+        guard isAuthenticated else { return }
         let date = Self.dayString(from: selectedDate)
-        isLoadingNote = true
         noteError = nil
-
-        if let cached = try? await store.cachedDailyNote(date: date) {
-            noteContent = cached.content
-            draftContent = cached.content
-        }
-
-        guard let client = apiClient else {
-            isLoadingNote = false
-            return
-        }
-
-        do {
-            let note = try await client.fetchDailyNote(date: date)
-            noteContent = note.content
-            draftContent = note.content
-            try await store.cacheDailyNote(date: date, content: note.content)
-        } catch {
-            if noteContent.isEmpty {
-                noteError = error.localizedDescription
-            }
-        }
-
-        isLoadingNote = false
+        let hasCachedNote = await loadCachedNote(for: date)
+        await refreshSelectedDateFromServer(date: date, showLoadingState: !hasCachedNote)
     }
 
     func changeDate(to date: Date) {
@@ -116,6 +178,7 @@ final class AppModel: ObservableObject {
     }
 
     func saveCurrentNote() async {
+        guard isAuthenticated else { return }
         let date = Self.dayString(from: selectedDate)
         noteContent = draftContent
         isEditing = false
@@ -131,6 +194,11 @@ final class AppModel: ObservableObject {
     }
 
     func runSearch() async {
+        guard isAuthenticated else {
+            searchResults = []
+            searchError = "Sign in to search your notes."
+            return
+        }
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
             searchResults = []
@@ -146,8 +214,14 @@ final class AppModel: ObservableObject {
         searchError = nil
         do {
             searchResults = try await client.search(query: query, limit: 20)
+            markServerReachable()
         } catch {
-            searchError = error.localizedDescription
+            if await handleAuthFailure(error) {
+                searchResults = []
+                return
+            }
+            handleConnectionFailure(error)
+            searchError = userFacingMessage(for: error, fallback: "Search needs a reachable Blackwood server.")
             searchResults = []
         }
         isSearching = false
@@ -168,9 +242,13 @@ final class AppModel: ObservableObject {
         }
         UserDefaults.standard.set(serverURLString, forKey: "blackwood.serverURL")
         connectionTestState = .idle
-        await loadSelectedDate()
-        if isOnline {
-            await syncNow()
+        await refreshAuthStatus()
+        if isAuthenticated {
+            await loadSelectedDate()
+            await refreshServerReachability()
+            if isNetworkAvailable {
+                await syncNow()
+            }
         }
     }
 
@@ -184,25 +262,49 @@ final class AppModel: ObservableObject {
                 return
             }
             let response = try await client.checkHealth()
+            markServerReachable(version: response.version)
             connectionTestState = .success(version: response.version)
         } catch {
-            connectionTestState = .failed(message: error.localizedDescription)
+            handleConnectionFailure(error)
+            connectionTestState = .failed(message: userFacingMessage(for: error, fallback: "Blackwood is unreachable right now."))
         }
     }
 
     func presentRecorder(autoStart: Bool = false) {
-        isRecordingSheetPresented = true
+        guard isAuthenticated else { return }
+        recorder.reset()
         recorder.autoStartOnAppear = autoStart
+        if autoStart {
+            recorder.state = .preparing
+        }
+        presentedSheet = .recording
     }
 
-    func syncNow() async {
-        guard isOnline, let client = apiClient else { return }
+    func presentSettings() {
+        presentedSheet = .settings
+    }
+
+    func syncNow(force: Bool = false) async {
+        guard isAuthenticated else { return }
+        guard isNetworkAvailable, let client = apiClient else { return }
+        guard force || Date() >= nextAutomaticSyncAllowedAt else { return }
         do {
             let engine = SyncEngine(store: store, remote: client)
             _ = try await engine.sync()
+            markServerReachable()
+            syncRetryAttempt = 0
+            nextAutomaticSyncAllowedAt = .distantPast
             await refreshQueueSnapshot()
         } catch {
-            noteError = error.localizedDescription
+            if await handleAuthFailure(error) {
+                return
+            }
+            if isConnectivityFailure(error) {
+                handleConnectionFailure(error)
+                scheduleAutomaticSyncRetry()
+            } else {
+                noteError = userFacingMessage(for: error, fallback: "Blackwood couldn’t sync your queued changes.")
+            }
         }
     }
 
@@ -224,7 +326,7 @@ final class AppModel: ObservableObject {
         do {
             try await store.updateUpload(upload)
             await refreshQueueSnapshot()
-            await syncNow()
+            await syncNow(force: true)
         } catch {
             noteError = error.localizedDescription
         }
@@ -310,12 +412,205 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func handleShortcutIfNeeded() async {
-        let shouldStart = UserDefaults.standard.bool(forKey: ShortcutKeys.startRecording)
-        guard shouldStart else { return }
-        UserDefaults.standard.set(false, forKey: ShortcutKeys.startRecording)
-        selectedTab = .today
-        presentRecorder(autoStart: true)
+    private func handlePendingLaunchActionIfNeeded() async {
+        guard let pendingAction = pendingLaunchAction else { return }
+        guard isAuthenticated else { return }
+        clearPendingLaunchAction()
+
+        switch pendingAction {
+        case .startRecording:
+            selectedTab = .today
+            presentRecorder(autoStart: true)
+        }
+    }
+
+    private func enterAuthenticatedWorkspace() async {
+        guard isAuthenticated else { return }
+        await hydrateLaunchState()
+        await handlePendingLaunchActionIfNeeded()
+        Task { [weak self] in
+            await self?.finishLaunchingInBackground()
+        }
+    }
+
+    func refreshAuthStatus() async {
+        guard let client = authClient else {
+            authStatusMessage = "Set a valid Blackwood server URL."
+            if authState != .authenticated {
+                authState = UserDefaults.standard.bool(forKey: Self.lastSetupRequiredKey) ? .needsSetup : .needsLogin
+            }
+            return
+        }
+
+        do {
+            let status = try await client.status()
+            authStatusMessage = nil
+            UserDefaults.standard.set(status.authenticated, forKey: Self.lastAuthenticatedKey)
+            UserDefaults.standard.set(status.setupRequired, forKey: Self.lastSetupRequiredKey)
+
+            if status.setupRequired {
+                authState = .needsSetup
+                if authSetupInfo == nil {
+                    await loadAuthSetupInfo()
+                }
+            } else if status.authenticated {
+                authState = .authenticated
+                authSetupInfo = nil
+            } else {
+                authState = .needsLogin
+                authSetupInfo = nil
+            }
+        } catch {
+            if authState != .authenticated {
+                authState = UserDefaults.standard.bool(forKey: Self.lastSetupRequiredKey) ? .needsSetup : .needsLogin
+            }
+            authStatusMessage = userFacingMessage(for: error, fallback: "Blackwood is unreachable right now.")
+        }
+    }
+
+    func loadAuthSetupInfo() async {
+        guard authState == .needsSetup, authSetupInfo == nil, let client = authClient else { return }
+        do {
+            authSetupInfo = try await client.getSetupInfo()
+            authStatusMessage = nil
+        } catch {
+            authStatusMessage = userFacingMessage(for: error, fallback: "Couldn’t load TOTP setup details.")
+        }
+    }
+
+    func login(code: String) async -> Bool {
+        guard let client = authClient else {
+            authStatusMessage = "Set a valid Blackwood server URL."
+            return false
+        }
+
+        do {
+            let response = try await client.login(code: code)
+            guard response.ok else {
+                authStatusMessage = response.error ?? "Invalid code. Please try again."
+                return false
+            }
+            UserDefaults.standard.set(true, forKey: Self.lastAuthenticatedKey)
+            UserDefaults.standard.set(false, forKey: Self.lastSetupRequiredKey)
+            authState = .authenticated
+            authSetupInfo = nil
+            authStatusMessage = nil
+            await enterAuthenticatedWorkspace()
+            return true
+        } catch {
+            authStatusMessage = userFacingMessage(for: error, fallback: "Blackwood could not sign you in right now.")
+            return false
+        }
+    }
+
+    func confirmAuthSetup(code: String) async -> Bool {
+        guard authState == .needsSetup else {
+            return false
+        }
+        guard let setupInfo = await ensureAuthSetupInfo() else {
+            authStatusMessage = "Couldn’t load TOTP setup details."
+            return false
+        }
+        let secret = setupInfo.secret
+        guard let client = authClient else {
+            authStatusMessage = "Set a valid Blackwood server URL."
+            return false
+        }
+
+        do {
+            let response = try await client.confirmSetup(secret: secret, code: code)
+            guard response.ok else {
+                authStatusMessage = response.error ?? "Invalid code. Please try again."
+                return false
+            }
+        } catch {
+            authStatusMessage = userFacingMessage(for: error, fallback: "Blackwood could not save TOTP setup right now.")
+            return false
+        }
+
+        UserDefaults.standard.set(false, forKey: Self.lastSetupRequiredKey)
+        authState = .needsLogin
+        authSetupInfo = nil
+        return await login(code: code)
+    }
+
+    func logout() async {
+        guard let client = authClient else {
+            authState = .needsLogin
+            return
+        }
+
+        do {
+            try await client.logout()
+        } catch {
+            authStatusMessage = userFacingMessage(for: error, fallback: "Blackwood could not sign you out cleanly.")
+        }
+
+        UserDefaults.standard.set(false, forKey: Self.lastAuthenticatedKey)
+        authState = UserDefaults.standard.bool(forKey: Self.lastSetupRequiredKey) ? .needsSetup : .needsLogin
+        authSetupInfo = nil
+        authStatusMessage = nil
+        noteContent = ""
+        draftContent = ""
+        searchResults = []
+        searchError = nil
+        noteError = nil
+    }
+
+    private func hydrateLaunchState() async {
+        let date = Self.dayString(from: selectedDate)
+        _ = await loadCachedNote(for: date)
+        await refreshQueueSnapshot()
+    }
+
+    private func finishLaunchingInBackground() async {
+        guard isAuthenticated else { return }
+        let date = Self.dayString(from: selectedDate)
+        await refreshSelectedDateFromServer(date: date, showLoadingState: noteContent.isEmpty)
+        if isNetworkAvailable {
+            await refreshServerReachability()
+            await syncNow()
+        }
+    }
+
+    @discardableResult
+    private func loadCachedNote(for date: String) async -> Bool {
+        guard let cached = try? await store.cachedDailyNote(date: date) else {
+            return false
+        }
+        noteContent = cached.content
+        if !isEditing {
+            draftContent = cached.content
+        }
+        return true
+    }
+
+    private func refreshSelectedDateFromServer(date: String, showLoadingState: Bool) async {
+        guard isAuthenticated else { return }
+        if showLoadingState {
+            isLoadingNote = true
+        }
+        defer { isLoadingNote = false }
+
+        guard let client = apiClient else { return }
+
+        do {
+            let note = try await client.fetchDailyNote(date: date)
+            noteContent = note.content
+            if !isEditing {
+                draftContent = note.content
+            }
+            try await store.cacheDailyNote(date: date, content: note.content)
+            markServerReachable()
+        } catch {
+            if await handleAuthFailure(error) {
+                return
+            }
+            handleConnectionFailure(error)
+            if noteContent.isEmpty {
+                noteError = userFacingMessage(for: error, fallback: "Blackwood is unreachable right now.")
+            }
+        }
     }
 
     private func audioContentType(for fileURL: URL) -> String {
@@ -343,5 +638,112 @@ final class AppModel: ObservableObject {
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.date(from: dayString)
+    }
+
+    private var isServerReachable: Bool {
+        if case .reachable = serverReachability {
+            return true
+        }
+        return false
+    }
+
+    private func refreshServerReachability() async {
+        guard isNetworkAvailable, let client = apiClient else {
+            serverReachability = .unknown
+            return
+        }
+
+        serverReachability = .checking
+        do {
+            let response = try await client.checkHealth()
+            markServerReachable(version: response.version)
+        } catch {
+            handleConnectionFailure(error)
+        }
+    }
+
+    private func markServerReachable(version: String = "") {
+        serverReachability = .reachable(version: version)
+    }
+
+    private func handleConnectionFailure(_ error: Error) {
+        guard isConnectivityFailure(error) else { return }
+        serverReachability = .unreachable(message: userFacingMessage(for: error, fallback: "Blackwood is unreachable right now."))
+    }
+
+    private func handleAuthFailure(_ error: Error) async -> Bool {
+        guard let challenge = error as? AuthChallenge else {
+            return false
+        }
+
+        authStatusMessage = challenge.message
+        authSetupInfo = nil
+        noteError = nil
+        searchError = nil
+        UserDefaults.standard.set(false, forKey: Self.lastAuthenticatedKey)
+
+        switch challenge.kind {
+        case .setupRequired:
+            UserDefaults.standard.set(true, forKey: Self.lastSetupRequiredKey)
+            authState = .needsSetup
+            await loadAuthSetupInfo()
+        case .unauthorized:
+            UserDefaults.standard.set(false, forKey: Self.lastSetupRequiredKey)
+            authState = .needsLogin
+        }
+        return true
+    }
+
+    private func scheduleAutomaticSyncRetry() {
+        syncRetryAttempt += 1
+        let cappedAttempt = min(syncRetryAttempt, 5)
+        nextAutomaticSyncAllowedAt = Date().addingTimeInterval(pow(2, Double(cappedAttempt - 1)) * 5)
+    }
+
+    private func isConnectivityFailure(_ error: Error) -> Bool {
+        if let failure = error as? SyncFailure {
+            return failure.disposition == .retryable
+        }
+        if error is URLError {
+            return true
+        }
+        let nsError = error as NSError
+        return nsError.domain == NSURLErrorDomain
+    }
+
+    private func userFacingMessage(for error: Error, fallback: String) -> String {
+        if let failure = error as? SyncFailure, !failure.message.isEmpty {
+            return failure.message
+        }
+        if isConnectivityFailure(error) {
+            return fallback
+        }
+        let description = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        return description.isEmpty ? fallback : description
+    }
+
+    private func ensureAuthSetupInfo() async -> AuthSetupInfo? {
+        if let info = authSetupInfo {
+            return info
+        }
+        await loadAuthSetupInfo()
+        return authSetupInfo
+    }
+
+    private var pendingLaunchAction: PendingLaunchAction? {
+        guard let rawValue = Self.shortcutStore.string(forKey: ShortcutKeys.pendingLaunchAction) else {
+            return nil
+        }
+        return PendingLaunchAction(rawValue: rawValue)
+    }
+
+    private func clearPendingLaunchAction() {
+        Self.shortcutStore.removeObject(forKey: ShortcutKeys.pendingLaunchAction)
+    }
+
+    private var authClient: BlackwoodAuthClient? {
+        guard let normalized = try? normalizedServerURLString(from: serverURLString),
+              let url = URL(string: normalized) else { return nil }
+        return BlackwoodAuthClient(baseURL: url)
     }
 }

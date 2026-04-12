@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="23504" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="01J-lp-oVM">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="24765" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="01J-lp-oVM">
     <device id="retina6_12" orientation="portrait" appearance="light"/>
     <dependencies>
-        <deployment identifier="iOS"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="23506"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24743"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
@@ -16,19 +15,19 @@
                         <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="Blackwood" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="8bY-YR-s2q">
-                                <rect key="frame" x="32" y="402" width="329" height="48"/>
-                                <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="40"/>
-                                <color key="textColor" red="0.10980392156862745" green="0.14117647058823529" blue="0.20000000000000001" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
-                                <nil key="highlightedColor"/>
-                            </label>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="BlackwoodWordmark.png" translatesAutoresizingMaskIntoConstraints="NO" id="8bY-YR-s2q">
+                                <rect key="frame" x="64.666666666666686" y="397" width="264" height="58"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="264" id="klL-YL-aAc"/>
+                                    <constraint firstAttribute="height" constant="58" id="qPP-HC-cbx"/>
+                                </constraints>
+                            </imageView>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="Bcu-3y-fUS"/>
                         <color key="backgroundColor" red="0.98039215686274506" green="0.97254901960784312" blue="0.95294117647058818" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
+                            <constraint firstItem="8bY-YR-s2q" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="4T9-Qr-Gvh"/>
                             <constraint firstItem="8bY-YR-s2q" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" id="8AZ-n3-AGz"/>
-                            <constraint firstItem="8bY-YR-s2q" firstAttribute="leading" secondItem="Bcu-3y-fUS" secondAttribute="leading" constant="32" id="FW4-kC-wtE"/>
-                            <constraint secondItem="Bcu-3y-fUS" secondAttribute="trailing" firstItem="8bY-YR-s2q" firstAttribute="trailing" constant="32" id="tMk-LW-HIr"/>
                         </constraints>
                     </view>
                 </viewController>
@@ -37,4 +36,7 @@
             <point key="canvasLocation" x="52" y="375"/>
         </scene>
     </scenes>
+    <resources>
+        <image name="BlackwoodWordmark.png" width="348" height="124"/>
+    </resources>
 </document>

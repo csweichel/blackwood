@@ -54,3 +54,5 @@ blackwood
 blackwood.yaml
 dont-commit-openai-key
 dont-commit-telegram-token
+.DS_Store
+ios/BlackwoodMobile/.build
