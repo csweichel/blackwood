@@ -37,6 +37,7 @@ interface NoteEditorProps {
   title?: React.ReactNode;
   /** Show the attach button and panels (voice/photo/clip). Defaults to true. */
   showAttach?: boolean;
+  onEditingChange?: (editing: boolean) => void;
 }
 
 function SaveStatusIndicator({ status, editing }: { status: SaveStatus; editing: boolean }) {
@@ -80,6 +81,7 @@ export default function NoteEditor({
   emptyTemplate,
   title,
   showAttach = true,
+  onEditingChange,
 }: NoteEditorProps) {
   const navigate = useNavigate();
 
@@ -157,20 +159,27 @@ export default function NoteEditor({
   function startEditing() {
     setEditContent(content.trim() ? content : (emptyTemplate ?? content));
     setEditing(true);
+    onEditingChange?.(true);
   }
 
   function handleSave() {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     onContentChange(editContent);
     setEditing(false);
+    onEditingChange?.(false);
     doSave(editContent);
   }
 
   function handleCancel() {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     setEditing(false);
+    onEditingChange?.(false);
     setSaveStatus("idle");
   }
+
+  useEffect(() => {
+    onEditingChange?.(editing);
+  }, [editing, onEditingChange]);
 
   function handleAttachmentCreated() {
     setShowRecorder(false);
@@ -385,7 +394,7 @@ export default function NoteEditor({
                   }
                   return <h1 className={className} {...props}>{children}</h1>;
                 },
-                input: ({ type, checked, disabled: _disabled, ...props }) => {
+                input: ({ type, checked, ...props }) => {
                   if (type === "checkbox") {
                     return <input type="checkbox" checked={checked} readOnly {...props} />;
                   }

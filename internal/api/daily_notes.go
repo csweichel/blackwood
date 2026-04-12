@@ -56,11 +56,12 @@ type DailyNotesHandler struct {
 	store       *storage.Store
 	transcriber transcribe.Transcriber // may be nil if not configured
 	indexer     EntryIndexer           // may be nil if chat index is disabled
+	changes     *ChangeBroadcaster
 }
 
 // NewDailyNotesHandler creates a new DailyNotesHandler backed by the given store.
-func NewDailyNotesHandler(store *storage.Store, transcriber transcribe.Transcriber, indexer EntryIndexer) *DailyNotesHandler {
-	return &DailyNotesHandler{store: store, transcriber: transcriber, indexer: indexer}
+func NewDailyNotesHandler(store *storage.Store, transcriber transcribe.Transcriber, indexer EntryIndexer, changes *ChangeBroadcaster) *DailyNotesHandler {
+	return &DailyNotesHandler{store: store, transcriber: transcriber, indexer: indexer, changes: changes}
 }
 
 // GetDailyNote returns the daily note for the given date, including entries and attachments.
@@ -319,6 +320,13 @@ func (h *DailyNotesHandler) UpdateDailyNoteContent(ctx context.Context, req *con
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get or create daily note: %w", err))
 	}
+	currentRevision := revisionString(note.UpdatedAt)
+	if req.Msg.BaseRevision != "" && req.Msg.BaseRevision != currentRevision {
+		return nil, connect.NewError(
+			connect.CodeFailedPrecondition,
+			fmt.Errorf("daily note changed on another client; reload and try again"),
+		)
+	}
 
 	if err := h.store.UpdateDailyNoteContent(ctx, note.ID, req.Msg.Content); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update daily note content: %w", err))
@@ -335,6 +343,26 @@ func (h *DailyNotesHandler) UpdateDailyNoteContent(ctx context.Context, req *con
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(protoNote), nil
+}
+
+// StreamChanges streams note and subpage invalidation events to connected clients.
+func (h *DailyNotesHandler) StreamChanges(ctx context.Context, _ *connect.Request[blackwoodv1.StreamChangesRequest], stream *connect.ServerStream[blackwoodv1.ChangeEvent]) error {
+	events, unsubscribe := h.changes.Subscribe()
+	defer unsubscribe()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case event, ok := <-events:
+			if !ok {
+				return nil
+			}
+			if err := stream.Send(event); err != nil {
+				return err
+			}
+		}
+	}
 }
 
 // ListDatesWithContent returns dates that have non-empty markdown content within a date range.
@@ -423,6 +451,7 @@ func (h *DailyNotesHandler) dailyNoteToProto(ctx context.Context, n *storage.Dai
 		Content:   n.Content,
 		CreatedAt: timestamppb.New(n.CreatedAt),
 		UpdatedAt: timestamppb.New(n.UpdatedAt),
+		Revision:  revisionString(n.UpdatedAt),
 	}
 
 	if includeEntries {

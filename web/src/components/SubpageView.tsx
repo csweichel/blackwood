@@ -2,9 +2,11 @@ import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
   getSubpage,
+  RPCError,
   updateSubpageContent,
   listSubpages,
 } from "../api/client";
+import { subscribeToChanges } from "../lib/changeEvents";
 import NoteEditor from "./NoteEditor";
 
 interface SubpageViewProps {
@@ -24,9 +26,11 @@ function formatDateHeading(dateStr: string): string {
 
 export default function SubpageView({ date, name }: SubpageViewProps) {
   const [content, setContent] = useState("");
+  const [revision, setRevision] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [autoEdit, setAutoEdit] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [existingSubpages, setExistingSubpages] = useState<Set<string>>(
     new Set()
   );
@@ -41,6 +45,7 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
         listSubpages(date).catch(() => ({ names: [] as string[] })),
       ]);
       setContent(data.content ?? "");
+      setRevision(data.revision ?? "");
       setExistingSubpages(new Set(subpagesResp.names ?? []));
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to load";
@@ -50,8 +55,9 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
         msg.includes("404")
       ) {
         try {
-          await updateSubpageContent(date, name, "");
+          const created = await updateSubpageContent(date, name, "", "");
           setContent("");
+          setRevision(created.revision ?? "");
           setAutoEdit(true);
         } catch (createErr) {
           setError(
@@ -72,11 +78,31 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
     load();
   }, [load]);
 
+  useEffect(() => {
+    return subscribeToChanges((event) => {
+      if (event.date !== date || event.subpageName !== name) return;
+      if (event.kind === "CHANGE_EVENT_KIND_SUBPAGE_UPDATED" && !isEditing && event.revision !== revision) {
+        void load();
+      }
+    });
+  }, [date, isEditing, load, name, revision]);
+
   const handleSave = useCallback(
     async (text: string) => {
-      await updateSubpageContent(date, name, text);
+      try {
+        const updated = await updateSubpageContent(date, name, text, revision);
+        setContent(updated.content ?? text);
+        setRevision(updated.revision ?? revision);
+        setError(null);
+      } catch (err) {
+        if (err instanceof RPCError && err.code === "failed_precondition") {
+          setError("This subpage changed on another client. The latest version has been reloaded.");
+          await load();
+        }
+        throw err;
+      }
     },
-    [date, name]
+    [date, load, name, revision]
   );
 
   if (loading) {
@@ -114,6 +140,7 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
         onContentChange={setContent}
         onSave={handleSave}
         onEntryCreated={load}
+        onEditingChange={setIsEditing}
         date={date}
         existingSubpages={existingSubpages}
         emptyMessage="No content yet. Click to start writing."

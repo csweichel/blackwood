@@ -2,10 +2,11 @@ import Foundation
 
 public protocol BlackwoodRemote: Sendable {
     func fetchDailyNote(date: String) async throws -> APIDailyNote
-    func updateDailyNoteContent(date: String, content: String) async throws -> APIDailyNote
+    func updateDailyNoteContent(date: String, content: String, baseRevision: String) async throws -> APIDailyNote
     func createAudioEntry(upload: PendingEntryUpload) async throws -> APIEntry
     func search(query: String, limit: Int) async throws -> [SearchResult]
     func checkHealth() async throws -> HealthCheckResponse
+    func makeChangeStream() -> AsyncThrowingStream<APIChangeEvent, Error>
 }
 
 public struct HealthCheckResponse: Codable, Equatable, Sendable {
@@ -29,10 +30,10 @@ public struct BlackwoodAPIClient: BlackwoodRemote, Sendable {
         )
     }
 
-    public func updateDailyNoteContent(date: String, content: String) async throws -> APIDailyNote {
+    public func updateDailyNoteContent(date: String, content: String, baseRevision: String) async throws -> APIDailyNote {
         try await rpc(
             path: "/blackwood.v1.DailyNotesService/UpdateDailyNoteContent",
-            request: ["date": date, "content": content]
+            request: ["date": date, "content": content, "baseRevision": baseRevision]
         )
     }
 
@@ -121,6 +122,66 @@ public struct BlackwoodAPIClient: BlackwoodRemote, Sendable {
         )
     }
 
+    public func makeChangeStream() -> AsyncThrowingStream<APIChangeEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    var urlRequest = URLRequest(url: baseURL.appending(path: "/blackwood.v1.DailyNotesService/StreamChanges"))
+                    urlRequest.httpMethod = "POST"
+                    urlRequest.setValue("application/connect+json", forHTTPHeaderField: "Content-Type")
+                    urlRequest.setValue("1", forHTTPHeaderField: "Connect-Protocol-Version")
+                    urlRequest.httpBody = envelopeRequest([:])
+
+                    let (bytes, response) = try await session.bytes(for: urlRequest)
+                    try validate(response: response, data: Data())
+
+                    var iterator = bytes.makeAsyncIterator()
+                    var buffer = Data()
+                    let decoder = JSONDecoder()
+                    decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+                    while let byte = try await iterator.next() {
+                        buffer.append(byte)
+
+                        while buffer.count >= 5 {
+                            let flags = buffer[0]
+                            let lengthData = buffer[1..<5]
+                            let length = lengthData.reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
+                            let frameSize = 5 + Int(length)
+                            guard buffer.count >= frameSize else { break }
+
+                            let payload = buffer[5..<frameSize]
+                            buffer.removeFirst(frameSize)
+
+                            if (flags & 0x01) != 0 {
+                                throw SyncFailure(message: "Compressed stream frames are not supported.", disposition: .terminal)
+                            }
+
+                            if (flags & 0x02) != 0 {
+                                let streamError = parsedErrorPayload(from: Data(payload))
+                                if let message = streamError.message {
+                                    throw SyncFailure(message: message, disposition: .retryable, code: streamError.code)
+                                }
+                                continue
+                            }
+
+                            let envelope = try decoder.decode(StreamEnvelope<APIChangeEvent>.self, from: Data(payload))
+                            continuation.yield(envelope.result ?? envelope.directResult)
+                        }
+                    }
+
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+
     private func rpc<Response: Decodable>(path: String, request: [String: Any]) async throws -> Response {
         let url = baseURL.appending(path: path)
         var urlRequest = URLRequest(url: url)
@@ -146,7 +207,7 @@ public struct BlackwoodAPIClient: BlackwoodRemote, Sendable {
                 throw AuthChallenge(kind: kind, message: text)
             }
             let disposition: SyncFailureDisposition = http.statusCode >= 500 ? .retryable : .terminal
-            throw SyncFailure(message: text, disposition: disposition)
+            throw SyncFailure(message: text, disposition: disposition, code: payload.code)
         }
     }
 
@@ -175,4 +236,34 @@ public struct BlackwoodAPIClient: BlackwoodRemote, Sendable {
 
         return (code, nil)
     }
+
+    private func envelopeRequest(_ payload: [String: Any]) -> Data {
+        let json = (try? JSONSerialization.data(withJSONObject: payload)) ?? Data("{}".utf8)
+        var framed = Data([0, 0, 0, 0, 0])
+        let length = UInt32(json.count).bigEndian
+        withUnsafeBytes(of: length) { framed.replaceSubrange(1..<5, with: $0) }
+        framed.append(json)
+        return framed
+    }
+}
+
+private struct StreamEnvelope<Result: Decodable>: Decodable {
+    let result: Result?
+    let directResult: Result
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let wrapped = try? container.decode(ResultWrapper<Result>.self), let result = wrapped.result {
+            self.result = result
+            self.directResult = result
+            return
+        }
+        let direct = try container.decode(Result.self)
+        self.result = nil
+        self.directResult = direct
+    }
+}
+
+private struct ResultWrapper<Result: Decodable>: Decodable {
+    let result: Result?
 }

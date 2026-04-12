@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { fetchSummariesInRange } from "../api/client";
+import { subscribeToChanges } from "../lib/changeEvents";
 import {
   getCurrentMonthId,
   getMonthCalendarDates,
@@ -34,6 +35,25 @@ export default function MonthView() {
       })
       .catch(() => setSummaries({}))
       .finally(() => setLoading(false));
+  }, [currentMonth]);
+
+  useEffect(() => {
+    const dates = getMonthCalendarDates(currentMonth);
+    const start = fmtDate(dates[0]);
+    const end = fmtDate(dates[dates.length - 1]);
+    return subscribeToChanges((event) => {
+      if (event.kind !== "CHANGE_EVENT_KIND_DAILY_NOTE_UPDATED") return;
+      if (event.date < start || event.date > end) return;
+      setLoading(true);
+      fetchSummariesInRange(start, end)
+        .then((data) => {
+          const map: Record<string, string> = {};
+          for (const s of data) map[s.date] = s.summary;
+          setSummaries(map);
+        })
+        .catch(() => setSummaries({}))
+        .finally(() => setLoading(false));
+    });
   }, [currentMonth]);
 
   const calendarDates = getMonthCalendarDates(currentMonth);

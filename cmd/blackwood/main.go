@@ -98,6 +98,10 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = store.Close() }()
+	changes := api.NewChangeBroadcaster()
+	store.SetNoteChangeNotifier(func(date string, updatedAt time.Time) {
+		changes.PublishDailyNote(date, updatedAt)
+	})
 
 	srv := api.NewServer(addr)
 
@@ -163,7 +167,7 @@ func main() {
 	}
 
 	// Register the daily notes service.
-	dnPath, dnHandler := blackwoodv1connect.NewDailyNotesServiceHandler(api.NewDailyNotesHandler(store, audioTranscriber, semanticIndex))
+	dnPath, dnHandler := blackwoodv1connect.NewDailyNotesServiceHandler(api.NewDailyNotesHandler(store, audioTranscriber, semanticIndex, changes))
 	srv.Handle(dnPath, dnHandler)
 
 	// Create the background import worker (started after context is created below).

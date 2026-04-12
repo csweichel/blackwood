@@ -12,12 +12,12 @@ private actor MockRemote: BlackwoodRemote {
     }
 
     func fetchDailyNote(date: String) async throws -> APIDailyNote {
-        APIDailyNote(id: "note", date: date, entries: [], createdAt: "", updatedAt: "", content: "# Notes")
+        APIDailyNote(id: "note", date: date, entries: [], createdAt: "", updatedAt: "", content: "# Notes", revision: "rev-1")
     }
 
-    func updateDailyNoteContent(date: String, content: String) async throws -> APIDailyNote {
+    func updateDailyNoteContent(date: String, content: String, baseRevision: String) async throws -> APIDailyNote {
         updatedDates.append(date)
-        return APIDailyNote(id: "note", date: date, entries: [], createdAt: "", updatedAt: "", content: content)
+        return APIDailyNote(id: "note", date: date, entries: [], createdAt: "", updatedAt: "", content: content, revision: "rev-2")
     }
 
     func createAudioEntry(upload: PendingEntryUpload) async throws -> APIEntry {
@@ -34,6 +34,12 @@ private actor MockRemote: BlackwoodRemote {
     func checkHealth() async throws -> HealthCheckResponse {
         HealthCheckResponse(status: "ok", version: "test")
     }
+
+    func makeChangeStream() -> AsyncThrowingStream<APIChangeEvent, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.finish()
+        }
+    }
 }
 
 @Test
@@ -44,7 +50,7 @@ func syncFlushesNoteUpdatesAndUploads() async throws {
     try Data("audio".utf8).write(to: audioURL)
 
     let store = QueueStore(baseDirectory: base)
-    try await store.queueNoteUpdate(date: "2026-03-25", content: "updated")
+    try await store.queueNoteUpdate(date: "2026-03-25", content: "updated", baseRevision: "rev-1")
     try await store.queueAudioUpload(PendingEntryUpload(date: "2026-03-25", localFilePath: audioURL.path, duration: 3))
 
     let remote = MockRemote()

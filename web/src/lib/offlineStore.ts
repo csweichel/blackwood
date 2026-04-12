@@ -7,6 +7,7 @@ export interface CachedDailyNote {
   date: string;
   content: string;
   updatedAt: number;
+  revision: string;
 }
 
 export interface PendingEntry {
@@ -25,6 +26,7 @@ export interface PendingContentUpdate {
   date: string;
   content: string;
   updatedAt: number;
+  baseRevision: string;
 }
 
 interface BlackwoodDB extends DBSchema {
@@ -35,7 +37,7 @@ interface BlackwoodDB extends DBSchema {
   pendingEntries: {
     key: number;
     value: PendingEntry;
-    indexes: {};
+    indexes: Record<string, never>;
   };
   pendingContentUpdates: {
     key: string;
@@ -49,7 +51,7 @@ let dbPromise: Promise<IDBPDatabase<BlackwoodDB>> | null = null;
 
 function getDB(): Promise<IDBPDatabase<BlackwoodDB>> {
   if (!dbPromise) {
-    dbPromise = openDB<BlackwoodDB>("blackwood-offline", 1, {
+    dbPromise = openDB<BlackwoodDB>("blackwood-offline", 2, {
       upgrade(db) {
         if (!db.objectStoreNames.contains("dailyNotes")) {
           db.createObjectStore("dailyNotes", { keyPath: "date" });
@@ -73,10 +75,11 @@ function getDB(): Promise<IDBPDatabase<BlackwoodDB>> {
 
 export async function cacheDailyNote(
   date: string,
-  content: string
+  content: string,
+  revision: string = ""
 ): Promise<void> {
   const db = await getDB();
-  await db.put("dailyNotes", { date, content, updatedAt: Date.now() });
+  await db.put("dailyNotes", { date, content, updatedAt: Date.now(), revision });
 }
 
 export async function getCachedDailyNote(
@@ -91,7 +94,8 @@ export async function getCachedDailyNote(
 export async function queueEntry(entry: PendingEntry): Promise<number> {
   const db = await getDB();
   // Strip the id so autoIncrement assigns one.
-  const { id: _id, ...rest } = entry;
+  const { id, ...rest } = entry;
+  void id;
   return db.add("pendingEntries", rest as PendingEntry);
 }
 
@@ -109,14 +113,16 @@ export async function removePendingEntry(id: number): Promise<void> {
 
 export async function queueContentUpdate(
   date: string,
-  content: string
+  content: string,
+  baseRevision: string
 ): Promise<void> {
   const db = await getDB();
-  // Last-write-wins: overwrite any existing update for the same date.
+  const existing = await db.get("pendingContentUpdates", date);
   await db.put("pendingContentUpdates", {
     date,
     content,
     updatedAt: Date.now(),
+    baseRevision: existing?.baseRevision ?? baseRevision,
   });
 }
 

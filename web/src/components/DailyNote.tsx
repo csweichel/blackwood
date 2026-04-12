@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { visit } from "unist-util-visit";
-import { getDailyNote, updateDailyNoteContent, listSubpages } from "../api/client";
+import { getDailyNote, listSubpages, RPCError, updateDailyNoteContent } from "../api/client";
 import { useGeolocation } from "../hooks/useGeolocation";
+import { subscribeToChanges } from "../lib/changeEvents";
 
 import NoteEditor from "./NoteEditor";
 
@@ -400,9 +401,11 @@ function formatDateHeading(dateStr: string): string {
 
 export default function DailyNoteView({ date }: DailyNoteViewProps) {
   const [content, setContent] = useState("");
+  const [revision, setRevision] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [existingSubpages, setExistingSubpages] = useState<Set<string>>(new Set());
+  const [isEditing, setIsEditing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -413,11 +416,13 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
         listSubpages(date).catch(() => ({ names: [] as string[] })),
       ]);
       setContent(data.content ?? "");
+      setRevision(data.revision ?? "");
       setExistingSubpages(new Set(subpagesResp.names ?? []));
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to load";
       if (msg.includes("404") || msg.includes("not found") || msg.includes("not_found")) {
         setContent("");
+        setRevision("");
       } else {
         setError(msg);
       }
@@ -429,6 +434,15 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    return subscribeToChanges((event) => {
+      if (event.date !== date) return;
+      if (event.kind === "CHANGE_EVENT_KIND_DAILY_NOTE_UPDATED" && !isEditing && event.revision !== revision) {
+        void load();
+      }
+    });
+  }, [date, isEditing, load, revision]);
 
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
@@ -457,9 +471,20 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
 
   const handleSave = useCallback(
     async (text: string) => {
-      await updateDailyNoteContent(date, text);
+      try {
+        const updated = await updateDailyNoteContent(date, text, revision);
+        setContent(updated.content ?? text);
+        setRevision(updated.revision ?? revision);
+        setError(null);
+      } catch (err) {
+        if (err instanceof RPCError && err.code === "failed_precondition") {
+          setError("This note changed on another client. The latest version has been reloaded.");
+          await load();
+        }
+        throw err;
+      }
     },
-    [date]
+    [date, load, revision]
   );
 
   const downloadPdf = useCallback(async () => {
@@ -601,6 +626,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
         onContentChange={setContent}
         onSave={handleSave}
         onEntryCreated={load}
+        onEditingChange={setIsEditing}
         date={date}
         existingSubpages={existingSubpages}
         emptyMessage="No entries yet. Click to start writing, or add an entry below."

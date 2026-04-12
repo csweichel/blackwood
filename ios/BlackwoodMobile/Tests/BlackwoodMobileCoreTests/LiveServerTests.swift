@@ -36,7 +36,7 @@ func liveWireProtocolRoundTrip() async throws {
     let date = populatedDate
     let template = "# Summary\n\nIntegration test note.\n\n# Notes\n\n# Links\n"
 
-    let updated = try await client.updateDailyNoteContent(date: date, content: template)
+    let updated = try await client.updateDailyNoteContent(date: date, content: template, baseRevision: "")
     #expect(updated.content.contains("Integration test note."))
 
     let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)

@@ -47,6 +47,7 @@ export interface DailyNote {
   entries: Entry[];
   createdAt: string;
   updatedAt: string;
+  revision: string;
 }
 
 export interface ListDailyNotesResponse {
@@ -165,8 +166,25 @@ export interface Subpage {
   name: string;
   content: string;
   date: string;
+  revision: string;
+  updatedAt: string;
 }
 
 export interface ListSubpagesResponse {
   names: string[];
+}
+
+export const ChangeEventKind = {
+  UNSPECIFIED: "CHANGE_EVENT_KIND_UNSPECIFIED",
+  DAILY_NOTE_UPDATED: "CHANGE_EVENT_KIND_DAILY_NOTE_UPDATED",
+  SUBPAGE_UPDATED: "CHANGE_EVENT_KIND_SUBPAGE_UPDATED",
+} as const;
+export type ChangeEventKind = (typeof ChangeEventKind)[keyof typeof ChangeEventKind];
+
+export interface ChangeEvent {
+  kind: ChangeEventKind;
+  date: string;
+  subpageName: string;
+  revision: string;
+  changedAt: string;
 }

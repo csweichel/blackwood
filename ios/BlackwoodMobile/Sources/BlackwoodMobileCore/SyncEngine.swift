@@ -20,9 +20,27 @@ public final class SyncEngine: @unchecked Sendable {
 
         let noteUpdates = try await store.pendingNoteUpdates()
         for update in noteUpdates {
-            _ = try await remote.updateDailyNoteContent(date: update.date, content: update.content)
-            try await store.removeNoteUpdate(id: update.id)
-            syncedNoteUpdates += 1
+            do {
+                let note = try await remote.updateDailyNoteContent(
+                    date: update.date,
+                    content: update.content,
+                    baseRevision: update.baseRevision
+                )
+                try await store.cacheDailyNote(
+                    date: update.date,
+                    content: note.content,
+                    updatedAt: ISO8601DateFormatter().date(from: note.updatedAt) ?? Date(),
+                    revision: note.revision
+                )
+                try await store.removeNoteUpdate(id: update.id)
+                syncedNoteUpdates += 1
+            } catch let failure as SyncFailure {
+                if failure.code == "failed_precondition" {
+                    try await store.removeNoteUpdate(id: update.id)
+                    throw failure
+                }
+                throw failure
+            }
         }
 
         let uploads = try await store.pendingUploads()

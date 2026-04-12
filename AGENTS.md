@@ -119,6 +119,8 @@ Vite proxies API calls to `localhost:8080` by default. Adjust `vite.config.ts` i
 - Generated code: `gen/blackwood/v1/` — **never edit manually**
 - Wire format: Connect-RPC JSON (camelCase field names)
 - Streaming: Server-streaming for `Chat` RPC using Connect protocol envelopes
+- Live updates: `DailyNotesService.StreamChanges` provides Connect server-streaming invalidation events for daily notes and subpages. Clients should treat these as reload hints, not as authoritative document contents.
+- Optimistic concurrency: `DailyNote.revision` and `Subpage.revision` are opaque concurrency tokens. Clients must send `base_revision` on updates when they want conflict detection; the server returns `failed_precondition` if the document changed meanwhile.
 
 When adding a new RPC:
 1. Define messages and service method in the appropriate `.proto` file
@@ -214,4 +216,4 @@ GoReleaser (`.goreleaser.yaml`):
 - **Proto/types drift**: `web/src/api/types.ts` is manually maintained. After proto changes, update it to match.
 - **SQLite busy errors**: All writes go through the single-connection write pool. Use `RetryOnBusy()` when accessing the write DB from outside the storage package.
 - **Nil AI services**: Transcriber, describer, indexer, and RAG engine are all nil when no OpenAI API key is configured. Guard with nil checks.
-- **buf.gen.yaml paths**: Plugin paths in `buf.gen.yaml` reference the maintainer's local Go bin. `buf generate` requires `protoc-gen-go` and `protoc-gen-connect-go` in your PATH.
+- **Proto generation tools**: `buf generate` uses `protoc-gen-go` and `protoc-gen-connect-go` from your `PATH`. Ensure both plugins are installed before regenerating.

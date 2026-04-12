@@ -5,8 +5,10 @@ import {
   removePendingEntry,
   removePendingContentUpdate,
   getPendingCount,
+  cacheDailyNote,
 } from "./offlineStore";
 import type { Entry, DailyNote } from "../api/types";
+import { RPCError } from "../api/client";
 
 const DAILY_NOTES_SERVICE = "/blackwood.v1.DailyNotesService";
 
@@ -21,7 +23,18 @@ async function rawRpc<Req, Res>(method: string, request: Req): Promise<Res> {
   });
   if (!resp.ok) {
     const text = await resp.text();
-    throw new Error(`RPC ${method} failed (${resp.status}): ${text}`);
+    let code: string | undefined;
+    let message = `RPC ${method} failed (${resp.status})`;
+    try {
+      const parsed = JSON.parse(text) as { code?: string; message?: string; error?: { code?: string; message?: string } };
+      code = parsed.code ?? parsed.error?.code;
+      message = parsed.message ?? parsed.error?.message ?? message;
+    } catch {
+      if (text.trim()) {
+        message = text;
+      }
+    }
+    throw new RPCError(message, resp.status, code);
   }
   return resp.json();
 }
@@ -86,13 +99,19 @@ export async function startSync(): Promise<void> {
     const contentUpdates = await getPendingContentUpdates();
     for (const update of contentUpdates) {
       try {
-        await rawRpc<{ date: string; content: string }, DailyNote>(
+        await rawRpc<{ date: string; content: string; baseRevision: string }, DailyNote>(
           "UpdateDailyNoteContent",
-          { date: update.date, content: update.content }
+          { date: update.date, content: update.content, baseRevision: update.baseRevision }
         );
+        const synced = await rawRpc<{ date: string }, DailyNote>("GetDailyNote", { date: update.date });
+        await cacheDailyNote(update.date, synced.content ?? "", synced.revision ?? "");
         await removePendingContentUpdate(update.date);
       } catch (err) {
         console.error(`Sync: failed to update content for ${update.date}:`, err);
+        if (err instanceof RPCError && err.code === "failed_precondition") {
+          await removePendingContentUpdate(update.date);
+          break;
+        }
         // Stop syncing on network error to avoid hammering a down server.
         if (!navigator.onLine) break;
       }

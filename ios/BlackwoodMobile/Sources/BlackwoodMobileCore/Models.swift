@@ -147,6 +147,7 @@ public struct APIDailyNote: Codable, Equatable, Sendable {
     public let createdAt: String
     public let updatedAt: String
     public let content: String
+    public let revision: String
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -155,6 +156,7 @@ public struct APIDailyNote: Codable, Equatable, Sendable {
         case createdAt
         case updatedAt
         case content
+        case revision
     }
 
     public init(
@@ -163,7 +165,8 @@ public struct APIDailyNote: Codable, Equatable, Sendable {
         entries: [APIEntry],
         createdAt: String,
         updatedAt: String,
-        content: String
+        content: String,
+        revision: String
     ) {
         self.id = id
         self.date = date
@@ -171,6 +174,7 @@ public struct APIDailyNote: Codable, Equatable, Sendable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.content = content
+        self.revision = revision
     }
 
     public init(from decoder: Decoder) throws {
@@ -181,6 +185,7 @@ public struct APIDailyNote: Codable, Equatable, Sendable {
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt) ?? ""
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt) ?? ""
         content = try container.decodeIfPresent(String.self, forKey: .content) ?? ""
+        revision = try container.decodeIfPresent(String.self, forKey: .revision) ?? ""
     }
 }
 
@@ -201,6 +206,29 @@ public struct CachedDailyNote: Codable, Equatable, Sendable {
     public let date: String
     public var content: String
     public var updatedAt: Date
+    public var revision: String
+
+    enum CodingKeys: String, CodingKey {
+        case date
+        case content
+        case updatedAt
+        case revision
+    }
+
+    public init(date: String, content: String, updatedAt: Date, revision: String) {
+        self.date = date
+        self.content = content
+        self.updatedAt = updatedAt
+        self.revision = revision
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        date = try container.decode(String.self, forKey: .date)
+        content = try container.decode(String.self, forKey: .content)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        revision = try container.decodeIfPresent(String.self, forKey: .revision) ?? ""
+    }
 }
 
 public struct PendingNoteUpdate: Codable, Equatable, Sendable, Identifiable {
@@ -208,13 +236,40 @@ public struct PendingNoteUpdate: Codable, Equatable, Sendable, Identifiable {
     public let date: String
     public var content: String
     public var updatedAt: Date
+    public var baseRevision: String
 
-    public init(id: String = UUID().uuidString, date: String, content: String, updatedAt: Date = Date()) {
+    public init(id: String = UUID().uuidString, date: String, content: String, updatedAt: Date = Date(), baseRevision: String) {
         self.id = id
         self.date = date
         self.content = content
         self.updatedAt = updatedAt
+        self.baseRevision = baseRevision
     }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case date
+        case content
+        case updatedAt
+        case baseRevision
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        date = try container.decode(String.self, forKey: .date)
+        content = try container.decode(String.self, forKey: .content)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        baseRevision = try container.decodeIfPresent(String.self, forKey: .baseRevision) ?? ""
+    }
+}
+
+public struct APIChangeEvent: Codable, Equatable, Sendable {
+    public let kind: String
+    public let date: String
+    public let subpageName: String
+    public let revision: String
+    public let changedAt: String
 }
 
 public enum PendingUploadStatus: String, Codable, Equatable, Sendable {
@@ -292,9 +347,11 @@ public enum SyncFailureDisposition: Equatable, Sendable {
 public struct SyncFailure: Error, Equatable, Sendable {
     public let message: String
     public let disposition: SyncFailureDisposition
+    public let code: String?
 
-    public init(message: String, disposition: SyncFailureDisposition) {
+    public init(message: String, disposition: SyncFailureDisposition, code: String? = nil) {
         self.message = message
         self.disposition = disposition
+        self.code = code
     }
 }

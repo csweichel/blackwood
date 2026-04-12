@@ -1,10 +1,8 @@
 version: v1
 plugins:
   - plugin: go
-    path: /Users/christianweichel/go/bin/protoc-gen-go
     out: gen
     opt: paths=source_relative
   - plugin: connect-go
-    path: /Users/christianweichel/go/bin/protoc-gen-connect-go
     out: gen
     opt: paths=source_relative

@@ -45,6 +45,7 @@ final class AppModel: ObservableObject {
     @Published var selectedDate = Date()
     @Published var noteContent = ""
     @Published var draftContent = ""
+    @Published var noteRevision = ""
     @Published var isEditing = false
     @Published var isLoadingNote = false
     @Published var noteError: String?
@@ -70,6 +71,7 @@ final class AppModel: ObservableObject {
     private var didStart = false
     private var syncRetryAttempt = 0
     private var nextAutomaticSyncAllowedAt = Date.distantPast
+    private var changeStreamTask: Task<Void, Never>?
 
     init() {
         authState = UserDefaults.standard.bool(forKey: Self.lastAuthenticatedKey)
@@ -184,8 +186,8 @@ final class AppModel: ObservableObject {
         isEditing = false
 
         do {
-            try await store.cacheDailyNote(date: date, content: draftContent)
-            try await store.queueNoteUpdate(date: date, content: draftContent)
+            try await store.cacheDailyNote(date: date, content: draftContent, revision: noteRevision)
+            try await store.queueNoteUpdate(date: date, content: draftContent, baseRevision: noteRevision)
             await refreshQueueSnapshot()
             await syncNow()
         } catch {
@@ -242,10 +244,12 @@ final class AppModel: ObservableObject {
         }
         UserDefaults.standard.set(serverURLString, forKey: "blackwood.serverURL")
         connectionTestState = .idle
+        stopChangeStream()
         await refreshAuthStatus()
         if isAuthenticated {
             await loadSelectedDate()
             await refreshServerReachability()
+            startChangeStream()
             if isNetworkAvailable {
                 await syncNow()
             }
@@ -297,6 +301,12 @@ final class AppModel: ObservableObject {
             await refreshQueueSnapshot()
         } catch {
             if await handleAuthFailure(error) {
+                return
+            }
+            if let failure = error as? SyncFailure, failure.code == "failed_precondition" {
+                noteError = failure.message
+                await refreshSelectedDateFromServer(date: Self.dayString(from: selectedDate), showLoadingState: false)
+                await refreshQueueSnapshot()
                 return
             }
             if isConnectivityFailure(error) {
@@ -552,9 +562,11 @@ final class AppModel: ObservableObject {
         authStatusMessage = nil
         noteContent = ""
         draftContent = ""
+        noteRevision = ""
         searchResults = []
         searchError = nil
         noteError = nil
+        stopChangeStream()
     }
 
     private func hydrateLaunchState() async {
@@ -567,6 +579,7 @@ final class AppModel: ObservableObject {
         guard isAuthenticated else { return }
         let date = Self.dayString(from: selectedDate)
         await refreshSelectedDateFromServer(date: date, showLoadingState: noteContent.isEmpty)
+        startChangeStream()
         if isNetworkAvailable {
             await refreshServerReachability()
             await syncNow()
@@ -579,6 +592,7 @@ final class AppModel: ObservableObject {
             return false
         }
         noteContent = cached.content
+        noteRevision = cached.revision
         if !isEditing {
             draftContent = cached.content
         }
@@ -597,13 +611,24 @@ final class AppModel: ObservableObject {
         do {
             let note = try await client.fetchDailyNote(date: date)
             noteContent = note.content
+            noteRevision = note.revision
             if !isEditing {
                 draftContent = note.content
             }
-            try await store.cacheDailyNote(date: date, content: note.content)
+            try await store.cacheDailyNote(
+                date: date,
+                content: note.content,
+                updatedAt: ISO8601DateFormatter().date(from: note.updatedAt) ?? Date(),
+                revision: note.revision
+            )
             markServerReachable()
         } catch {
             if await handleAuthFailure(error) {
+                return
+            }
+            if let failure = error as? SyncFailure, failure.code == "failed_precondition" {
+                noteError = "This note changed on another client. The latest version has been reloaded."
+                await refreshSelectedDateFromServer(date: date, showLoadingState: false)
                 return
             }
             handleConnectionFailure(error)
@@ -611,6 +636,34 @@ final class AppModel: ObservableObject {
                 noteError = userFacingMessage(for: error, fallback: "Blackwood is unreachable right now.")
             }
         }
+    }
+
+    private func startChangeStream() {
+        guard changeStreamTask == nil, isAuthenticated, let client = apiClient else { return }
+        changeStreamTask = Task { [weak self] in
+            while let self, !Task.isCancelled {
+                do {
+                    for try await event in client.makeChangeStream() {
+                        if Task.isCancelled { return }
+                        guard event.kind == "CHANGE_EVENT_KIND_DAILY_NOTE_UPDATED" else { continue }
+                        let selected = Self.dayString(from: self.selectedDate)
+                        guard event.date == selected else { continue }
+                        guard !self.isEditing else { continue }
+                        guard event.revision != self.noteRevision else { continue }
+                        await self.refreshSelectedDateFromServer(date: selected, showLoadingState: false)
+                    }
+                    return
+                } catch {
+                    if Task.isCancelled { return }
+                    try? await Task.sleep(for: .seconds(2))
+                }
+            }
+        }
+    }
+
+    private func stopChangeStream() {
+        changeStreamTask?.cancel()
+        changeStreamTask = nil
     }
 
     private func audioContentType(for fileURL: URL) -> String {

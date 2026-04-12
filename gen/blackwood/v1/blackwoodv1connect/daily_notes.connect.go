@@ -66,6 +66,9 @@ const (
 	// DailyNotesServiceListSubpagesProcedure is the fully-qualified name of the DailyNotesService's
 	// ListSubpages RPC.
 	DailyNotesServiceListSubpagesProcedure = "/blackwood.v1.DailyNotesService/ListSubpages"
+	// DailyNotesServiceStreamChangesProcedure is the fully-qualified name of the DailyNotesService's
+	// StreamChanges RPC.
+	DailyNotesServiceStreamChangesProcedure = "/blackwood.v1.DailyNotesService/StreamChanges"
 )
 
 // DailyNotesServiceClient is a client for the blackwood.v1.DailyNotesService service.
@@ -81,6 +84,7 @@ type DailyNotesServiceClient interface {
 	GetSubpage(context.Context, *connect.Request[v1.GetSubpageRequest]) (*connect.Response[v1.Subpage], error)
 	UpdateSubpageContent(context.Context, *connect.Request[v1.UpdateSubpageContentRequest]) (*connect.Response[v1.Subpage], error)
 	ListSubpages(context.Context, *connect.Request[v1.ListSubpagesRequest]) (*connect.Response[v1.ListSubpagesResponse], error)
+	StreamChanges(context.Context, *connect.Request[v1.StreamChangesRequest]) (*connect.ServerStreamForClient[v1.ChangeEvent], error)
 }
 
 // NewDailyNotesServiceClient constructs a client for the blackwood.v1.DailyNotesService service. By
@@ -160,6 +164,12 @@ func NewDailyNotesServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(dailyNotesServiceMethods.ByName("ListSubpages")),
 			connect.WithClientOptions(opts...),
 		),
+		streamChanges: connect.NewClient[v1.StreamChangesRequest, v1.ChangeEvent](
+			httpClient,
+			baseURL+DailyNotesServiceStreamChangesProcedure,
+			connect.WithSchema(dailyNotesServiceMethods.ByName("StreamChanges")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -176,6 +186,7 @@ type dailyNotesServiceClient struct {
 	getSubpage             *connect.Client[v1.GetSubpageRequest, v1.Subpage]
 	updateSubpageContent   *connect.Client[v1.UpdateSubpageContentRequest, v1.Subpage]
 	listSubpages           *connect.Client[v1.ListSubpagesRequest, v1.ListSubpagesResponse]
+	streamChanges          *connect.Client[v1.StreamChangesRequest, v1.ChangeEvent]
 }
 
 // GetDailyNote calls blackwood.v1.DailyNotesService.GetDailyNote.
@@ -233,6 +244,11 @@ func (c *dailyNotesServiceClient) ListSubpages(ctx context.Context, req *connect
 	return c.listSubpages.CallUnary(ctx, req)
 }
 
+// StreamChanges calls blackwood.v1.DailyNotesService.StreamChanges.
+func (c *dailyNotesServiceClient) StreamChanges(ctx context.Context, req *connect.Request[v1.StreamChangesRequest]) (*connect.ServerStreamForClient[v1.ChangeEvent], error) {
+	return c.streamChanges.CallServerStream(ctx, req)
+}
+
 // DailyNotesServiceHandler is an implementation of the blackwood.v1.DailyNotesService service.
 type DailyNotesServiceHandler interface {
 	GetDailyNote(context.Context, *connect.Request[v1.GetDailyNoteRequest]) (*connect.Response[v1.DailyNote], error)
@@ -246,6 +262,7 @@ type DailyNotesServiceHandler interface {
 	GetSubpage(context.Context, *connect.Request[v1.GetSubpageRequest]) (*connect.Response[v1.Subpage], error)
 	UpdateSubpageContent(context.Context, *connect.Request[v1.UpdateSubpageContentRequest]) (*connect.Response[v1.Subpage], error)
 	ListSubpages(context.Context, *connect.Request[v1.ListSubpagesRequest]) (*connect.Response[v1.ListSubpagesResponse], error)
+	StreamChanges(context.Context, *connect.Request[v1.StreamChangesRequest], *connect.ServerStream[v1.ChangeEvent]) error
 }
 
 // NewDailyNotesServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -321,6 +338,12 @@ func NewDailyNotesServiceHandler(svc DailyNotesServiceHandler, opts ...connect.H
 		connect.WithSchema(dailyNotesServiceMethods.ByName("ListSubpages")),
 		connect.WithHandlerOptions(opts...),
 	)
+	dailyNotesServiceStreamChangesHandler := connect.NewServerStreamHandler(
+		DailyNotesServiceStreamChangesProcedure,
+		svc.StreamChanges,
+		connect.WithSchema(dailyNotesServiceMethods.ByName("StreamChanges")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/blackwood.v1.DailyNotesService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DailyNotesServiceGetDailyNoteProcedure:
@@ -345,6 +368,8 @@ func NewDailyNotesServiceHandler(svc DailyNotesServiceHandler, opts ...connect.H
 			dailyNotesServiceUpdateSubpageContentHandler.ServeHTTP(w, r)
 		case DailyNotesServiceListSubpagesProcedure:
 			dailyNotesServiceListSubpagesHandler.ServeHTTP(w, r)
+		case DailyNotesServiceStreamChangesProcedure:
+			dailyNotesServiceStreamChangesHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -396,4 +421,8 @@ func (UnimplementedDailyNotesServiceHandler) UpdateSubpageContent(context.Contex
 
 func (UnimplementedDailyNotesServiceHandler) ListSubpages(context.Context, *connect.Request[v1.ListSubpagesRequest]) (*connect.Response[v1.ListSubpagesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("blackwood.v1.DailyNotesService.ListSubpages is not implemented"))
+}
+
+func (UnimplementedDailyNotesServiceHandler) StreamChanges(context.Context, *connect.Request[v1.StreamChangesRequest], *connect.ServerStream[v1.ChangeEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("blackwood.v1.DailyNotesService.StreamChanges is not implemented"))
 }

@@ -23,9 +23,10 @@ var schema string
 // contention. The write pool is limited to a single connection so all writes
 // are serialized in-process.
 type Store struct {
-	readDB  *sql.DB
-	writeDB *sql.DB
-	dataDir string
+	readDB             *sql.DB
+	writeDB            *sql.DB
+	dataDir            string
+	noteChangeNotifier func(date string, updatedAt time.Time)
 }
 
 // DailyNote represents a single day's note container.
@@ -138,6 +139,17 @@ func (s *Store) Close() error {
 		return wErr
 	}
 	return rErr
+}
+
+// SetNoteChangeNotifier registers a callback invoked after a daily note's content changes.
+func (s *Store) SetNoteChangeNotifier(fn func(date string, updatedAt time.Time)) {
+	s.noteChangeNotifier = fn
+}
+
+func (s *Store) notifyDailyNoteChanged(date string, updatedAt time.Time) {
+	if s.noteChangeNotifier != nil {
+		s.noteChangeNotifier(date, updatedAt)
+	}
 }
 
 // DB returns the read database connection for use by other packages
@@ -355,10 +367,14 @@ func (s *Store) UpdateDailyNoteContent(ctx context.Context, id string, content s
 	if err := s.writeNoteContent(date, content); err != nil {
 		return fmt.Errorf("write note file: %w", err)
 	}
+	now := time.Now().UTC()
 	_, err = s.exec(ctx,
 		`UPDATE daily_notes SET updated_at = ? WHERE id = ?`,
-		time.Now().UTC(), id,
+		now, id,
 	)
+	if err == nil {
+		s.notifyDailyNoteChanged(date, now)
+	}
 	return err
 }
 
@@ -372,10 +388,14 @@ func (s *Store) AppendDailyNoteContent(ctx context.Context, id string, text stri
 	if err := s.writeNoteContent(date, existing+text); err != nil {
 		return fmt.Errorf("write note file: %w", err)
 	}
+	now := time.Now().UTC()
 	_, err = s.exec(ctx,
 		`UPDATE daily_notes SET updated_at = ? WHERE id = ?`,
-		time.Now().UTC(), id,
+		now, id,
 	)
+	if err == nil {
+		s.notifyDailyNoteChanged(date, now)
+	}
 	return err
 }
 
@@ -424,10 +444,14 @@ func (s *Store) AppendToSection(ctx context.Context, id string, section string, 
 	if err := s.writeNoteContent(date, content); err != nil {
 		return fmt.Errorf("write note file: %w", err)
 	}
+	now := time.Now().UTC()
 	_, err = s.exec(ctx,
 		`UPDATE daily_notes SET updated_at = ? WHERE id = ?`,
-		time.Now().UTC(), id,
+		now, id,
 	)
+	if err == nil {
+		s.notifyDailyNoteChanged(date, now)
+	}
 	return err
 }
 
@@ -496,10 +520,14 @@ func (s *Store) SetSection(ctx context.Context, id string, section string, text 
 	if err := s.writeNoteContent(date, content); err != nil {
 		return fmt.Errorf("write note file: %w", err)
 	}
+	now := time.Now().UTC()
 	_, err = s.exec(ctx,
 		`UPDATE daily_notes SET updated_at = ? WHERE id = ?`,
-		time.Now().UTC(), id,
+		now, id,
 	)
+	if err == nil {
+		s.notifyDailyNoteChanged(date, now)
+	}
 	return err
 }
 
@@ -1483,4 +1511,3 @@ func (s *Store) CleanExpiredSessions(ctx context.Context) error {
 	_, err := s.exec(ctx, `DELETE FROM auth_sessions WHERE expires_at < CURRENT_TIMESTAMP`)
 	return err
 }
-

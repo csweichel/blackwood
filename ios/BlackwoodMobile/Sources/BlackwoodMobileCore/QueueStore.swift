@@ -18,9 +18,9 @@ public actor QueueStore {
         decoder.dateDecodingStrategy = .iso8601
     }
 
-    public func cacheDailyNote(date: String, content: String, updatedAt: Date = Date()) async throws {
+    public func cacheDailyNote(date: String, content: String, updatedAt: Date = Date(), revision: String = "") async throws {
         var cache = try loadCache()
-        cache[date] = CachedDailyNote(date: date, content: content, updatedAt: updatedAt)
+        cache[date] = CachedDailyNote(date: date, content: content, updatedAt: updatedAt, revision: revision)
         try save(cache, to: cacheFile)
     }
 
@@ -28,13 +28,16 @@ public actor QueueStore {
         try loadCache()[date]
     }
 
-    public func queueNoteUpdate(date: String, content: String, updatedAt: Date = Date()) async throws {
+    public func queueNoteUpdate(date: String, content: String, updatedAt: Date = Date(), baseRevision: String) async throws {
         var updates = try loadNoteUpdates()
         if let existingIndex = updates.firstIndex(where: { $0.date == date }) {
             updates[existingIndex].content = content
             updates[existingIndex].updatedAt = updatedAt
+            if updates[existingIndex].baseRevision.isEmpty {
+                updates[existingIndex].baseRevision = baseRevision
+            }
         } else {
-            updates.append(PendingNoteUpdate(date: date, content: content, updatedAt: updatedAt))
+            updates.append(PendingNoteUpdate(date: date, content: content, updatedAt: updatedAt, baseRevision: baseRevision))
         }
         updates.sort { $0.updatedAt < $1.updatedAt }
         try save(updates, to: noteUpdatesFile)

@@ -5,12 +5,13 @@ import Testing
 @Test
 func noteUpdatesAreLastWriteWinsPerDate() async throws {
     let store = QueueStore(baseDirectory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
-    try await store.queueNoteUpdate(date: "2026-03-25", content: "first")
-    try await store.queueNoteUpdate(date: "2026-03-25", content: "second")
+    try await store.queueNoteUpdate(date: "2026-03-25", content: "first", baseRevision: "rev-1")
+    try await store.queueNoteUpdate(date: "2026-03-25", content: "second", baseRevision: "rev-2")
 
     let updates = try await store.pendingNoteUpdates()
     #expect(updates.count == 1)
     #expect(updates.first?.content == "second")
+    #expect(updates.first?.baseRevision == "rev-1")
 }
 
 @Test

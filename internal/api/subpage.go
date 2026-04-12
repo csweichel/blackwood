@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	blackwoodv1 "github.com/csweichel/blackwood/gen/blackwood/v1"
 )
@@ -31,11 +32,18 @@ func (h *DailyNotesHandler) GetSubpage(ctx context.Context, req *connect.Request
 		}
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("read subpage: %w", err))
 	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("stat subpage: %w", err))
+	}
+	modTime := info.ModTime().UTC()
 
 	return connect.NewResponse(&blackwoodv1.Subpage{
-		Name:    name,
-		Content: string(data),
-		Date:    date,
+		Name:      name,
+		Content:   string(data),
+		Date:      date,
+		Revision:  revisionString(modTime),
+		UpdatedAt: timestamppb.New(modTime),
 	}), nil
 }
 
@@ -55,15 +63,37 @@ func (h *DailyNotesHandler) UpdateSubpageContent(ctx context.Context, req *conne
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create directory: %w", err))
 	}
+	if req.Msg.BaseRevision != "" {
+		info, err := os.Stat(path)
+		if err == nil {
+			currentRevision := revisionString(info.ModTime().UTC())
+			if currentRevision != req.Msg.BaseRevision {
+				return nil, connect.NewError(
+					connect.CodeFailedPrecondition,
+					fmt.Errorf("subpage changed on another client; reload and try again"),
+				)
+			}
+		} else if !os.IsNotExist(err) {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("stat subpage: %w", err))
+		}
+	}
 
 	if err := os.WriteFile(path, []byte(req.Msg.Content), 0o644); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("write subpage: %w", err))
 	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("stat written subpage: %w", err))
+	}
+	modTime := info.ModTime().UTC()
+	h.changes.PublishSubpage(date, name, modTime)
 
 	return connect.NewResponse(&blackwoodv1.Subpage{
-		Name:    name,
-		Content: req.Msg.Content,
-		Date:    date,
+		Name:      name,
+		Content:   req.Msg.Content,
+		Date:      date,
+		Revision:  revisionString(modTime),
+		UpdatedAt: timestamppb.New(modTime),
 	}), nil
 }
 

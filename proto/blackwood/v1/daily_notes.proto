@@ -53,6 +53,7 @@ message DailyNote {
   google.protobuf.Timestamp created_at = 4;
   google.protobuf.Timestamp updated_at = 5;
   string content = 6;
+  string revision = 7;
 }
 
 message GetDailyNoteRequest {
@@ -105,6 +106,7 @@ message ListEntriesResponse {
 message UpdateDailyNoteContentRequest {
   string date = 1;
   string content = 2;
+  string base_revision = 3;
 }
 
 message ListDatesWithContentRequest {
@@ -120,6 +122,8 @@ message Subpage {
   string name = 1;
   string content = 2;
   string date = 3;
+  string revision = 4;
+  google.protobuf.Timestamp updated_at = 5;
 }
 
 message GetSubpageRequest {
@@ -131,6 +135,7 @@ message UpdateSubpageContentRequest {
   string date = 1;
   string name = 2;
   string content = 3;
+  string base_revision = 4;
 }
 
 message ListSubpagesRequest {
@@ -139,6 +144,22 @@ message ListSubpagesRequest {
 
 message ListSubpagesResponse {
   repeated string names = 1;
+}
+
+enum ChangeEventKind {
+  CHANGE_EVENT_KIND_UNSPECIFIED = 0;
+  CHANGE_EVENT_KIND_DAILY_NOTE_UPDATED = 1;
+  CHANGE_EVENT_KIND_SUBPAGE_UPDATED = 2;
+}
+
+message StreamChangesRequest {}
+
+message ChangeEvent {
+  ChangeEventKind kind = 1;
+  string date = 2;
+  string subpage_name = 3;
+  string revision = 4;
+  google.protobuf.Timestamp changed_at = 5;
 }
 
 service DailyNotesService {
@@ -153,4 +174,5 @@ service DailyNotesService {
   rpc GetSubpage(GetSubpageRequest) returns (Subpage);
   rpc UpdateSubpageContent(UpdateSubpageContentRequest) returns (Subpage);
   rpc ListSubpages(ListSubpagesRequest) returns (ListSubpagesResponse);
+  rpc StreamChanges(StreamChangesRequest) returns (stream ChangeEvent);
 }

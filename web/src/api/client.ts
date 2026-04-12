@@ -1,4 +1,5 @@
 import type {
+  ChangeEvent,
   DailyNote,
   Entry,
   ListDailyNotesResponse,
@@ -29,6 +30,34 @@ const CHAT_SERVICE = "/blackwood.v1.ChatService";
 const IMPORT_SERVICE = "/blackwood.v1.ImportService";
 const PREFERENCES_SERVICE = "/blackwood.v1.PreferencesService";
 
+export class RPCError extends Error {
+  status: number;
+  code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = "RPCError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+function parseRPCErrorPayload(text: string): { code?: string; message?: string } {
+  try {
+    const parsed = JSON.parse(text) as {
+      code?: string;
+      message?: string;
+      error?: { message?: string; code?: string };
+    };
+    return {
+      code: parsed.code ?? parsed.error?.code,
+      message: parsed.message ?? parsed.error?.message,
+    };
+  } catch {
+    return {};
+  }
+}
+
 // Connect-go uses POST with JSON body and Content-Type: application/json.
 // Field names use camelCase in the JSON wire format (protobuf JSON mapping).
 async function rpc<Req, Res>(method: string, request: Req, service: string = DAILY_NOTES_SERVICE): Promise<Res> {
@@ -48,7 +77,12 @@ async function rpc<Req, Res>(method: string, request: Req, service: string = DAI
   }
   if (!resp.ok) {
     const text = await resp.text();
-    throw new Error(`RPC ${method} failed (${resp.status}): ${text}`);
+    const payload = parseRPCErrorPayload(text);
+    throw new RPCError(
+      payload.message ?? `RPC ${method} failed (${resp.status})`,
+      resp.status,
+      payload.code
+    );
   }
   return resp.json();
 }
@@ -59,7 +93,7 @@ export async function getDailyNote(req: GetDailyNoteRequest): Promise<DailyNote>
   try {
     const data = await rpc<GetDailyNoteRequest, DailyNote>("GetDailyNote", req);
     // Cache on success.
-    await cacheDailyNote(req.date, data.content ?? "");
+    await cacheDailyNote(req.date, data.content ?? "", data.revision ?? "");
     return data;
   } catch (err) {
     if (!navigator.onLine) {
@@ -72,6 +106,7 @@ export async function getDailyNote(req: GetDailyNoteRequest): Promise<DailyNote>
           entries: [],
           createdAt: "",
           updatedAt: new Date(cached.updatedAt).toISOString(),
+          revision: cached.revision ?? "",
         };
       }
     }
@@ -125,25 +160,33 @@ export async function deleteEntry(req: DeleteEntryRequest): Promise<void> {
   await rpc<DeleteEntryRequest, Record<string, never>>("DeleteEntry", req);
 }
 
-export async function updateDailyNoteContent(date: string, content: string): Promise<DailyNote> {
+export async function updateDailyNoteContent(date: string, content: string, baseRevision: string): Promise<DailyNote> {
   // Always update the local cache optimistically.
-  await cacheDailyNote(date, content);
+  await cacheDailyNote(date, content, baseRevision);
 
   if (navigator.onLine) {
     try {
-      return await rpc<{ date: string; content: string }, DailyNote>("UpdateDailyNoteContent", { date, content });
-    } catch {
+      const updated = await rpc<{ date: string; content: string; baseRevision: string }, DailyNote>(
+        "UpdateDailyNoteContent",
+        { date, content, baseRevision }
+      );
+      await cacheDailyNote(date, updated.content ?? "", updated.revision ?? "");
+      return updated;
+    } catch (err) {
+      if (err instanceof RPCError && err.code === "failed_precondition") {
+        throw err;
+      }
       // Network error despite onLine — queue it.
-      await queueContentUpdate(date, content);
+      await queueContentUpdate(date, content, baseRevision);
       await notifyPendingChange();
-      return { id: "", date, content, entries: [], createdAt: "", updatedAt: new Date().toISOString() };
+      return { id: "", date, content, entries: [], createdAt: "", updatedAt: new Date().toISOString(), revision: baseRevision };
     }
   }
 
   // Offline: queue for later sync.
-  await queueContentUpdate(date, content);
+  await queueContentUpdate(date, content, baseRevision);
   await notifyPendingChange();
-  return { id: "", date, content, entries: [], createdAt: "", updatedAt: new Date().toISOString() };
+  return { id: "", date, content, entries: [], createdAt: "", updatedAt: new Date().toISOString(), revision: baseRevision };
 }
 
 export async function listDatesWithContent(startDate: string, endDate: string): Promise<{ dates: string[] }> {
@@ -395,11 +438,85 @@ export async function getSubpage(date: string, name: string): Promise<Subpage> {
   return rpc<{ date: string; name: string }, Subpage>("GetSubpage", { date, name });
 }
 
-export async function updateSubpageContent(date: string, name: string, content: string): Promise<Subpage> {
-  return rpc<{ date: string; name: string; content: string }, Subpage>("UpdateSubpageContent", { date, name, content });
+export async function updateSubpageContent(
+  date: string,
+  name: string,
+  content: string,
+  baseRevision: string
+): Promise<Subpage> {
+  return rpc<{ date: string; name: string; content: string; baseRevision: string }, Subpage>(
+    "UpdateSubpageContent",
+    { date, name, content, baseRevision }
+  );
 }
 
 export async function listSubpages(date: string): Promise<ListSubpagesResponse> {
   return rpc<{ date: string }, ListSubpagesResponse>("ListSubpages", { date });
 }
 
+export async function* streamChanges(signal?: AbortSignal): AsyncGenerator<ChangeEvent> {
+  const resp = await fetch(`${DAILY_NOTES_SERVICE}/StreamChanges`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/connect+json",
+      "Connect-Protocol-Version": "1",
+    },
+    body: envelopeRequest({}),
+    signal,
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    const payload = parseRPCErrorPayload(text);
+    throw new RPCError(payload.message ?? `StreamChanges failed (${resp.status})`, resp.status, payload.code);
+  }
+  if (!resp.body) {
+    throw new Error("StreamChanges failed: empty response body");
+  }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = new Uint8Array(0);
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value || value.length === 0) continue;
+
+    const merged = new Uint8Array(buffer.length + value.length);
+    merged.set(buffer, 0);
+    merged.set(value, buffer.length);
+    buffer = merged;
+
+    while (buffer.length >= 5) {
+      const flags = buffer[0];
+      const len =
+        (((buffer[1] << 24) |
+        (buffer[2] << 16) |
+        (buffer[3] << 8) |
+        buffer[4]) >>> 0);
+      const frameSize = 5 + len;
+      if (buffer.length < frameSize) break;
+
+      const payload = buffer.slice(5, frameSize);
+      buffer = buffer.slice(frameSize);
+
+      if ((flags & 0x01) !== 0) {
+        throw new Error("StreamChanges failed: compressed stream frames are not supported");
+      }
+
+      const text = decoder.decode(payload);
+      if (!text.trim()) continue;
+      const parsed = JSON.parse(text) as Record<string, unknown>;
+
+      if ((flags & 0x02) !== 0) {
+        const streamErr = parsed.error as { message?: string; code?: string } | undefined;
+        if (streamErr?.message) {
+          throw new RPCError(streamErr.message, 500, streamErr.code);
+        }
+        continue;
+      }
+
+      yield (parsed.result ?? parsed) as ChangeEvent;
+    }
+  }
+}
