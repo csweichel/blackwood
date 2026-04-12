@@ -17,6 +17,7 @@
 		BWBUILDFILE00000000000008 /* SyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000008 /* SyncEngine.swift */; };
 		BWBUILDFILE00000000000009 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000009 /* LaunchScreen.storyboard */; };
 		BWBUILDFILE00000000000010 /* BlackwoodWordmark.png in Resources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000010 /* BlackwoodWordmark.png */; };
+		BWBUILDFILE00000000000011 /* BlackwoodAuthClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000011 /* BlackwoodAuthClient.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -30,6 +31,7 @@
 		BWFILE00000000000008 /* SyncEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngine.swift; sourceTree = "<group>"; };
 		BWFILE00000000000009 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		BWFILE00000000000010 /* BlackwoodWordmark.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = BlackwoodWordmark.png; sourceTree = "<group>"; };
+		BWFILE00000000000011 /* BlackwoodAuthClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlackwoodAuthClient.swift; sourceTree = "<group>"; };
 		BWPRODUCT00000000000001 /* BlackwoodMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BlackwoodMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -84,6 +86,7 @@
 				BWFILE00000000000005 /* Models.swift */,
 				BWFILE00000000000006 /* QueueStore.swift */,
 				BWFILE00000000000007 /* BlackwoodAPIClient.swift */,
+				BWFILE00000000000011 /* BlackwoodAuthClient.swift */,
 				BWFILE00000000000008 /* SyncEngine.swift */,
 			);
 			path = Sources/BlackwoodMobileCore;
@@ -178,6 +181,7 @@
 				BWBUILDFILE00000000000005 /* Models.swift in Sources */,
 				BWBUILDFILE00000000000006 /* QueueStore.swift in Sources */,
 				BWBUILDFILE00000000000007 /* BlackwoodAPIClient.swift in Sources */,
+				BWBUILDFILE00000000000011 /* BlackwoodAuthClient.swift in Sources */,
 				BWBUILDFILE00000000000008 /* SyncEngine.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -249,6 +253,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = SBFM8LSJQ6;
+				CODE_SIGN_ENTITLEMENTS = BlackwoodMobile.entitlements;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Blackwood;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Blackwood needs microphone access so you can record voice notes.";
@@ -275,6 +280,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = SBFM8LSJQ6;
+				CODE_SIGN_ENTITLEMENTS = BlackwoodMobile.entitlements;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Blackwood;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Blackwood needs microphone access so you can record voice notes.";

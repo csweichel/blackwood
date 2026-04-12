@@ -139,33 +139,40 @@ public struct BlackwoodAPIClient: BlackwoodRemote, Sendable {
             throw SyncFailure(message: "Invalid server response", disposition: .retryable)
         }
         guard (200..<300).contains(http.statusCode) else {
-            let text = parsedErrorMessage(from: data) ?? String(data: data, encoding: .utf8) ?? "Request failed"
+            let payload = parsedErrorPayload(from: data)
+            let text = payload.message ?? String(data: data, encoding: .utf8) ?? "Request failed"
+            if http.statusCode == 401 {
+                let kind: AuthChallengeKind = payload.code == "setup_required" ? .setupRequired : .unauthorized
+                throw AuthChallenge(kind: kind, message: text)
+            }
             let disposition: SyncFailureDisposition = http.statusCode >= 500 ? .retryable : .terminal
             throw SyncFailure(message: text, disposition: disposition)
         }
     }
 
-    private func parsedErrorMessage(from data: Data) -> String? {
+    private func parsedErrorPayload(from data: Data) -> (code: String?, message: String?) {
         guard
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else {
-            return nil
+            return (nil, nil)
         }
+
+        let code = json["code"] as? String
 
         for key in ["message", "error", "msg"] {
             if let value = json[key] as? String, !value.isEmpty {
-                return value
+                return (code, value)
             }
         }
 
         if let error = json["error"] as? [String: Any] {
             for key in ["message", "msg"] {
                 if let value = error[key] as? String, !value.isEmpty {
-                    return value
+                    return (code, value)
                 }
             }
         }
 
-        return nil
+        return (code, nil)
     }
 }

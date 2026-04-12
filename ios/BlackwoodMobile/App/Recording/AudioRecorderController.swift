@@ -20,6 +20,7 @@ final class AudioRecorderController: NSObject, ObservableObject, @preconcurrency
 
     private var recorder: AVAudioRecorder?
     private var timer: Timer?
+    private var meteringTask: Task<Void, Never>?
     private var startedAt: Date?
     private var latestMeasuredDuration: TimeInterval = 0
 
@@ -32,6 +33,8 @@ final class AudioRecorderController: NSObject, ObservableObject, @preconcurrency
     func reset() {
         timer?.invalidate()
         timer = nil
+        meteringTask?.cancel()
+        meteringTask = nil
         recorder = nil
         startedAt = nil
         latestMeasuredDuration = 0
@@ -42,6 +45,7 @@ final class AudioRecorderController: NSObject, ObservableObject, @preconcurrency
 
     func startRecording() async {
         state = .preparing
+        await Task.yield()
         let session = AVAudioSession.sharedInstance()
         let granted = await requestPermission(session: session)
         guard granted else {
@@ -76,15 +80,19 @@ final class AudioRecorderController: NSObject, ObservableObject, @preconcurrency
             self.state = .recording
 
             timer?.invalidate()
-            timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self, recorder, recordingStart] _ in
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
+            timer = nil
+            meteringTask?.cancel()
+            meteringTask = Task { @MainActor [weak self, recorder, recordingStart] in
+                while !Task.isCancelled, recorder.isRecording {
                     let elapsed = Date().timeIntervalSince(recordingStart)
                     recorder.updateMeters()
-                    self.duration = elapsed
-                    self.latestMeasuredDuration = elapsed
-                    self.levels.removeFirst()
-                    self.levels.append(Self.normalizedLevel(from: recorder.averagePower(forChannel: 0)))
+                    self?.duration = elapsed
+                    self?.latestMeasuredDuration = elapsed
+                    if let self {
+                        self.levels.removeFirst()
+                        self.levels.append(Self.normalizedLevel(from: recorder.averagePower(forChannel: 0)))
+                    }
+                    try? await Task.sleep(for: .milliseconds(125))
                 }
             }
         } catch {
@@ -95,6 +103,8 @@ final class AudioRecorderController: NSObject, ObservableObject, @preconcurrency
     func stopRecording() {
         timer?.invalidate()
         timer = nil
+        meteringTask?.cancel()
+        meteringTask = nil
         state = .processing
         recorder?.stop()
     }
@@ -105,6 +115,8 @@ final class AudioRecorderController: NSObject, ObservableObject, @preconcurrency
 
     func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
         defer {
+            meteringTask?.cancel()
+            meteringTask = nil
             self.recorder = nil
             self.startedAt = nil
             self.duration = 0

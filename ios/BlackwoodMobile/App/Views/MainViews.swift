@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private enum BlackwoodPalette {
     static let background = Color(red: 250/255, green: 248/255, blue: 243/255)
@@ -79,7 +80,7 @@ struct RootTabView: View {
         .sheet(item: $model.presentedSheet) { sheet in
             switch sheet {
             case .recording:
-                RecordingSheet(model: model)
+                RecordingSheet(model: model, recorder: model.recorder)
             case .settings:
                 SettingsScreen(model: model)
             }
@@ -137,6 +138,269 @@ struct RootTabView: View {
     }
 }
 
+struct AuthGateView: View {
+    @ObservedObject var model: AppModel
+    @State private var loginCode = ""
+    @State private var setupCode = ""
+    @State private var isSigningIn = false
+    @State private var isConfirmingSetup = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                SectionIntro(
+                    eyebrow: "Blackwood",
+                    title: model.authState == .needsSetup ? "Set up TOTP" : "Sign in with TOTP",
+                    detail: model.authState == .needsSetup
+                        ? "Scan the QR code in your authenticator app, then confirm the current six-digit code."
+                        : "Enter the current six-digit code from your authenticator app to unlock your notes."
+                )
+
+                if let message = model.authStatusMessage, !message.isEmpty {
+                    card {
+                        Text(message)
+                            .font(.system(size: 14))
+                            .foregroundStyle(BlackwoodPalette.destructive)
+                    }
+                }
+
+                serverCard
+
+                if model.authState == .needsSetup {
+                    setupCard
+                } else {
+                    loginCard
+                }
+            }
+            .frame(maxWidth: 680)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+        }
+        .background(BlackwoodPalette.background.ignoresSafeArea())
+        .task {
+            await model.refreshAuthStatus()
+            if model.authState == .needsSetup, model.authSetupInfo == nil {
+                await model.loadAuthSetupInfo()
+            }
+        }
+        .onChange(of: model.authState) { _, newValue in
+            guard newValue == .needsSetup, model.authSetupInfo == nil else { return }
+            Task { await model.loadAuthSetupInfo() }
+        }
+    }
+
+    private var serverCard: some View {
+        card(spacing: 14) {
+            CardHeader(title: "Blackwood Server", detail: "This is the server your phone talks to.")
+
+            TextField("Server URL", text: $model.serverURLString)
+                .textInputAutocapitalization(.never)
+                .keyboardType(.URL)
+                .textContentType(.URL)
+                .autocorrectionDisabled()
+                .padding(12)
+                .background(BlackwoodPalette.muted.opacity(0.8))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            HStack(spacing: 12) {
+                Button("Save Endpoint") {
+                    Task { await model.updateServerURL() }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(BlackwoodPalette.accent)
+
+                Button("Test Connection") {
+                    Task { await model.testServerConnection() }
+                }
+                .buttonStyle(.bordered)
+                .tint(BlackwoodPalette.accent)
+            }
+
+            connectionStatusView
+        }
+    }
+
+    private var loginCard: some View {
+        card(spacing: 14) {
+            CardHeader(title: "Sign in", detail: "Unlock Blackwood with your current TOTP code.")
+
+            TextField("123456", text: $loginCode)
+                .textInputAutocapitalization(.never)
+                .keyboardType(.numberPad)
+                .textContentType(.oneTimeCode)
+                .padding(12)
+                .background(BlackwoodPalette.muted.opacity(0.8))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            Button {
+                let code = sanitizedCode(loginCode)
+                Task { @MainActor in
+                    isSigningIn = true
+                    defer { isSigningIn = false }
+                    _ = await model.login(code: code)
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    if isSigningIn {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    Text("Sign In")
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(BlackwoodPalette.accent)
+            .disabled(isSigningIn || sanitizedCode(loginCode).count < 6)
+        }
+    }
+
+    private var setupCard: some View {
+        card(spacing: 14) {
+            CardHeader(title: "TOTP Setup", detail: "Use the QR code to add Blackwood to your authenticator app.")
+
+            if let setupInfo = model.authSetupInfo {
+                VStack(alignment: .leading, spacing: 12) {
+                    if let qrImage = qrCodeImage(from: setupInfo.qrCode) {
+                        Image(uiImage: qrImage)
+                            .resizable()
+                            .interpolation(.none)
+                            .scaledToFit()
+                            .frame(maxWidth: 220)
+                            .padding(14)
+                            .background(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    } else {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(BlackwoodPalette.muted)
+                            .frame(width: 220, height: 220)
+                            .overlay {
+                                ProgressView()
+                            }
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Secret")
+                            .font(.system(size: 12, weight: .semibold))
+                            .tracking(0.9)
+                            .foregroundStyle(BlackwoodPalette.mutedForeground)
+                        Text(setupInfo.secret)
+                            .font(.system(size: 14, design: .monospaced))
+                            .textSelection(.enabled)
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(BlackwoodPalette.muted.opacity(0.8))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                }
+            } else {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Generating setup details…")
+                        .foregroundStyle(BlackwoodPalette.mutedForeground)
+                }
+            }
+
+            TextField("123456", text: $setupCode)
+                .textInputAutocapitalization(.never)
+                .keyboardType(.numberPad)
+                .textContentType(.oneTimeCode)
+                .padding(12)
+                .background(BlackwoodPalette.muted.opacity(0.8))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            Button {
+                let code = sanitizedCode(setupCode)
+                Task { @MainActor in
+                    isConfirmingSetup = true
+                    defer { isConfirmingSetup = false }
+                    _ = await model.confirmAuthSetup(code: code)
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    if isConfirmingSetup {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    Text("Confirm & Sign In")
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(BlackwoodPalette.accent)
+            .disabled(isConfirmingSetup || sanitizedCode(setupCode).count < 6 || model.authSetupInfo == nil)
+        }
+    }
+
+    @ViewBuilder
+    private var connectionStatusView: some View {
+        switch model.connectionTestState {
+        case .idle:
+            VStack(alignment: .leading, spacing: 6) {
+                Text("The server URL is stored locally on this device.")
+                    .font(.caption)
+                    .foregroundStyle(BlackwoodPalette.mutedForeground)
+                Text(reachabilitySummary)
+                    .font(.caption)
+                    .foregroundStyle(reachabilityTint)
+            }
+        case .testing:
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Testing connection…")
+                    .font(.caption)
+                    .foregroundStyle(BlackwoodPalette.mutedForeground)
+            }
+        case .success(let version):
+            Text("Connected successfully\(version.isEmpty ? "" : " • \(version)")")
+                .font(.caption)
+                .foregroundStyle(BlackwoodPalette.success)
+        case .failed(let message):
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(BlackwoodPalette.destructive)
+        }
+    }
+
+    private var reachabilitySummary: String {
+        if !model.isNetworkAvailable {
+            return "No network connection."
+        }
+        switch model.serverReachability {
+        case .unknown:
+            return "Server reachability has not been checked yet."
+        case .checking:
+            return "Checking Blackwood server…"
+        case .reachable(let version):
+            return version.isEmpty ? "Blackwood is reachable." : "Blackwood is reachable • \(version)"
+        case .unreachable(let message):
+            return message
+        }
+    }
+
+    private var reachabilityTint: Color {
+        if !model.isNetworkAvailable {
+            return BlackwoodPalette.warning
+        }
+        switch model.serverReachability {
+        case .reachable:
+            return BlackwoodPalette.success
+        case .unknown, .checking:
+            return BlackwoodPalette.mutedForeground
+        case .unreachable:
+            return BlackwoodPalette.destructive
+        }
+    }
+
+    private func sanitizedCode(_ raw: String) -> String {
+        String(raw.filter(\.isNumber).prefix(6))
+    }
+
+    private func qrCodeImage(from base64String: String) -> UIImage? {
+        guard let data = Data(base64Encoded: base64String) else { return nil }
+        return UIImage(data: data)
+    }
+}
+
 struct NotesScreen: View {
     @ObservedObject var model: AppModel
 
@@ -154,30 +418,24 @@ struct NotesScreen: View {
                     errorBanner(error)
                 }
 
-                card {
-                    VStack(alignment: .leading, spacing: 18) {
-                        CardHeader(
-                            title: "Daily note",
-                            detail: model.isEditing ? "Editing markdown" : "Ink and parchment view"
-                        )
-
-                        if model.isEditing {
-                            TextEditor(text: $model.draftContent)
-                                .font(.system(size: 17))
-                                .foregroundStyle(BlackwoodPalette.foreground)
-                                .scrollContentBackground(.hidden)
-                                .frame(minHeight: 360)
-                        } else if model.isLoadingNote && model.noteContent.isEmpty {
-                            ProgressView("Loading note…")
-                                .frame(maxWidth: .infinity, minHeight: 220)
-                        } else {
-                            StructuredNoteView(
-                                content: model.noteContent,
-                                baseURL: model.normalizedServerURL,
-                                date: AppModel.dayString(from: model.selectedDate)
-                            )
-                        }
-                    }
+                if model.isEditing {
+                    TextEditor(text: $model.draftContent)
+                        .font(.system(size: 17))
+                        .foregroundStyle(BlackwoodPalette.foreground)
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 360)
+                        .padding(12)
+                        .background(BlackwoodPalette.muted.opacity(0.25))
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                } else if model.isLoadingNote && model.noteContent.isEmpty {
+                    ProgressView("Loading note…")
+                        .frame(maxWidth: .infinity, minHeight: 220, alignment: .leading)
+                } else {
+                    StructuredNoteView(
+                        content: model.noteContent,
+                        baseURL: model.normalizedServerURL,
+                        date: AppModel.dayString(from: model.selectedDate)
+                    )
                 }
             }
         }
@@ -568,6 +826,19 @@ struct SettingsScreen: View {
                             connectionStatusView
                         }
                     }
+
+                    card(spacing: 12) {
+                        CardHeader(title: "Session", detail: "Sign out of this device.")
+
+                        Button("Sign Out") {
+                            Task { @MainActor in
+                                await model.logout()
+                                dismiss()
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(BlackwoodPalette.destructive)
+                    }
                 }
                 .frame(maxWidth: 680)
                 .padding(.horizontal, 20)
@@ -651,11 +922,12 @@ struct SettingsScreen: View {
 struct RecordingSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var model: AppModel
+    @ObservedObject var recorder: AudioRecorderController
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 24) {
-                switch model.recorder.state {
+                switch recorder.state {
                 case .idle:
                     idleState
                 case .preparing:
@@ -679,7 +951,7 @@ struct RecordingSheet: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Close") {
                         if canDismissSheet {
-                            model.recorder.reset()
+                            recorder.reset()
                             dismiss()
                         }
                     }
@@ -687,7 +959,7 @@ struct RecordingSheet: View {
                 }
             }
             .task {
-                await model.recorder.prepareIfNeeded()
+                await recorder.prepareIfNeeded()
             }
         }
     }
@@ -703,7 +975,7 @@ struct RecordingSheet: View {
                 .foregroundStyle(BlackwoodPalette.mutedForeground)
                 .multilineTextAlignment(.center)
             Button("Start Recording") {
-                Task { await model.recorder.startRecording() }
+                Task { await recorder.startRecording() }
             }
             .buttonStyle(.borderedProminent)
             .tint(BlackwoodPalette.accent)
@@ -731,18 +1003,18 @@ struct RecordingSheet: View {
                 .tracking(1.2)
                 .foregroundStyle(BlackwoodPalette.destructive)
 
-            Text(formattedDuration(model.recorder.duration))
+            Text(formattedDuration(recorder.duration))
                 .font(.system(size: 52, weight: .semibold, design: .rounded))
                 .foregroundStyle(BlackwoodPalette.foreground)
 
-            RecordingLevelMeter(levels: model.recorder.levels)
+            RecordingLevelMeter(levels: recorder.levels)
 
             Text("Voice memo for \(AppModel.dayString(from: model.selectedDate))")
                 .font(.system(size: 15))
                 .foregroundStyle(BlackwoodPalette.mutedForeground)
 
             Button("Stop Recording") {
-                model.recorder.stopRecording()
+                recorder.stopRecording()
             }
             .buttonStyle(.borderedProminent)
             .tint(BlackwoodPalette.destructive)
@@ -773,7 +1045,7 @@ struct RecordingSheet: View {
                 .font(.system(size: 16))
                 .foregroundStyle(BlackwoodPalette.mutedForeground)
             Button("Done") {
-                model.recorder.reset()
+                recorder.reset()
                 dismiss()
             }
             .buttonStyle(.borderedProminent)
@@ -788,7 +1060,7 @@ struct RecordingSheet: View {
                 .foregroundStyle(BlackwoodPalette.destructive)
                 .multilineTextAlignment(.center)
             Button("Dismiss") {
-                model.recorder.dismissError()
+                recorder.dismissError()
                 dismiss()
             }
             .buttonStyle(.bordered)
@@ -812,7 +1084,7 @@ struct RecordingSheet: View {
     }
 
     private var canDismissSheet: Bool {
-        switch model.recorder.state {
+        switch recorder.state {
         case .recording, .processing:
             return false
         default:
@@ -889,18 +1161,23 @@ private struct MarkdownBlockView: View {
     private enum Block: Hashable {
         case heading(level: Int, text: String)
         case paragraph(String)
-        case bulletList([String])
-        case numberedList([String])
+        case bulletList([ListItem])
+        case numberedList([ListItem])
         case quote(String)
         case image(source: String, alt: String?)
         case rule
     }
 
+    private struct ListItem: Hashable {
+        let text: String
+        let children: [Block]
+    }
+
     private var blocks: [Block] {
+        let lines = markdown.components(separatedBy: .newlines)
         var result: [Block] = []
         var paragraphLines: [String] = []
-        var bullets: [String] = []
-        var numbers: [String] = []
+        var index = 0
 
         func flushParagraph() {
             guard !paragraphLines.isEmpty else { return }
@@ -908,159 +1185,181 @@ private struct MarkdownBlockView: View {
             paragraphLines.removeAll()
         }
 
-        func flushBullets() {
-            guard !bullets.isEmpty else { return }
-            result.append(.bulletList(bullets))
-            bullets.removeAll()
+        func flushListRegion(_ region: [String]) {
+            guard !region.isEmpty else { return }
+            if let first = region.first, let match = listMatch(for: first) {
+                let parsed = parseListItems(from: region, startingAt: 0, parentIndent: match.indent)
+                if !parsed.items.isEmpty {
+                    result.append(match.isOrdered ? .numberedList(parsed.items) : .bulletList(parsed.items))
+                }
+            }
         }
 
-        func flushNumbers() {
-            guard !numbers.isEmpty else { return }
-            result.append(.numberedList(numbers))
-            numbers.removeAll()
+        var pendingListRegion: [String] = []
+
+        func flushPendingList() {
+            flushListRegion(pendingListRegion)
+            pendingListRegion.removeAll()
         }
 
-        for rawLine in markdown.components(separatedBy: .newlines) {
+        while index < lines.count {
+            let rawLine = lines[index]
             let line = rawLine.trimmingCharacters(in: .whitespaces)
 
             if line.isEmpty {
                 flushParagraph()
-                flushBullets()
-                flushNumbers()
+                flushPendingList()
+                index += 1
                 continue
             }
 
             if line == "---" {
                 flushParagraph()
-                flushBullets()
-                flushNumbers()
+                flushPendingList()
                 result.append(.rule)
+                index += 1
                 continue
             }
 
             if let image = imageBlock(from: line) {
                 flushParagraph()
-                flushBullets()
-                flushNumbers()
+                flushPendingList()
                 result.append(image)
+                index += 1
                 continue
             }
 
             if let heading = headingBlock(from: line) {
                 flushParagraph()
-                flushBullets()
-                flushNumbers()
+                flushPendingList()
                 result.append(heading)
+                index += 1
                 continue
             }
 
-            if let bullet = bulletText(from: line) {
+            if listMatch(for: rawLine) != nil {
                 flushParagraph()
-                flushNumbers()
-                bullets.append(bullet)
-                continue
-            }
-
-            if let number = numberedText(from: line) {
-                flushParagraph()
-                flushBullets()
-                numbers.append(number)
+                pendingListRegion.append(rawLine)
+                index += 1
                 continue
             }
 
             if line.hasPrefix(">") {
                 flushParagraph()
-                flushBullets()
-                flushNumbers()
+                flushPendingList()
                 result.append(.quote(String(line.drop { $0 == ">" || $0 == " " })))
+                index += 1
                 continue
             }
 
-            flushBullets()
-            flushNumbers()
+            flushPendingList()
             paragraphLines.append(line)
+            index += 1
         }
 
         flushParagraph()
-        flushBullets()
-        flushNumbers()
+        flushPendingList()
 
         return result.isEmpty ? [.paragraph(markdown)] : result
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
-                switch block {
-                case .heading(let level, let text):
-                    markdownText(text, font: headingFont(level), color: BlackwoodPalette.foreground)
-                        .padding(.top, level == 1 ? 4 : 2)
-
-                case .paragraph(let text):
-                    paragraphView(
-                        text,
-                        font: .system(size: 17),
-                        color: isSummary ? BlackwoodPalette.mutedForeground : BlackwoodPalette.foreground,
-                        italic: isSummary
-                    )
-
-                case .bulletList(let items):
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                            HStack(alignment: .top, spacing: 10) {
-                                Text("•")
-                                    .font(.system(size: 17, weight: .semibold))
-                                    .foregroundStyle(BlackwoodPalette.foreground)
-                                    .frame(width: 12, alignment: .leading)
-                                paragraphView(item, font: .system(size: 17), color: BlackwoodPalette.foreground)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-                    .padding(.leading, 4)
-
-                case .numberedList(let items):
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                            HStack(alignment: .top, spacing: 10) {
-                                Text("\(index + 1).")
-                                    .font(.system(size: 17, weight: .semibold))
-                                    .foregroundStyle(BlackwoodPalette.foreground)
-                                    .frame(width: 24, alignment: .leading)
-                                paragraphView(item, font: .system(size: 17), color: BlackwoodPalette.foreground)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-                    .padding(.leading, 4)
-
-                case .quote(let text):
-                    HStack(alignment: .top, spacing: 12) {
-                        Rectangle()
-                            .fill(BlackwoodPalette.accent)
-                            .frame(width: 2)
-                        paragraphView(text, font: .system(size: 16), color: BlackwoodPalette.mutedForeground)
-                    }
-                    .padding(.vertical, 6)
-
-                case .image(let source, let alt):
-                    NoteImageView(
-                        imageURL: resolvedImageURL(for: source),
-                        altText: alt
-                    )
-                    .padding(.vertical, 6)
-
-                case .rule:
-                    Rectangle()
-                        .fill(BlackwoodPalette.border)
-                        .frame(width: 40, height: 1)
-                        .padding(.vertical, 4)
-                }
+                blockView(block, depth: 0)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func blockView(_ block: Block, depth: Int) -> AnyView {
+        switch block {
+        case .heading(let level, let text):
+            return AnyView(
+                markdownText(text, font: headingFont(level), color: BlackwoodPalette.foreground)
+                    .padding(.top, level == 1 ? 4 : 2)
+            )
+
+        case .paragraph(let text):
+            return AnyView(
+                paragraphView(
+                    text,
+                    font: .system(size: 17),
+                    color: isSummary ? BlackwoodPalette.mutedForeground : BlackwoodPalette.foreground,
+                    italic: isSummary
+                )
+            )
+
+        case .bulletList(let items):
+            return AnyView(
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                        listItemView(item, depth: depth, orderedIndex: nil)
+                    }
+                }
+                .padding(.leading, depth == 0 ? 2 : 0)
+            )
+
+        case .numberedList(let items):
+            return AnyView(
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                        listItemView(item, depth: depth, orderedIndex: index + 1)
+                    }
+                }
+                .padding(.leading, depth == 0 ? 2 : 0)
+            )
+
+        case .quote(let text):
+            return AnyView(
+                HStack(alignment: .top, spacing: 12) {
+                    Rectangle()
+                        .fill(BlackwoodPalette.accent)
+                        .frame(width: 2)
+                    paragraphView(text, font: .system(size: 16), color: BlackwoodPalette.mutedForeground)
+                }
+                .padding(.vertical, 6)
+            )
+
+        case .image(let source, let alt):
+            return AnyView(
+                NoteImageView(
+                    imageURL: resolvedImageURL(for: source),
+                    altText: alt
+                )
+                .padding(.vertical, 6)
+            )
+
+        case .rule:
+            return AnyView(
+                Rectangle()
+                    .fill(BlackwoodPalette.border)
+                    .frame(width: 40, height: 1)
+                    .padding(.vertical, 4)
+            )
+        }
+    }
+
+    private func listItemView(_ item: ListItem, depth: Int, orderedIndex: Int?) -> AnyView {
+        AnyView(
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .top, spacing: 8) {
+                    Text(listMarker(depth: depth, orderedIndex: orderedIndex))
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(BlackwoodPalette.foreground)
+                        .frame(width: orderedIndex == nil ? 12 : 24, alignment: .leading)
+                    paragraphView(item.text, font: .system(size: 17), color: BlackwoodPalette.foreground)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                ForEach(Array(item.children.enumerated()), id: \.offset) { _, child in
+                    blockView(child, depth: depth + 1)
+                        .padding(.leading, 18)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        )
     }
 
     private func markdownText(_ markdown: String, font: Font, color: Color) -> some View {
@@ -1162,6 +1461,94 @@ private struct MarkdownBlockView: View {
         let afterDot = line[line.index(after: dotIndex)...]
         guard afterDot.first == " " else { return nil }
         return String(afterDot.dropFirst())
+    }
+
+    private func listMatch(for rawLine: String) -> ListMatch? {
+        let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        let indent = rawLine.prefix { $0 == " " }.count
+        if let bullet = bulletText(from: trimmed) {
+            return ListMatch(indent: indent, text: bullet, isOrdered: false)
+        }
+        if let numbered = numberedText(from: trimmed) {
+            return ListMatch(indent: indent, text: numbered, isOrdered: true)
+        }
+        return nil
+    }
+
+    private struct ListMatch {
+        let indent: Int
+        let text: String
+        let isOrdered: Bool
+    }
+
+    private struct ParsedList {
+        let items: [ListItem]
+        let nextIndex: Int
+    }
+
+    private func parseListItems(from lines: [String], startingAt startIndex: Int, parentIndent: Int) -> ParsedList {
+        var items: [ListItem] = []
+        var index = startIndex
+
+        while index < lines.count {
+            let rawLine = lines[index]
+            let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty {
+                index += 1
+                continue
+            }
+
+            guard let match = listMatch(for: rawLine), match.indent >= parentIndent else {
+                break
+            }
+
+            if match.indent > parentIndent {
+                break
+            }
+
+            let itemIndent = match.indent
+            let itemText = match.text
+            var children: [Block] = []
+            var nextIndex = index + 1
+
+            if nextIndex < lines.count, let nextMatch = listMatch(for: lines[nextIndex]), nextMatch.indent > itemIndent {
+                let parsedChildren = parseListItems(from: lines, startingAt: nextIndex, parentIndent: nextMatch.indent)
+                if !parsedChildren.items.isEmpty {
+                    children = [nextMatch.isOrdered ? .numberedList(parsedChildren.items) : .bulletList(parsedChildren.items)]
+                }
+                nextIndex = parsedChildren.nextIndex
+            }
+
+            items.append(ListItem(text: itemText, children: children))
+            index = nextIndex
+        }
+
+        return ParsedList(items: items, nextIndex: index)
+    }
+
+    private func listMarker(depth: Int, orderedIndex: Int?) -> String {
+        if let orderedIndex {
+            if depth == 1 {
+                return "\(alphaMarker(for: orderedIndex))."
+            }
+            return "\(orderedIndex)."
+        }
+
+        switch depth {
+        case 0:
+            return "•"
+        case 1:
+            return "◦"
+        default:
+            return "▪"
+        }
+    }
+
+    private func alphaMarker(for index: Int) -> String {
+        let letters = Array("abcdefghijklmnopqrstuvwxyz")
+        let clamped = max(1, min(index, letters.count))
+        return String(letters[clamped - 1])
     }
 
     private func resolvedImageURL(for source: String) -> URL? {

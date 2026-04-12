@@ -1,8 +1,26 @@
 import AppIntents
+import CoreFoundation
+import Foundation
 import SwiftUI
 
 enum ShortcutKeys {
-    static let startRecording = "blackwood.shortcut.startRecording"
+    static let pendingLaunchAction = "blackwood.shortcut.pendingLaunchAction"
+}
+
+enum PendingLaunchAction: String {
+    case startRecording
+}
+
+enum ShortcutStore {
+    static let appGroupID = "group.dev.blackwood.mobile"
+
+    static var defaults: UserDefaults {
+        UserDefaults(suiteName: appGroupID) ?? .standard
+    }
+}
+
+enum ShortcutNotifications {
+    static let pendingLaunchActionDidChange = "dev.blackwood.mobile.pendingLaunchActionDidChange"
 }
 
 struct StartRecordingIntent: AppIntent {
@@ -11,8 +29,44 @@ struct StartRecordingIntent: AppIntent {
     static let openAppWhenRun = true
 
     func perform() async throws -> some IntentResult {
-        UserDefaults.standard.set(true, forKey: ShortcutKeys.startRecording)
+        ShortcutStore.defaults.set(PendingLaunchAction.startRecording.rawValue, forKey: ShortcutKeys.pendingLaunchAction)
+        CFNotificationCenterPostNotification(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            CFNotificationName(ShortcutNotifications.pendingLaunchActionDidChange as CFString),
+            nil,
+            nil,
+            true
+        )
         return .result()
+    }
+}
+
+final class ShortcutLaunchActionObserver {
+    private let callback: @Sendable () -> Void
+
+    init(callback: @escaping @Sendable () -> Void) {
+        self.callback = callback
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            Unmanaged.passUnretained(self).toOpaque(),
+            { _, observer, _, _, _ in
+                guard let observer else { return }
+                let object = Unmanaged<ShortcutLaunchActionObserver>.fromOpaque(observer).takeUnretainedValue()
+                object.callback()
+            },
+            ShortcutNotifications.pendingLaunchActionDidChange as CFString,
+            nil,
+            .deliverImmediately
+        )
+    }
+
+    deinit {
+        CFNotificationCenterRemoveObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            Unmanaged.passUnretained(self).toOpaque(),
+            CFNotificationName(ShortcutNotifications.pendingLaunchActionDidChange as CFString),
+            nil
+        )
     }
 }
 
@@ -35,11 +89,16 @@ struct BlackwoodMobileApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var model = AppModel()
     @State private var isShowingLaunchOverlay = true
+    @State private var shortcutObserver: ShortcutLaunchActionObserver?
 
     var body: some Scene {
         WindowGroup {
             ZStack {
-                RootTabView(model: model)
+                if model.isAuthenticated {
+                    RootTabView(model: model)
+                } else {
+                    AuthGateView(model: model)
+                }
 
                 if isShowingLaunchOverlay {
                     LaunchOverlayView()
@@ -48,6 +107,11 @@ struct BlackwoodMobileApp: App {
                 }
             }
             .task {
+                shortcutObserver = ShortcutLaunchActionObserver {
+                    Task { @MainActor in
+                        await model.handleAppBecameActive()
+                    }
+                }
                 await model.start()
                 guard isShowingLaunchOverlay else { return }
                 try? await Task.sleep(for: .milliseconds(520))
