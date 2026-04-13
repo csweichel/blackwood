@@ -3,6 +3,8 @@ import Foundation
 public protocol BlackwoodRemote: Sendable {
     func fetchDailyNote(date: String) async throws -> APIDailyNote
     func updateDailyNoteContent(date: String, content: String, baseRevision: String) async throws -> APIDailyNote
+    func fetchSubpage(date: String, name: String) async throws -> APISubpage
+    func updateSubpageContent(date: String, name: String, content: String, baseRevision: String) async throws -> APISubpage
     func createAudioEntry(upload: PendingEntryUpload) async throws -> APIEntry
     func search(query: String, limit: Int) async throws -> [SearchResult]
     func checkHealth() async throws -> HealthCheckResponse
@@ -34,6 +36,20 @@ public struct BlackwoodAPIClient: BlackwoodRemote, Sendable {
         try await rpc(
             path: "/blackwood.v1.DailyNotesService/UpdateDailyNoteContent",
             request: ["date": date, "content": content, "baseRevision": baseRevision]
+        )
+    }
+
+    public func fetchSubpage(date: String, name: String) async throws -> APISubpage {
+        try await rpc(
+            path: "/blackwood.v1.DailyNotesService/GetSubpage",
+            request: ["date": date, "name": name]
+        )
+    }
+
+    public func updateSubpageContent(date: String, name: String, content: String, baseRevision: String) async throws -> APISubpage {
+        try await rpc(
+            path: "/blackwood.v1.DailyNotesService/UpdateSubpageContent",
+            request: ["date": date, "name": name, "content": content, "baseRevision": baseRevision]
         )
     }
 

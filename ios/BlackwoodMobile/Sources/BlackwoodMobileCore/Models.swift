@@ -189,6 +189,39 @@ public struct APIDailyNote: Codable, Equatable, Sendable {
     }
 }
 
+public struct APISubpage: Codable, Equatable, Sendable {
+    public let name: String
+    public let content: String
+    public let date: String
+    public let revision: String
+    public let updatedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case content
+        case date
+        case revision
+        case updatedAt
+    }
+
+    public init(name: String, content: String, date: String, revision: String, updatedAt: String) {
+        self.name = name
+        self.content = content
+        self.date = date
+        self.revision = revision
+        self.updatedAt = updatedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        content = try container.decodeIfPresent(String.self, forKey: .content) ?? ""
+        date = try container.decode(String.self, forKey: .date)
+        revision = try container.decodeIfPresent(String.self, forKey: .revision) ?? ""
+        updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt) ?? ""
+    }
+}
+
 public struct SearchResult: Codable, Equatable, Sendable, Identifiable {
     public let entryId: String
     public let date: String

@@ -20,6 +20,14 @@ private actor MockRemote: BlackwoodRemote {
         return APIDailyNote(id: "note", date: date, entries: [], createdAt: "", updatedAt: "", content: content, revision: "rev-2")
     }
 
+    func fetchSubpage(date: String, name: String) async throws -> APISubpage {
+        APISubpage(name: name, content: "", date: date, revision: "sub-rev-1", updatedAt: "")
+    }
+
+    func updateSubpageContent(date: String, name: String, content: String, baseRevision: String) async throws -> APISubpage {
+        APISubpage(name: name, content: content, date: date, revision: "sub-rev-2", updatedAt: "")
+    }
+
     func createAudioEntry(upload: PendingEntryUpload) async throws -> APIEntry {
         if failFirstUpload {
             failFirstUpload = false

@@ -24,6 +24,13 @@ final class AppModel: ObservableObject {
         var id: String { rawValue }
     }
 
+    struct SubpageRoute: Equatable, Identifiable {
+        let date: String
+        let name: String
+
+        var id: String { "\(date)|\(name)" }
+    }
+
     enum ConnectionTestState: Equatable {
         case idle
         case testing
@@ -46,6 +53,13 @@ final class AppModel: ObservableObject {
     @Published var noteContent = ""
     @Published var draftContent = ""
     @Published var noteRevision = ""
+    @Published var activeSubpage: SubpageRoute?
+    @Published var subpageContent = ""
+    @Published var subpageDraftContent = ""
+    @Published var subpageRevision = ""
+    @Published var isEditingSubpage = false
+    @Published var isLoadingSubpage = false
+    @Published var subpageError: String?
     @Published var isEditing = false
     @Published var isLoadingNote = false
     @Published var noteError: String?
@@ -179,6 +193,33 @@ final class AppModel: ObservableObject {
         isEditing = false
     }
 
+    func openSubpage(named name: String, for date: String? = nil) {
+        let route = SubpageRoute(date: date ?? Self.dayString(from: selectedDate), name: name)
+        activeSubpage = route
+        subpageError = nil
+        isEditingSubpage = false
+        Task { await loadSubpage(route) }
+    }
+
+    func beginEditingSubpage() {
+        subpageDraftContent = subpageContent
+        isEditingSubpage = true
+    }
+
+    func cancelEditingSubpage() {
+        subpageDraftContent = subpageContent
+        isEditingSubpage = false
+    }
+
+    func closeSubpage() {
+        activeSubpage = nil
+        subpageContent = ""
+        subpageDraftContent = ""
+        subpageRevision = ""
+        subpageError = nil
+        isEditingSubpage = false
+    }
+
     func saveCurrentNote() async {
         guard isAuthenticated else { return }
         let date = Self.dayString(from: selectedDate)
@@ -192,6 +233,39 @@ final class AppModel: ObservableObject {
             await syncNow()
         } catch {
             noteError = error.localizedDescription
+        }
+    }
+
+    func saveCurrentSubpage() async {
+        guard isAuthenticated, let route = activeSubpage, let client = apiClient else { return }
+
+        let draft = subpageDraftContent
+        subpageContent = draft
+        isEditingSubpage = false
+        subpageError = nil
+
+        do {
+            let subpage = try await client.updateSubpageContent(
+                date: route.date,
+                name: route.name,
+                content: draft,
+                baseRevision: subpageRevision
+            )
+            subpageContent = subpage.content
+            subpageDraftContent = subpage.content
+            subpageRevision = subpage.revision
+            markServerReachable()
+        } catch {
+            if await handleAuthFailure(error) {
+                return
+            }
+            if let failure = error as? SyncFailure, failure.code == "failed_precondition" {
+                subpageError = failure.message
+                await loadSubpage(route)
+                return
+            }
+            handleConnectionFailure(error)
+            subpageError = userFacingMessage(for: error, fallback: "Blackwood couldn’t save this subpage.")
         }
     }
 
@@ -563,6 +637,7 @@ final class AppModel: ObservableObject {
         noteContent = ""
         draftContent = ""
         noteRevision = ""
+        closeSubpage()
         searchResults = []
         searchError = nil
         noteError = nil
@@ -583,6 +658,49 @@ final class AppModel: ObservableObject {
         if isNetworkAvailable {
             await refreshServerReachability()
             await syncNow()
+        }
+    }
+
+    private func loadSubpage(_ route: SubpageRoute) async {
+        guard isAuthenticated else { return }
+        guard let client = apiClient else { return }
+
+        isLoadingSubpage = true
+        defer { isLoadingSubpage = false }
+
+        do {
+            let subpage = try await client.fetchSubpage(date: route.date, name: route.name)
+            subpageContent = subpage.content
+            subpageDraftContent = subpage.content
+            subpageRevision = subpage.revision
+            subpageError = nil
+            markServerReachable()
+        } catch {
+            if await handleAuthFailure(error) {
+                return
+            }
+            if let failure = error as? SyncFailure, failure.code == "not_found" {
+                do {
+                    let created = try await client.updateSubpageContent(
+                        date: route.date,
+                        name: route.name,
+                        content: "",
+                        baseRevision: ""
+                    )
+                    subpageContent = created.content
+                    subpageDraftContent = created.content
+                    subpageRevision = created.revision
+                    subpageError = nil
+                    isEditingSubpage = true
+                    markServerReachable()
+                    return
+                } catch {
+                    subpageError = userFacingMessage(for: error, fallback: "Blackwood couldn’t create this subpage.")
+                    return
+                }
+            }
+            handleConnectionFailure(error)
+            subpageError = userFacingMessage(for: error, fallback: "Blackwood couldn’t load this subpage.")
         }
     }
 
@@ -645,12 +763,22 @@ final class AppModel: ObservableObject {
                 do {
                     for try await event in client.makeChangeStream() {
                         if Task.isCancelled { return }
-                        guard event.kind == "CHANGE_EVENT_KIND_DAILY_NOTE_UPDATED" else { continue }
-                        let selected = Self.dayString(from: self.selectedDate)
-                        guard event.date == selected else { continue }
-                        guard !self.isEditing else { continue }
-                        guard event.revision != self.noteRevision else { continue }
-                        await self.refreshSelectedDateFromServer(date: selected, showLoadingState: false)
+                        switch event.kind {
+                        case "CHANGE_EVENT_KIND_DAILY_NOTE_UPDATED":
+                            let selected = Self.dayString(from: self.selectedDate)
+                            guard event.date == selected else { continue }
+                            guard !self.isEditing else { continue }
+                            guard event.revision != self.noteRevision else { continue }
+                            await self.refreshSelectedDateFromServer(date: selected, showLoadingState: false)
+                        case "CHANGE_EVENT_KIND_SUBPAGE_UPDATED":
+                            guard let route = self.activeSubpage else { continue }
+                            guard route.date == event.date, route.name == event.subpageName else { continue }
+                            guard !self.isEditingSubpage else { continue }
+                            guard event.revision != self.subpageRevision else { continue }
+                            await self.loadSubpage(route)
+                        default:
+                            continue
+                        }
                     }
                     return
                 } catch {

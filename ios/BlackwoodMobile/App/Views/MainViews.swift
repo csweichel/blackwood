@@ -2,17 +2,58 @@ import SwiftUI
 import UIKit
 
 private enum BlackwoodPalette {
-    static let background = Color(red: 250/255, green: 248/255, blue: 243/255)
-    static let foreground = Color(red: 28/255, green: 36/255, blue: 51/255)
-    static let card = Color(red: 250/255, green: 248/255, blue: 243/255)
-    static let muted = Color(red: 239/255, green: 233/255, blue: 220/255)
-    static let mutedForeground = Color(red: 106/255, green: 116/255, blue: 137/255)
-    static let accent = Color(red: 74/255, green: 111/255, blue: 165/255)
-    static let accentSubtle = Color(red: 226/255, green: 234/255, blue: 244/255)
-    static let border = Color(red: 214/255, green: 206/255, blue: 188/255)
-    static let destructive = Color(red: 184/255, green: 69/255, blue: 58/255)
-    static let success = Color(red: 74/255, green: 139/255, blue: 92/255)
-    static let warning = Color(red: 196/255, green: 136/255, blue: 45/255)
+    static let background = dynamicColor(
+        light: UIColor(red: 250/255, green: 248/255, blue: 243/255, alpha: 1),
+        dark: UIColor(red: 18/255, green: 22/255, blue: 30/255, alpha: 1)
+    )
+    static let foreground = dynamicColor(
+        light: UIColor(red: 28/255, green: 36/255, blue: 51/255, alpha: 1),
+        dark: UIColor(red: 235/255, green: 238/255, blue: 244/255, alpha: 1)
+    )
+    static let card = dynamicColor(
+        light: UIColor(red: 250/255, green: 248/255, blue: 243/255, alpha: 1),
+        dark: UIColor(red: 24/255, green: 29/255, blue: 39/255, alpha: 1)
+    )
+    static let muted = dynamicColor(
+        light: UIColor(red: 239/255, green: 233/255, blue: 220/255, alpha: 1),
+        dark: UIColor(red: 39/255, green: 46/255, blue: 60/255, alpha: 1)
+    )
+    static let mutedForeground = dynamicColor(
+        light: UIColor(red: 106/255, green: 116/255, blue: 137/255, alpha: 1),
+        dark: UIColor(red: 156/255, green: 167/255, blue: 187/255, alpha: 1)
+    )
+    static let accent = dynamicColor(
+        light: UIColor(red: 74/255, green: 111/255, blue: 165/255, alpha: 1),
+        dark: UIColor(red: 124/255, green: 166/255, blue: 224/255, alpha: 1)
+    )
+    static let accentSubtle = dynamicColor(
+        light: UIColor(red: 226/255, green: 234/255, blue: 244/255, alpha: 1),
+        dark: UIColor(red: 37/255, green: 52/255, blue: 74/255, alpha: 1)
+    )
+    static let border = dynamicColor(
+        light: UIColor(red: 214/255, green: 206/255, blue: 188/255, alpha: 1),
+        dark: UIColor(red: 59/255, green: 69/255, blue: 88/255, alpha: 1)
+    )
+    static let destructive = dynamicColor(
+        light: UIColor(red: 184/255, green: 69/255, blue: 58/255, alpha: 1),
+        dark: UIColor(red: 245/255, green: 118/255, blue: 105/255, alpha: 1)
+    )
+    static let success = dynamicColor(
+        light: UIColor(red: 74/255, green: 139/255, blue: 92/255, alpha: 1),
+        dark: UIColor(red: 110/255, green: 191/255, blue: 132/255, alpha: 1)
+    )
+    static let warning = dynamicColor(
+        light: UIColor(red: 196/255, green: 136/255, blue: 45/255, alpha: 1),
+        dark: UIColor(red: 240/255, green: 186/255, blue: 93/255, alpha: 1)
+    )
+
+    private static func dynamicColor(light: UIColor, dark: UIColor) -> Color {
+        Color(
+            UIColor { traits in
+                traits.userInterfaceStyle == .dark ? dark : light
+            }
+        )
+    }
 }
 
 struct RootTabView: View {
@@ -84,6 +125,9 @@ struct RootTabView: View {
             case .settings:
                 SettingsScreen(model: model)
             }
+        }
+        .sheet(item: $model.activeSubpage) { route in
+            SubpageScreen(model: model, route: route)
         }
         .contentShape(Rectangle())
         .gesture(sidebarRevealGesture)
@@ -434,8 +478,90 @@ struct NotesScreen: View {
                     StructuredNoteView(
                         content: model.noteContent,
                         baseURL: model.normalizedServerURL,
-                        date: AppModel.dayString(from: model.selectedDate)
+                        date: AppModel.dayString(from: model.selectedDate),
+                        onOpenSubpage: { model.openSubpage(named: $0) }
                     )
+                }
+            }
+        }
+    }
+}
+
+struct SubpageScreen: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var model: AppModel
+    let route: AppModel.SubpageRoute
+
+    var body: some View {
+        NavigationStack {
+            AppContentScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    card(spacing: 8) {
+                        Text(route.date.uppercased())
+                            .font(.system(size: 11, weight: .semibold))
+                            .tracking(1)
+                            .foregroundStyle(BlackwoodPalette.mutedForeground)
+
+                        Text(route.name)
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(BlackwoodPalette.foreground)
+                    }
+
+                    if let error = model.subpageError, !error.isEmpty {
+                        errorBanner(error)
+                    }
+
+                    if model.isEditingSubpage {
+                        TextEditor(text: $model.subpageDraftContent)
+                            .font(.system(size: 17))
+                            .foregroundStyle(BlackwoodPalette.foreground)
+                            .scrollContentBackground(.hidden)
+                            .frame(minHeight: 360)
+                            .padding(12)
+                            .background(BlackwoodPalette.muted.opacity(0.25))
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    } else if model.isLoadingSubpage && model.subpageContent.isEmpty {
+                        ProgressView("Loading subpage…")
+                            .frame(maxWidth: .infinity, minHeight: 220, alignment: .leading)
+                    } else {
+                        StructuredNoteView(
+                            content: model.subpageContent,
+                            baseURL: model.normalizedServerURL,
+                            date: route.date,
+                            onOpenSubpage: { model.openSubpage(named: $0, for: route.date) }
+                        )
+                    }
+                }
+            }
+            .background(BlackwoodPalette.background.ignoresSafeArea())
+            .navigationTitle(route.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Done") {
+                        model.closeSubpage()
+                        dismiss()
+                    }
+                }
+
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    if model.isEditingSubpage {
+                        Button("Cancel") {
+                            model.cancelEditingSubpage()
+                        }
+                        Button("Save") {
+                            Task { await model.saveCurrentSubpage() }
+                        }
+                    } else {
+                        Button("Edit") {
+                            model.beginEditingSubpage()
+                        }
+                    }
+                }
+            }
+            .onDisappear {
+                if model.activeSubpage?.id == route.id {
+                    model.closeSubpage()
                 }
             }
         }
@@ -1097,6 +1223,7 @@ private struct StructuredNoteView: View {
     let content: String
     let baseURL: URL?
     let date: String
+    let onOpenSubpage: ((String) -> Void)?
 
     private var sections: [(title: String, body: String)] {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1143,7 +1270,8 @@ private struct StructuredNoteView: View {
                         markdown: section.body,
                         isSummary: section.title == "Summary",
                         baseURL: baseURL,
-                        date: date
+                        date: date,
+                        onOpenSubpage: onOpenSubpage
                     )
                 }
             }
@@ -1157,6 +1285,7 @@ private struct MarkdownBlockView: View {
     let isSummary: Bool
     let baseURL: URL?
     let date: String
+    let onOpenSubpage: ((String) -> Void)?
 
     private enum Block: Hashable {
         case heading(level: Int, text: String)
@@ -1270,6 +1399,19 @@ private struct MarkdownBlockView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .environment(\.openURL, OpenURLAction { url in
+            guard url.scheme == "blackwood-subpage" else {
+                return .systemAction(url)
+            }
+            let encodedName = url.host?.removingPercentEncoding
+                ?? url.pathComponents.dropFirst().first?.removingPercentEncoding
+                ?? ""
+            guard !encodedName.isEmpty else {
+                return .discarded
+            }
+            onOpenSubpage?(encodedName)
+            return .handled
+        })
     }
 
     private func blockView(_ block: Block, depth: Int) -> AnyView {
@@ -1363,9 +1505,10 @@ private struct MarkdownBlockView: View {
     }
 
     private func markdownText(_ markdown: String, font: Font, color: Color) -> some View {
-        Group {
+        let renderedMarkdown = replacingWikilinks(in: markdown)
+        return Group {
             if let rendered = try? AttributedString(
-                markdown: markdown,
+                markdown: renderedMarkdown,
                 options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
             ) {
                 Text(rendered)
@@ -1565,6 +1708,23 @@ private struct MarkdownBlockView: View {
         let encodedSource = source.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? source
         let path = "/api/daily-notes/\(date)/attachments/\(encodedSource)"
         return URL(string: path, relativeTo: baseURL)?.absoluteURL
+    }
+
+    private func replacingWikilinks(in text: String) -> String {
+        let pattern = #"\[\[([^\]]+)\]\]"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+        let range = NSRange(text.startIndex..., in: text)
+        let mutable = NSMutableString(string: text)
+
+        let matches = regex.matches(in: text, range: range).reversed()
+        for match in matches {
+            guard let nameRange = Range(match.range(at: 1), in: text) else { continue }
+            let name = String(text[nameRange])
+            let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? name
+            mutable.replaceCharacters(in: match.range, with: "[\(name)](blackwood-subpage://\(encoded))")
+        }
+
+        return mutable as String
     }
 }
 
