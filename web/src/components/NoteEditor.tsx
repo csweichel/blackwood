@@ -1,20 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import Markdown from "react-markdown";
-import rehypeRaw from "rehype-raw";
-import remarkGfm from "remark-gfm";
-import MarkdownEditor from "./MarkdownEditor";
+import BlockNoteEditor from "./BlockNoteEditor";
 import AudioRecorder from "./AudioRecorder";
 import PhotoCapture from "./PhotoCapture";
-import {
-  rehypeYoutubeEmbed,
-  rehypeCollapsible,
-  rehypeSectionLabels,
-  rehypeCheckboxIndex,
-  rehypeAttachmentUrls,
-  remarkWikilinks,
-  SECTION_ICONS_JSX,
-} from "./DailyNote";
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -27,8 +14,7 @@ interface NoteEditorProps {
   date: string;
   existingSubpages: Set<string>;
   emptyMessage?: string;
-  startInEditMode?: boolean;
-  /** Extra toolbar buttons rendered before the collapse/attach/edit buttons. */
+  /** Extra toolbar buttons rendered before the attach button. */
   toolbarExtra?: React.ReactNode;
   /** Extra items rendered inside the attach dropdown (e.g. location). */
   attachMenuExtra?: React.ReactNode;
@@ -40,10 +26,10 @@ interface NoteEditorProps {
   onEditingChange?: (editing: boolean) => void;
 }
 
-function SaveStatusIndicator({ status, editing }: { status: SaveStatus; editing: boolean }) {
+function SaveStatusIndicator({ status }: { status: SaveStatus }) {
   return (
     <span
-      className={`text-xs transition-opacity ${editing ? "hidden md:inline" : ""} ${
+      className={`text-xs transition-opacity ${
         status === "idle" ? "opacity-0" : "opacity-100"
       } ${
         status === "saving"
@@ -74,7 +60,6 @@ export default function NoteEditor({
   date,
   existingSubpages,
   emptyMessage = "No content yet. Click to start writing.",
-  startInEditMode = false,
   toolbarExtra,
   attachMenuExtra,
   afterContent,
@@ -83,17 +68,8 @@ export default function NoteEditor({
   showAttach = true,
   onEditingChange,
 }: NoteEditorProps) {
-  const navigate = useNavigate();
-
-  // Edit state
-  const [editContent, setEditContent] = useState("");
-  const [editing, setEditing] = useState(startInEditMode);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const proseRef = useRef<HTMLDivElement>(null);
-
-  // Collapse state
-  const [sectionsCollapsed, setSectionsCollapsed] = useState(false);
 
   // Attach state
   const [showAttachMenu, setShowAttachMenu] = useState(false);
@@ -103,6 +79,11 @@ export default function NoteEditor({
   const [clipUrl, setClipUrl] = useState("");
   const [clipLoading, setClipLoading] = useState(false);
   const attachRef = useRef<HTMLDivElement>(null);
+
+  // Always editing — notify parent on mount
+  useEffect(() => {
+    onEditingChange?.(true);
+  }, [onEditingChange]);
 
   // Close attach menu on outside click
   useEffect(() => {
@@ -131,55 +112,12 @@ export default function NoteEditor({
     [onSave]
   );
 
-  function handleEditChange(text: string) {
-    setEditContent(text);
+  function handleEditorChange(markdown: string) {
+    onContentChange(markdown);
     setSaveStatus("idle");
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => doSave(text), 1000);
+    saveTimerRef.current = setTimeout(() => doSave(markdown), 1000);
   }
-
-  function toggleCheckbox(index: number) {
-    const checkboxRe = /- \[([ xX])\]/g;
-    let count = 0;
-    const newContent = content.replace(checkboxRe, (match, mark) => {
-      if (count++ === index) return mark.trim() ? "- [ ]" : "- [x]";
-      return match;
-    });
-    onContentChange(newContent);
-    doSave(newContent);
-  }
-
-  function toggleAllSections() {
-    if (!proseRef.current) return;
-    const next = !sectionsCollapsed;
-    proseRef.current.querySelectorAll("details").forEach((d) => { d.open = !next; });
-    setSectionsCollapsed(next);
-  }
-
-  function startEditing() {
-    setEditContent(content.trim() ? content : (emptyTemplate ?? content));
-    setEditing(true);
-    onEditingChange?.(true);
-  }
-
-  function handleSave() {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    onContentChange(editContent);
-    setEditing(false);
-    onEditingChange?.(false);
-    doSave(editContent);
-  }
-
-  function handleCancel() {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    setEditing(false);
-    onEditingChange?.(false);
-    setSaveStatus("idle");
-  }
-
-  useEffect(() => {
-    onEditingChange?.(editing);
-  }, [editing, onEditingChange]);
 
   function handleAttachmentCreated() {
     setShowRecorder(false);
@@ -187,26 +125,15 @@ export default function NoteEditor({
     onEntryCreated?.();
   }
 
+  const effectiveContent = content.trim() ? content : (emptyTemplate ?? "");
+
   return (
     <>
       {/* Toolbar */}
       <div className="flex items-center gap-3 mb-3 md:mb-4">
         {title ? <div className="flex-1 min-w-0">{title}</div> : <div className="flex-1" />}
-        <SaveStatusIndicator status={saveStatus} editing={editing} />
+        <SaveStatusIndicator status={saveStatus} />
         {toolbarExtra}
-        {content.trim() && (
-          <button
-            onClick={toggleAllSections}
-            className="p-1.5 rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
-            title={sectionsCollapsed ? "Expand all sections" : "Collapse all sections"}
-          >
-            {sectionsCollapsed ? (
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7 20 5-5 5 5"/><path d="m7 4 5 5 5-5"/></svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
-            )}
-          </button>
-        )}
         {showAttach && (
           <div className="relative" ref={attachRef}>
             <button
@@ -242,29 +169,6 @@ export default function NoteEditor({
                 </button>
               </div>
             )}
-          </div>
-        )}
-        {!editing ? (
-          <button
-            onClick={startEditing}
-            className="px-3 py-1.5 text-xs font-medium text-muted-foreground bg-muted rounded-md hover:bg-border transition-colors"
-          >
-            Edit
-          </button>
-        ) : (
-          <div className="hidden md:flex items-center gap-2">
-            <button
-              onClick={handleCancel}
-              className="px-3 py-1.5 text-xs font-medium text-muted-foreground bg-muted rounded-md hover:bg-border transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              className="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:opacity-90 transition-colors"
-            >
-              Done
-            </button>
           </div>
         )}
       </div>
@@ -345,95 +249,16 @@ export default function NoteEditor({
 
       {/* Content area */}
       <div className="flex-1 min-h-0 overflow-y-auto mb-4">
-        {editing ? (
-          <MarkdownEditor
-            value={editContent}
-            onChange={handleEditChange}
-            onSubmit={handleSave}
-            placeholder="Start writing..."
-            autoFocus
-          />
-        ) : content.trim() ? (
-          <div
-            ref={proseRef}
-            className="prose prose-sm max-w-none note-prose note-container"
-            onClick={(e) => {
-              const target = e.target as HTMLElement;
-              if (target.tagName === "INPUT" && (target as HTMLInputElement).type === "checkbox") {
-                e.preventDefault();
-                const idx = target.getAttribute("data-checkbox-index");
-                if (idx != null) toggleCheckbox(parseInt(idx, 10));
-                return;
-              }
-              const wikilinkEl = target.closest("a[data-subpage]") as HTMLAnchorElement | null;
-              if (wikilinkEl) {
-                e.preventDefault();
-                const href = wikilinkEl.getAttribute("href");
-                if (href) navigate(href);
-                return;
-              }
-              if (target.closest("summary, details, a, audio, button, video, iframe, input")) return;
-              startEditing();
-            }}
-          >
-            <Markdown
-              remarkPlugins={[remarkGfm, remarkWikilinks(date, existingSubpages)]}
-              rehypePlugins={[rehypeRaw, rehypeYoutubeEmbed, rehypeCollapsible, rehypeSectionLabels, rehypeCheckboxIndex, rehypeAttachmentUrls(date)]}
-              components={{
-                h1: ({ className, children, ...props }) => {
-                  const cls = typeof className === "string" ? className : "";
-                  if (cls.includes("note-section-label")) {
-                    const text = typeof children === "string" ? children : String(children ?? "");
-                    const icon = SECTION_ICONS_JSX[text.trim()];
-                    return (
-                      <h1 className={cls} {...props}>
-                        {icon && <span className="note-section-icon">{icon}</span>}
-                        {children}
-                      </h1>
-                    );
-                  }
-                  return <h1 className={className} {...props}>{children}</h1>;
-                },
-                input: ({ type, checked, ...props }) => {
-                  if (type === "checkbox") {
-                    return <input type="checkbox" checked={checked} readOnly {...props} />;
-                  }
-                  return <input type={type} checked={checked} {...props} />;
-                },
-              }}
-            >
-              {content}
-            </Markdown>
-          </div>
-        ) : (
-          <div className="note-empty" onClick={startEditing}>
-            <p className="text-muted-foreground text-sm">{emptyMessage}</p>
-          </div>
-        )}
+        <BlockNoteEditor
+          content={effectiveContent}
+          onChange={handleEditorChange}
+          date={date}
+          existingSubpages={existingSubpages}
+          placeholder={emptyMessage}
+        />
       </div>
 
       {afterContent}
-
-      {/* Mobile bottom bar when editing */}
-      {editing && (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border px-4 py-3 flex items-center justify-between z-40">
-          <SaveStatusIndicator status={saveStatus} editing={false} />
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleCancel}
-              className="px-4 py-2 text-sm font-medium text-muted-foreground bg-muted rounded-md hover:bg-border transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:opacity-90 transition-colors"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      )}
     </>
   );
 }

@@ -1,0 +1,167 @@
+/*
+ * Map BlockNote's CSS variables to Blackwood's design tokens.
+ * Scoped to .bn-blackwood-wrapper so overrides don't leak.
+ */
+.bn-blackwood-wrapper {
+  /* BlockNote editor variables */
+  --bn-colors-editor-text: var(--foreground);
+  --bn-colors-editor-background: var(--card);
+  --bn-colors-menu-text: var(--foreground);
+  --bn-colors-menu-background: var(--card);
+  --bn-colors-tooltip-text: var(--foreground);
+  --bn-colors-tooltip-background: var(--muted);
+  --bn-colors-hovered-text: var(--foreground);
+  --bn-colors-hovered-background: var(--muted);
+  --bn-colors-selected-text: var(--accent-foreground);
+  --bn-colors-selected-background: var(--accent);
+  --bn-colors-disabled-text: var(--muted-foreground);
+  --bn-colors-disabled-background: var(--muted);
+  --bn-colors-shadow: var(--border);
+  --bn-colors-border: var(--border);
+  --bn-colors-side-menu: var(--muted-foreground);
+  --bn-colors-highlights-gray-text: var(--foreground);
+  --bn-colors-highlights-gray-background: var(--muted);
+
+  /* Remove default font override — inherit from Blackwood */
+  --bn-font-family: inherit;
+  --bn-font-size: 0.9375rem;
+}
+
+/* Remove default border/shadow from the editor container */
+.bn-blackwood-wrapper .bn-container {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+.bn-blackwood-wrapper .bn-editor {
+  color: var(--foreground);
+  background: transparent;
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  /* Remove the 54px inline padding that reserves space for the side menu.
+     The side menu will float in the left margin of the parent container instead. */
+  padding-inline: 0 !important;
+}
+
+/* ── Font sizes matching note-prose ──────────────────────────────────── */
+
+/* Override BlockNote's --level CSS variable which controls heading sizes.
+   BlockNote defaults: h1=3em, h2=2em, h3=1.3em — far too large. */
+.bn-blackwood-wrapper [data-content-type="heading"] {
+  --level: 1.5rem !important;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.bn-blackwood-wrapper [data-content-type="heading"][data-level="2"] {
+  --level: 1.25rem !important;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0;
+}
+
+.bn-blackwood-wrapper [data-content-type="heading"][data-level="3"] {
+  --level: 1.0625rem !important;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+/* Top spacing before heading blocks — use padding-top on the block itself
+   (not the blockOuter) so the side menu aligns with the heading text,
+   not the top of the spacing. */
+.bn-blackwood-wrapper [data-node-type="blockOuter"]:has(> .bn-block > .bn-block-content[data-content-type="heading"]) > .bn-block {
+  padding-top: 1.25em;
+}
+
+.bn-blackwood-wrapper [data-node-type="blockOuter"]:has(> .bn-block > .bn-block-content[data-content-type="heading"][data-level="2"]) > .bn-block {
+  padding-top: 1em;
+}
+
+.bn-blackwood-wrapper [data-node-type="blockOuter"]:has(> .bn-block > .bn-block-content[data-content-type="heading"][data-level="3"]) > .bn-block {
+  padding-top: 0.75em;
+}
+
+/* First heading in the editor shouldn't have top padding */
+.bn-blackwood-wrapper .bn-block-group > [data-node-type="blockOuter"]:first-child > .bn-block {
+  padding-top: 0;
+}
+
+/* Also override --prev-level which controls spacing after headings */
+.bn-blackwood-wrapper [data-prev-level="1"] {
+  --prev-level: 1.5rem !important;
+}
+.bn-blackwood-wrapper [data-prev-level="2"] {
+  --prev-level: 1.25rem !important;
+}
+.bn-blackwood-wrapper [data-prev-level="3"] {
+  --prev-level: 1.0625rem !important;
+}
+
+.bn-blackwood-wrapper .bn-editor [data-content-type="codeBlock"] pre {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+.bn-blackwood-wrapper .bn-inline-content code {
+  font-size: 0.85em;
+}
+
+/* ── Side menu height overrides ─────────────────────────────────────── */
+/* BlockNote defaults: h1=78px, h2=54px, h3=37px — calibrated for 3em/2em/1.3em.
+   Our headings are much smaller (1.5rem/1.25rem/1.0625rem), so reset to the
+   same height as paragraph blocks (30px) which is the default. */
+.bn-blackwood-wrapper .bn-side-menu[data-block-type="heading"] {
+  height: 30px;
+}
+
+/* Style links to use accent color */
+.bn-blackwood-wrapper .bn-editor a {
+  color: var(--accent);
+}
+
+.bn-blackwood-wrapper .bn-editor a:hover {
+  color: var(--accent-hover);
+}
+
+/* Placeholder text */
+.bn-blackwood-wrapper .bn-block-content::before {
+  color: var(--muted-foreground) !important;
+}
+
+/* ── Wikilink pill styling ──────────────────────────────────────────── */
+
+/* Links to subpages (wikilinks converted to /day/... hrefs) */
+.bn-blackwood-wrapper .bn-editor a[href^="/day/"] {
+  background: color-mix(in srgb, var(--accent, #3b82f6) 12%, transparent);
+  color: var(--accent, #3b82f6);
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 500;
+  transition: background 0.15s ease;
+}
+
+.bn-blackwood-wrapper .bn-editor a[href^="/day/"]:hover {
+  background: color-mix(in srgb, var(--accent, #3b82f6) 22%, transparent);
+  text-decoration: none;
+}
+
+/* Missing subpages (marked with ?new=1) get a dashed underline */
+.bn-blackwood-wrapper .bn-editor a[href*="?new=1"] {
+  background: color-mix(in srgb, var(--muted-foreground, #888) 8%, transparent);
+  color: var(--muted-foreground, #888);
+  border-bottom: 1px dashed var(--muted-foreground, #888);
+}
+
+.bn-blackwood-wrapper .bn-editor a[href*="?new=1"]:hover {
+  background: color-mix(in srgb, var(--muted-foreground, #888) 16%, transparent);
+}
+
+/* ── YouTube embed block ────────────────────────────────────────────── */
+
+.bn-blackwood-wrapper [data-content-type="youtube"] {
+  margin: 8px 0;
+}

@@ -109,7 +109,7 @@ Vite proxies API calls to `localhost:8080` by default. Adjust `vite.config.ts` i
 - **Offline support**: `offlineStore.ts` (IndexedDB via `idb`) + `syncEngine.ts`. API client functions in `client.ts` queue writes when offline.
 - **Routing**: `react-router-dom` v7 with `BrowserRouter`. Routes: `/day/:date`, `/week/:weekId`, `/month/:monthId`, `/chat/:slug`, `/search`, `/clip`.
 - **State**: Local component state with `useState`/`useCallback`/`useEffect`. No global state library.
-- **Markdown**: `react-markdown` with `remark-gfm` and `rehype-raw`. Editing via CodeMirror.
+- **Markdown**: BlockNote.js (`@blocknote/react` + `@blocknote/mantine`) for rich-text editing with markdown round-tripping. Custom blocks for YouTube embeds. Wikilinks and attachment URLs handled via markdown pre/post-processing in `web/src/lib/markdownTransforms.ts`.
 
 ### Proto / API
 

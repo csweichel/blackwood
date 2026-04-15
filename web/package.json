@@ -10,21 +10,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@codemirror/commands": "^6.10.3",
-    "@codemirror/lang-markdown": "^6.5.0",
-    "@codemirror/language": "^6.12.2",
-    "@codemirror/language-data": "^6.5.2",
-    "@codemirror/search": "^6.6.0",
-    "@codemirror/state": "^6.6.0",
-    "@codemirror/view": "^6.40.0",
-    "@lezer/highlight": "^1.2.3",
+    "@blocknote/core": "^0.48.0",
+    "@blocknote/mantine": "^0.48.0",
+    "@blocknote/react": "^0.48.0",
+    "@mantine/core": "^8.3.18",
+    "@mantine/hooks": "^8.3.18",
     "idb": "^8.0.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-markdown": "^9.0.0",
-    "react-router-dom": "^7.13.2",
-    "rehype-raw": "^7.0.0",
-    "remark-gfm": "^4.0.0"
+    "react-router-dom": "^7.13.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

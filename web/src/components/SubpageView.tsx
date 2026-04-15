@@ -29,7 +29,7 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
   const [revision, setRevision] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [autoEdit, setAutoEdit] = useState(false);
+
   const [isEditing, setIsEditing] = useState(false);
   const [existingSubpages, setExistingSubpages] = useState<Set<string>>(
     new Set()
@@ -38,7 +38,6 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    setAutoEdit(false);
     try {
       const [data, subpagesResp] = await Promise.all([
         getSubpage(date, name),
@@ -58,7 +57,6 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
           const created = await updateSubpageContent(date, name, "", "");
           setContent("");
           setRevision(created.revision ?? "");
-          setAutoEdit(true);
         } catch (createErr) {
           setError(
             createErr instanceof Error
@@ -144,7 +142,6 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
         date={date}
         existingSubpages={existingSubpages}
         emptyMessage="No content yet. Click to start writing."
-        startInEditMode={autoEdit}
         showAttach={false}
       />
     </div>
