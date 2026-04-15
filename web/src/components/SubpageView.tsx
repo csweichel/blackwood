@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
   getSubpage,
@@ -34,6 +34,22 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
   const [existingSubpages, setExistingSubpages] = useState<Set<string>>(
     new Set()
   );
+  const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const overflowRef = useRef<HTMLDivElement>(null);
+
+  // Close overflow menu on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
+        setShowOverflowMenu(false);
+      }
+    }
+    if (showOverflowMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showOverflowMenu]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -143,6 +159,35 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
         existingSubpages={existingSubpages}
         emptyMessage="No content yet. Click to start writing."
         showAttach={false}
+        toolbarExtra={
+          content.trim() ? (
+            <div className="relative" ref={overflowRef}>
+              <button
+                onClick={() => setShowOverflowMenu((v) => !v)}
+                className={`p-1.5 rounded-md transition-colors ${showOverflowMenu ? "text-accent bg-muted" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+                title="More actions"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+              </button>
+              {showOverflowMenu && (
+                <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg z-50 min-w-[180px]">
+                  <button
+                    onClick={async () => {
+                      setShowOverflowMenu(false);
+                      await navigator.clipboard.writeText(content);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                    {copied ? "Copied!" : "Copy as Markdown"}
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : undefined
+        }
       />
     </div>
   );

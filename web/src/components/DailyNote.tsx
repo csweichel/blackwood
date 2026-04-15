@@ -68,6 +68,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
   const overflowRef = useRef<HTMLDivElement>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
+  const [copied, setCopied] = useState(false);
   const { position: geoPosition, loading: geoLoading, error: geoError, requestLocation } = useGeolocation();
   const [locationTagged, setLocationTagged] = useState(false);
 
@@ -186,6 +187,18 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
           </button>
           {showOverflowMenu && (
             <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg z-50 min-w-[180px]">
+              <button
+                onClick={async () => {
+                  setShowOverflowMenu(false);
+                  await navigator.clipboard.writeText(content);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                {copied ? "Copied!" : "Copy as Markdown"}
+              </button>
               <button
                 onClick={() => { setShowOverflowMenu(false); generateSummary(); }}
                 disabled={summarizing}

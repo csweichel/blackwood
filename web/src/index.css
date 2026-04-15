@@ -1,73 +1,73 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
-/* Light mode — ink & parchment */
+/* Light mode — Ona theme */
 :root {
-  --background: #FAF8F3;
-  --foreground: #1C2433;
-  --card: #FAF8F3;
-  --card-foreground: #1C2433;
-  --muted: #EFE9DC;
-  --muted-foreground: #6A7489;
-  --tertiary: #9199A8;
-  --accent: #4A6FA5;
-  --accent-foreground: #FAF8F3;
-  --accent-hover: #3D5E8E;
-  --accent-subtle: #E2EAF4;
-  --border: #D6CEBC;
-  --border-strong: #B8AE9A;
-  --destructive: #B8453A;
-  --success: #4A8B5C;
-  --warning: #C4882D;
-  --primary: #4A6FA5;
-  --primary-foreground: #FAF8F3;
+  --background: #FFFFFF;
+  --foreground: #1F1F1F;
+  --card: #FAFAFA;
+  --card-foreground: #1F1F1F;
+  --muted: #F5F5F5;
+  --muted-foreground: #737373;
+  --tertiary: #A3A3A3;
+  --accent: #0234B0;
+  --accent-foreground: #FFFFFF;
+  --accent-hover: #0048FF;
+  --accent-subtle: #EBF0FC;
+  --border: #E1E1E1;
+  --border-strong: #D4D4D4;
+  --destructive: #E90007;
+  --success: #069F00;
+  --warning: #EE6002;
+  --primary: #262626;
+  --primary-foreground: #FAFAFA;
 }
 
-/* Dark mode — ink & parchment */
+/* Dark mode — Ona theme */
 /* Applied via prefers-color-scheme (system) or explicit .dark class */
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
-    --background: #141A24;
-    --foreground: #E8E2D5;
-    --card: #1C2433;
-    --card-foreground: #E8E2D5;
-    --muted: #1C2433;
-    --muted-foreground: #6A7489;
-    --tertiary: #4D566A;
-    --accent: #6B9BD2;
-    --accent-foreground: #141A24;
-    --accent-hover: #85ADE0;
+    --background: #1F1F1F;
+    --foreground: #FAFAFA;
+    --card: #262626;
+    --card-foreground: #FAFAFA;
+    --muted: #2E2E2E;
+    --muted-foreground: #A3A3A3;
+    --tertiary: #525252;
+    --accent: #5E8AFD;
+    --accent-foreground: #1F1F1F;
+    --accent-hover: #8BABFC;
     --accent-subtle: #1E2D42;
-    --border: #2A3448;
-    --border-strong: #3A4660;
-    --destructive: #D4594C;
-    --success: #5EAD72;
-    --warning: #E8A93E;
-    --primary: #6B9BD2;
-    --primary-foreground: #141A24;
+    --border: #404040;
+    --border-strong: #525252;
+    --destructive: #FF1E27;
+    --success: #0BD300;
+    --warning: #FE7B27;
+    --primary: #FAFAFA;
+    --primary-foreground: #1F1F1F;
   }
 }
 
 /* Explicit dark class override (user chose "dark") */
 :root.dark {
-  --background: #141A24;
-  --foreground: #E8E2D5;
-  --card: #1C2433;
-  --card-foreground: #E8E2D5;
-  --muted: #1C2433;
-  --muted-foreground: #6A7489;
-  --tertiary: #4D566A;
-  --accent: #6B9BD2;
-  --accent-foreground: #141A24;
-  --accent-hover: #85ADE0;
+  --background: #1F1F1F;
+  --foreground: #FAFAFA;
+  --card: #262626;
+  --card-foreground: #FAFAFA;
+  --muted: #2E2E2E;
+  --muted-foreground: #A3A3A3;
+  --tertiary: #525252;
+  --accent: #5E8AFD;
+  --accent-foreground: #1F1F1F;
+  --accent-hover: #8BABFC;
   --accent-subtle: #1E2D42;
-  --border: #2A3448;
-  --border-strong: #3A4660;
-  --destructive: #D4594C;
-  --success: #5EAD72;
-  --warning: #E8A93E;
-  --primary: #6B9BD2;
-  --primary-foreground: #141A24;
+  --border: #404040;
+  --border-strong: #525252;
+  --destructive: #FF1E27;
+  --success: #0BD300;
+  --warning: #FE7B27;
+  --primary: #FAFAFA;
+  --primary-foreground: #1F1F1F;
 }
 
 @theme inline {
