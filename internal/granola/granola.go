@@ -15,6 +15,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -526,7 +528,8 @@ func (s *Syncer) getTranscript(ctx context.Context, meetingID string) (string, e
 	return text, nil
 }
 
-// importMeeting fetches full detail and transcript, then writes to a daily note.
+// importMeeting fetches full detail and transcript, writes the content to a
+// subpage, and adds a wikilink in the daily note's "# Meetings" section.
 func (s *Syncer) importMeeting(ctx context.Context, m Meeting) error {
 	detail, err := s.getMeetingDetail(ctx, m.ID)
 	if err != nil {
@@ -549,10 +552,31 @@ func (s *Syncer) importMeeting(ctx context.Context, m Meeting) error {
 	}
 
 	md := buildNoteMarkdown(detail, transcript)
+	subpageName := uniqueSubpageName(s.store, date, sanitizeSubpageName(m.Title))
 
+	// Write the meeting content to a subpage file.
+	subpagePath, err := s.store.SubpagePath(date, subpageName)
+	if err != nil {
+		return fmt.Errorf("subpage path for %q: %w", subpageName, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(subpagePath), 0o755); err != nil {
+		return fmt.Errorf("create day directory: %w", err)
+	}
+	if err := os.WriteFile(subpagePath, []byte(md), 0o644); err != nil {
+		return fmt.Errorf("write subpage: %w", err)
+	}
+
+	// Add a wikilink to the daily note under "# Meetings".
+	wikilink := "\n\n[[" + subpageName + "]]\n"
+	if err := s.store.AppendToSection(ctx, dailyNote.ID, "# Meetings", wikilink); err != nil {
+		return fmt.Errorf("append wikilink to daily note: %w", err)
+	}
+
+	// Still create an entry for indexing and search.
 	meta, _ := json.Marshal(map[string]string{
 		"granola_meeting_id": m.ID,
 		"granola_title":      m.Title,
+		"subpage":            subpageName,
 	})
 
 	entry := &storage.Entry{
@@ -565,11 +589,6 @@ func (s *Syncer) importMeeting(ctx context.Context, m Meeting) error {
 	}
 	if err := s.store.CreateEntry(ctx, entry); err != nil {
 		return fmt.Errorf("create entry: %w", err)
-	}
-
-	snippet := "\n\n# " + m.Title + "\n\n" + md + "\n"
-	if err := s.store.AppendToSection(ctx, dailyNote.ID, "# Meetings", snippet); err != nil {
-		return fmt.Errorf("append to daily note: %w", err)
 	}
 
 	if s.indexer != nil && md != "" {
@@ -587,8 +606,55 @@ func (s *Syncer) importMeeting(ctx context.Context, m Meeting) error {
 		return fmt.Errorf("upsert sync state: %w", err)
 	}
 
-	slog.Info("granola meeting imported", "meeting_id", m.ID, "title", m.Title, "date", date)
+	slog.Info("granola meeting imported as subpage", "meeting_id", m.ID, "title", m.Title, "subpage", subpageName, "date", date)
 	return nil
+}
+
+// uniqueSubpageName returns a subpage name that doesn't collide with existing
+// subpages for the given date. If "Title" already exists, tries "Title (2)",
+// "Title (3)", etc.
+func uniqueSubpageName(store *storage.Store, date, base string) string {
+	path, err := store.SubpagePath(date, base)
+	if err != nil {
+		return base
+	}
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return base
+	}
+	for i := 2; i <= 99; i++ {
+		candidate := fmt.Sprintf("%s (%d)", base, i)
+		path, err := store.SubpagePath(date, candidate)
+		if err != nil {
+			return candidate
+		}
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			return candidate
+		}
+	}
+	return base
+}
+
+// sanitizeSubpageName cleans a meeting title for use as a subpage filename.
+// Removes characters that are invalid in filenames and trims whitespace.
+func sanitizeSubpageName(title string) string {
+	// Replace characters invalid in filenames.
+	replacer := strings.NewReplacer(
+		"/", "-",
+		"\\", "-",
+		":", " -",
+		"*", "",
+		"?", "",
+		"\"", "",
+		"<", "",
+		">", "",
+		"|", "-",
+	)
+	name := replacer.Replace(title)
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = "Untitled Meeting"
+	}
+	return name
 }
 
 // buildNoteMarkdown combines the meeting detail text with the transcript.

@@ -272,13 +272,32 @@ func TestSyncWithFakeMCPServer(t *testing.T) {
 		t.Errorf("entry source = %q, want %q", entry.Source, "import")
 	}
 
-	// Verify the daily note was created for the meeting date.
+	// Verify the daily note contains a wikilink (not the full content).
 	dailyNote, err := store.GetDailyNoteByDate(ctx, "2026-01-27")
 	if err != nil {
 		t.Fatalf("get daily note: %v", err)
 	}
-	if !strings.Contains(dailyNote.Content, "# Test Meeting") {
-		t.Errorf("daily note should contain meeting heading, got: %s", dailyNote.Content)
+	if !strings.Contains(dailyNote.Content, "[[Test Meeting]]") {
+		t.Errorf("daily note should contain wikilink, got: %s", dailyNote.Content)
+	}
+	if strings.Contains(dailyNote.Content, "Transcript") {
+		t.Errorf("daily note should NOT contain full content, got: %s", dailyNote.Content)
+	}
+
+	// Verify the subpage file was created with the full content.
+	subpagePath, err := store.SubpagePath("2026-01-27", "Test Meeting")
+	if err != nil {
+		t.Fatalf("subpage path: %v", err)
+	}
+	subpageContent, err := os.ReadFile(subpagePath)
+	if err != nil {
+		t.Fatalf("read subpage: %v", err)
+	}
+	if !strings.Contains(string(subpageContent), "Test Meeting") {
+		t.Errorf("subpage should contain meeting content, got: %s", string(subpageContent))
+	}
+	if !strings.Contains(string(subpageContent), "Transcript") {
+		t.Errorf("subpage should contain transcript, got: %s", string(subpageContent))
 	}
 
 	// Second sync should skip (already imported).
