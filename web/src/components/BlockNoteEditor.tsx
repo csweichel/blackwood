@@ -114,13 +114,23 @@ export default function BlockNoteEditor({
   // Track whether initial content has been loaded
   const initialLoaded = useRef(false);
 
-  // Keep refs for values used in the onChange callback to avoid stale closures
+  // Keep refs for values used in callbacks to avoid stale closures
   const dateRef = useRef(date);
   useEffect(() => {
     dateRef.current = date;
   }, [date]);
 
-  // Load initial content and handle external content changes
+  // Use a ref for existingSubpages so it doesn't trigger the content-sync effect.
+  const existingSubpagesForSync = useRef(existingSubpages);
+  useEffect(() => {
+    existingSubpagesForSync.current = existingSubpages;
+  }, [existingSubpages]);
+
+  // Load initial content and handle external content changes.
+  // This effect runs when `content` changes (from parent state). It compares
+  // against what the editor already contains and only calls replaceBlocks when
+  // the content genuinely differs — preventing flicker from echo loops where
+  // the editor's own onChange output flows back as a prop change.
   useEffect(() => {
     if (!editor) return;
 
@@ -143,7 +153,7 @@ export default function BlockNoteEditor({
     }
 
     // Pre-process: convert wikilinks to standard markdown links
-    const preprocessed = preprocessMarkdown(content, date, existingSubpages);
+    const preprocessed = preprocessMarkdown(content, date, existingSubpagesForSync.current);
 
     // Parse markdown to blocks
     const blocks = editor.tryParseMarkdownToBlocks(preprocessed);
@@ -161,7 +171,7 @@ export default function BlockNoteEditor({
     editor.replaceBlocks(editor.document, nested as typeof blocks);
     lastSetContent.current = content;
     initialLoaded.current = true;
-  }, [editor, content, date, existingSubpages]);
+  }, [editor, content, date]);
 
   const handleChange = useCallback(() => {
     if (!editor) return;
@@ -188,14 +198,9 @@ export default function BlockNoteEditor({
   );
 
   // Build wikilink suggestion items from existing subpages
-  const existingSubpagesRef = useRef(existingSubpages);
-  useEffect(() => {
-    existingSubpagesRef.current = existingSubpages;
-  }, [existingSubpages]);
-
   const getWikilinkItems = useCallback(
     async (query: string) => {
-      const pages = Array.from(existingSubpagesRef.current);
+      const pages = Array.from(existingSubpagesForSync.current);
       const lowerQuery = query.toLowerCase();
 
       const makeItem = (name: string, isNew: boolean) => ({

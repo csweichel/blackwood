@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   getSubpage,
@@ -7,7 +7,10 @@ import {
   listSubpages,
 } from "../api/client";
 import { subscribeToChanges } from "../lib/changeEvents";
+import { stableSortedArray } from "../lib/stableArray";
+import { mergeContent } from "../lib/mergeContent";
 import NoteEditor from "./NoteEditor";
+import ConflictBanner from "./ConflictBanner";
 
 interface SubpageViewProps {
   date: string;
@@ -30,10 +33,12 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [isEditing, setIsEditing] = useState(false);
-  const [existingSubpages, setExistingSubpages] = useState<Set<string>>(
-    new Set()
-  );
+  const [subpageNames, setSubpageNames] = useState<string[]>([]);
+  const existingSubpages = useMemo(() => new Set(subpageNames), [subpageNames]);
+  const cancelPendingSaveRef = useRef<(() => void) | null>(null);
+  const baseContentRef = useRef("");
+  const [conflicts, setConflicts] = useState<string[]>([]);
+  const serverContentRef = useRef("");
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const [copied, setCopied] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
@@ -52,16 +57,21 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
   }, [showOverflowMenu]);
 
   const load = useCallback(async () => {
+    cancelPendingSaveRef.current?.();
     setLoading(true);
     setError(null);
+    setConflicts([]);
     try {
       const [data, subpagesResp] = await Promise.all([
         getSubpage(date, name),
         listSubpages(date).catch(() => ({ names: [] as string[] })),
       ]);
-      setContent(data.content ?? "");
+      const serverContent = data.content ?? "";
+      setContent(serverContent);
       setRevision(data.revision ?? "");
-      setExistingSubpages(new Set(subpagesResp.names ?? []));
+      baseContentRef.current = serverContent;
+      const names = subpagesResp.names ?? [];
+      setSubpageNames((prev) => stableSortedArray(prev, names));
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to load";
       if (
@@ -73,6 +83,7 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
           const created = await updateSubpageContent(date, name, "", "");
           setContent("");
           setRevision(created.revision ?? "");
+          baseContentRef.current = "";
         } catch (createErr) {
           setError(
             createErr instanceof Error
@@ -88,25 +99,81 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
     }
   }, [date, name]);
 
+  const mergeLoad = useCallback(async () => {
+    try {
+      const [data, subpagesResp] = await Promise.all([
+        getSubpage(date, name),
+        listSubpages(date).catch(() => ({ names: [] as string[] })),
+      ]);
+      const remoteContent = data.content ?? "";
+      const remoteRevision = data.revision ?? "";
+      const names = subpagesResp.names ?? [];
+      setSubpageNames((prev) => stableSortedArray(prev, names));
+
+      setContent((localContent) => {
+        const base = baseContentRef.current;
+        const result = mergeContent(base, localContent, remoteContent);
+
+        if (result.ok) {
+          cancelPendingSaveRef.current?.();
+          baseContentRef.current = remoteContent;
+          setRevision(remoteRevision);
+          setConflicts([]);
+          return result.merged ?? localContent;
+        }
+
+        serverContentRef.current = remoteContent;
+        setConflicts(result.conflicts);
+        return localContent;
+      });
+    } catch (err) {
+      console.warn("Merge load failed, falling back to full load", err);
+      void load();
+    }
+  }, [date, name, load]);
+
   useEffect(() => {
     load();
   }, [load]);
 
+  const revisionRef = useRef(revision);
+  useEffect(() => {
+    revisionRef.current = revision;
+  }, [revision]);
+
   useEffect(() => {
     return subscribeToChanges((event) => {
       if (event.date !== date || event.subpageName !== name) return;
-      if (event.kind === "CHANGE_EVENT_KIND_SUBPAGE_UPDATED" && !isEditing && event.revision !== revision) {
-        void load();
+      if (event.kind === "CHANGE_EVENT_KIND_SUBPAGE_UPDATED" && event.revision !== revisionRef.current) {
+        void mergeLoad();
       }
     });
-  }, [date, isEditing, load, name, revision]);
+  }, [date, mergeLoad, name]);
+
+  const handleConflictKeepLocal = useCallback(() => {
+    setConflicts([]);
+    setContent((c) => {
+      baseContentRef.current = c;
+      return c;
+    });
+  }, []);
+
+  const handleConflictUseServer = useCallback(() => {
+    cancelPendingSaveRef.current?.();
+    const server = serverContentRef.current;
+    setContent(server);
+    baseContentRef.current = server;
+    setConflicts([]);
+  }, []);
 
   const handleSave = useCallback(
     async (text: string) => {
       try {
         const updated = await updateSubpageContent(date, name, text, revision);
-        setContent(updated.content ?? text);
+        const savedContent = updated.content ?? text;
+        setContent(savedContent);
         setRevision(updated.revision ?? revision);
+        baseContentRef.current = savedContent;
         setError(null);
       } catch (err) {
         if (err instanceof RPCError && err.code === "failed_precondition") {
@@ -148,13 +215,19 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
         <span className="text-foreground font-medium">{name}</span>
       </nav>
 
+      <ConflictBanner
+        conflicts={conflicts}
+        onKeepLocal={handleConflictKeepLocal}
+        onUseServer={handleConflictUseServer}
+      />
+
       <NoteEditor
         title={<h2 className="text-lg md:text-xl font-semibold text-foreground truncate">{name}</h2>}
         content={content}
         onContentChange={setContent}
         onSave={handleSave}
         onEntryCreated={load}
-        onEditingChange={setIsEditing}
+        cancelPendingSaveRef={cancelPendingSaveRef}
         date={date}
         existingSubpages={existingSubpages}
         emptyMessage="No content yet. Click to start writing."

@@ -23,7 +23,10 @@ interface NoteEditorProps {
   title?: React.ReactNode;
   /** Show the attach button and panels (voice/photo/clip). Defaults to true. */
   showAttach?: boolean;
-  onEditingChange?: (editing: boolean) => void;
+  /** Ref that receives a function to cancel any pending auto-save debounce.
+   *  Call before reloading content from the server to prevent a stale save
+   *  from overwriting the freshly loaded data. */
+  cancelPendingSaveRef?: React.MutableRefObject<(() => void) | null>;
 }
 
 function SaveStatusIndicator({ status }: { status: SaveStatus }) {
@@ -66,7 +69,7 @@ export default function NoteEditor({
   emptyTemplate,
   title,
   showAttach = true,
-  onEditingChange,
+  cancelPendingSaveRef,
 }: NoteEditorProps) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -80,10 +83,20 @@ export default function NoteEditor({
   const [clipLoading, setClipLoading] = useState(false);
   const attachRef = useRef<HTMLDivElement>(null);
 
-  // Always editing — notify parent on mount
+  // Expose cancel function so parent can cancel pending saves before reloading
   useEffect(() => {
-    onEditingChange?.(true);
-  }, [onEditingChange]);
+    if (cancelPendingSaveRef) {
+      cancelPendingSaveRef.current = () => {
+        if (saveTimerRef.current) {
+          clearTimeout(saveTimerRef.current);
+          saveTimerRef.current = null;
+        }
+      };
+    }
+    return () => {
+      if (cancelPendingSaveRef) cancelPendingSaveRef.current = null;
+    };
+  }, [cancelPendingSaveRef]);
 
   // Close attach menu on outside click
   useEffect(() => {

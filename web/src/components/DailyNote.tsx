@@ -1,9 +1,12 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { getDailyNote, listSubpages, RPCError, updateDailyNoteContent } from "../api/client";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { subscribeToChanges } from "../lib/changeEvents";
+import { stableSortedArray } from "../lib/stableArray";
+import { mergeContent } from "../lib/mergeContent";
 
 import NoteEditor from "./NoteEditor";
+import ConflictBanner from "./ConflictBanner";
 
 interface DailyNoteViewProps {
   date: string;
@@ -24,25 +27,41 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
   const [revision, setRevision] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [existingSubpages, setExistingSubpages] = useState<Set<string>>(new Set());
-  const [isEditing, setIsEditing] = useState(false);
+  const [subpageNames, setSubpageNames] = useState<string[]>([]);
+  const existingSubpages = useMemo(() => new Set(subpageNames), [subpageNames]);
+  const cancelPendingSaveRef = useRef<(() => void) | null>(null);
 
+  // Base content: the last version received from the server (after load or save).
+  // Used as the common ancestor for three-way merge.
+  const baseContentRef = useRef("");
+
+  // Conflict state
+  const [conflicts, setConflicts] = useState<string[]>([]);
+  const serverContentRef = useRef("");
+
+  // Full load — used for initial load and explicit reloads (e.g. after failed_precondition).
   const load = useCallback(async () => {
+    cancelPendingSaveRef.current?.();
     setLoading(true);
     setError(null);
+    setConflicts([]);
     try {
       const [data, subpagesResp] = await Promise.all([
         getDailyNote({ date }),
         listSubpages(date).catch(() => ({ names: [] as string[] })),
       ]);
-      setContent(data.content ?? "");
+      const serverContent = data.content ?? "";
+      setContent(serverContent);
       setRevision(data.revision ?? "");
-      setExistingSubpages(new Set(subpagesResp.names ?? []));
+      baseContentRef.current = serverContent;
+      const names = subpagesResp.names ?? [];
+      setSubpageNames((prev) => stableSortedArray(prev, names));
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to load";
       if (msg.includes("404") || msg.includes("not found") || msg.includes("not_found")) {
         setContent("");
         setRevision("");
+        baseContentRef.current = "";
       } else {
         setError(msg);
       }
@@ -51,18 +70,85 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     }
   }, [date]);
 
+  // Merge load — used when a change event arrives while the editor may have unsaved edits.
+  // Fetches the new server content and three-way merges with the current editor state.
+  const mergeLoad = useCallback(async () => {
+    try {
+      const [data, subpagesResp] = await Promise.all([
+        getDailyNote({ date }),
+        listSubpages(date).catch(() => ({ names: [] as string[] })),
+      ]);
+      const remoteContent = data.content ?? "";
+      const remoteRevision = data.revision ?? "";
+      const names = subpagesResp.names ?? [];
+      setSubpageNames((prev) => stableSortedArray(prev, names));
+
+      // Read the current editor content via the ref-backed state.
+      // We need the latest value, so we use a functional update to read it.
+      setContent((localContent) => {
+        const base = baseContentRef.current;
+        const result = mergeContent(base, localContent, remoteContent);
+
+        if (result.ok) {
+          // Merge succeeded — cancel pending save (merged content will be saved
+          // on next keystroke or we can trigger a save explicitly).
+          cancelPendingSaveRef.current?.();
+          baseContentRef.current = remoteContent;
+          setRevision(remoteRevision);
+          setConflicts([]);
+          return result.merged ?? localContent;
+        }
+
+        // Conflict — stash server content, show banner, keep local in editor
+        serverContentRef.current = remoteContent;
+        setConflicts(result.conflicts);
+        // Don't update revision yet — user hasn't resolved the conflict
+        return localContent;
+      });
+    } catch (err) {
+      console.warn("Merge load failed, falling back to full load", err);
+      void load();
+    }
+  }, [date, load]);
+
   useEffect(() => {
     load();
   }, [load]);
 
+  // Use a ref for revision so the change-event listener always sees the latest
+  // value without needing to re-subscribe on every save.
+  const revisionRef = useRef(revision);
+  useEffect(() => {
+    revisionRef.current = revision;
+  }, [revision]);
+
   useEffect(() => {
     return subscribeToChanges((event) => {
       if (event.date !== date) return;
-      if (event.kind === "CHANGE_EVENT_KIND_DAILY_NOTE_UPDATED" && !isEditing && event.revision !== revision) {
-        void load();
+      if (event.kind === "CHANGE_EVENT_KIND_DAILY_NOTE_UPDATED" && event.revision !== revisionRef.current) {
+        void mergeLoad();
       }
     });
-  }, [date, isEditing, load, revision]);
+  }, [date, mergeLoad]);
+
+  const handleConflictKeepLocal = useCallback(() => {
+    // User chose their version — save it to establish as the new base
+    setConflicts([]);
+    // The current content is already the local version; trigger a save
+    setContent((c) => {
+      baseContentRef.current = c;
+      return c;
+    });
+  }, []);
+
+  const handleConflictUseServer = useCallback(() => {
+    // User chose server version — replace editor content
+    cancelPendingSaveRef.current?.();
+    const server = serverContentRef.current;
+    setContent(server);
+    baseContentRef.current = server;
+    setConflicts([]);
+  }, []);
 
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
@@ -94,8 +180,10 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     async (text: string) => {
       try {
         const updated = await updateDailyNoteContent(date, text, revision);
-        setContent(updated.content ?? text);
+        const savedContent = updated.content ?? text;
+        setContent(savedContent);
         setRevision(updated.revision ?? revision);
+        baseContentRef.current = savedContent;
         setError(null);
       } catch (err) {
         if (err instanceof RPCError && err.code === "failed_precondition") {
@@ -251,13 +339,18 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
 
   return (
     <div className="flex flex-col h-full">
+      <ConflictBanner
+        conflicts={conflicts}
+        onKeepLocal={handleConflictKeepLocal}
+        onUseServer={handleConflictUseServer}
+      />
       <NoteEditor
         title={<h2 className="text-lg md:text-xl font-semibold text-foreground truncate">{formatDateHeading(date)}</h2>}
         content={content}
         onContentChange={setContent}
         onSave={handleSave}
         onEntryCreated={load}
-        onEditingChange={setIsEditing}
+        cancelPendingSaveRef={cancelPendingSaveRef}
         date={date}
         existingSubpages={existingSubpages}
         emptyMessage="No entries yet. Click to start writing, or add an entry below."
