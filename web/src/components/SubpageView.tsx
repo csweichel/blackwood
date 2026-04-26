@@ -29,13 +29,26 @@ function formatDateHeading(dateStr: string): string {
 
 export default function SubpageView({ date, name }: SubpageViewProps) {
   const [content, setContent] = useState("");
-  const [revision, setRevision] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [subpageNames, setSubpageNames] = useState<string[]>([]);
   const existingSubpages = useMemo(() => new Set(subpageNames), [subpageNames]);
   const cancelPendingSaveRef = useRef<(() => void) | null>(null);
+  const contentRef = useRef("");
+  const revisionRef = useRef("");
+  const saveInFlightRef = useRef(false);
+  const deferredChangeRevisionRef = useRef<string | null>(null);
+
+  const updateContent = useCallback((nextContent: string) => {
+    contentRef.current = nextContent;
+    setContent(nextContent);
+  }, []);
+
+  const updateRevision = useCallback((nextRevision: string) => {
+    revisionRef.current = nextRevision;
+  }, []);
+
   const baseContentRef = useRef("");
   const [conflicts, setConflicts] = useState<string[]>([]);
   const serverContentRef = useRef("");
@@ -67,8 +80,8 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
         listSubpages(date).catch(() => ({ names: [] as string[] })),
       ]);
       const serverContent = data.content ?? "";
-      setContent(serverContent);
-      setRevision(data.revision ?? "");
+      updateContent(serverContent);
+      updateRevision(data.revision ?? "");
       baseContentRef.current = serverContent;
       const names = subpagesResp.names ?? [];
       setSubpageNames((prev) => stableSortedArray(prev, names));
@@ -81,8 +94,8 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
       ) {
         try {
           const created = await updateSubpageContent(date, name, "", "");
-          setContent("");
-          setRevision(created.revision ?? "");
+          updateContent("");
+          updateRevision(created.revision ?? "");
           baseContentRef.current = "";
         } catch (createErr) {
           setError(
@@ -97,7 +110,7 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
     } finally {
       setLoading(false);
     }
-  }, [date, name]);
+  }, [date, name, updateContent, updateRevision]);
 
   const mergeLoad = useCallback(async () => {
     try {
@@ -117,34 +130,36 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
         if (result.ok) {
           cancelPendingSaveRef.current?.();
           baseContentRef.current = remoteContent;
-          setRevision(remoteRevision);
+          updateRevision(remoteRevision);
           setConflicts([]);
-          return result.merged ?? localContent;
+          const mergedContent = result.merged ?? localContent;
+          contentRef.current = mergedContent;
+          return mergedContent;
         }
 
         serverContentRef.current = remoteContent;
         setConflicts(result.conflicts);
+        contentRef.current = localContent;
         return localContent;
       });
     } catch (err) {
       console.warn("Merge load failed, falling back to full load", err);
       void load();
     }
-  }, [date, name, load]);
+  }, [date, name, load, updateRevision]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const revisionRef = useRef(revision);
-  useEffect(() => {
-    revisionRef.current = revision;
-  }, [revision]);
-
   useEffect(() => {
     return subscribeToChanges((event) => {
       if (event.date !== date || event.subpageName !== name) return;
       if (event.kind === "CHANGE_EVENT_KIND_SUBPAGE_UPDATED" && event.revision !== revisionRef.current) {
+        if (saveInFlightRef.current) {
+          deferredChangeRevisionRef.current = event.revision;
+          return;
+        }
         void mergeLoad();
       }
     });
@@ -153,6 +168,7 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
   const handleConflictKeepLocal = useCallback(() => {
     setConflicts([]);
     setContent((c) => {
+      contentRef.current = c;
       baseContentRef.current = c;
       return c;
     });
@@ -161,29 +177,43 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
   const handleConflictUseServer = useCallback(() => {
     cancelPendingSaveRef.current?.();
     const server = serverContentRef.current;
-    setContent(server);
+    updateContent(server);
     baseContentRef.current = server;
     setConflicts([]);
-  }, []);
+  }, [updateContent]);
 
   const handleSave = useCallback(
     async (text: string) => {
+      const baseRevision = revisionRef.current;
+      let handledPrecondition = false;
+      saveInFlightRef.current = true;
       try {
-        const updated = await updateSubpageContent(date, name, text, revision);
+        const updated = await updateSubpageContent(date, name, text, baseRevision);
         const savedContent = updated.content ?? text;
-        setContent(savedContent);
-        setRevision(updated.revision ?? revision);
+        updateRevision(updated.revision ?? baseRevision);
         baseContentRef.current = savedContent;
+        if (contentRef.current === text) {
+          updateContent(savedContent);
+        }
         setError(null);
       } catch (err) {
         if (err instanceof RPCError && err.code === "failed_precondition") {
-          setError("This subpage changed on another client. The latest version has been reloaded.");
-          await load();
+          handledPrecondition = true;
+          deferredChangeRevisionRef.current = null;
+          setError("This subpage changed on another client. I kept your edits and merged in the latest version.");
+          await mergeLoad();
         }
         throw err;
+      } finally {
+        saveInFlightRef.current = false;
+        const deferredRevision = deferredChangeRevisionRef.current;
+        deferredChangeRevisionRef.current = null;
+        if (!handledPrecondition && deferredRevision && deferredRevision !== revisionRef.current) {
+          void mergeLoad();
+        }
       }
     },
-    [date, load, name, revision]
+    [date, mergeLoad, name, updateContent, updateRevision]
   );
 
   if (loading) {
@@ -224,7 +254,7 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
       <NoteEditor
         title={<h2 className="text-lg md:text-xl font-semibold text-foreground truncate">{name}</h2>}
         content={content}
-        onContentChange={setContent}
+        onContentChange={updateContent}
         onSave={handleSave}
         onEntryCreated={load}
         cancelPendingSaveRef={cancelPendingSaveRef}
