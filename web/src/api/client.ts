@@ -248,6 +248,37 @@ export async function createEntryWithAttachment(
   };
 }
 
+export interface UploadedAttachment {
+  attachmentId: string;
+  filename: string;
+  url: string;
+}
+
+export async function uploadDailyNoteAttachment(date: string, file: File): Promise<UploadedAttachment> {
+  const form = new FormData();
+  form.append("file", file);
+
+  const resp = await fetch(`/api/daily-notes/${date}/attachments`, {
+    method: "POST",
+    body: form,
+  });
+
+  if (resp.status === 401) {
+    if (resp.headers.get("X-Auth-Setup-Required") === "true") {
+      window.location.href = "/auth/setup";
+    } else {
+      window.location.href = "/auth/login";
+    }
+    throw new Error("Unauthorized");
+  }
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(text.trim() || `Attachment upload failed (${resp.status})`);
+  }
+
+  return resp.json();
+}
+
 // --- Range summaries (plain HTTP, not Connect-go RPC) ---
 
 export async function fetchSummariesInRange(start: string, end: string): Promise<{ date: string; summary: string }[]> {

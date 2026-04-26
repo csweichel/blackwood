@@ -16,11 +16,14 @@ import {
   preprocessMarkdown,
   postprocessMarkdown,
   rewriteAttachmentUrls,
+  resolveAttachmentUrl,
+  promoteImageLinks,
   convertYouTubeBlocks,
   nestBlocksUnderHeadings,
   flattenBlockHierarchy,
   expandAllToggleBlocks,
 } from "../lib/markdownTransforms";
+import { uploadDailyNoteAttachment } from "../api/client";
 
 /** Detect dark mode from the document root class or system preference. */
 function useColorScheme(): "light" | "dark" {
@@ -103,9 +106,28 @@ export default function BlockNoteEditor({
 }: BlockNoteEditorProps) {
   const colorScheme = useColorScheme();
 
+  // Keep refs for values used in callbacks to avoid stale closures
+  const dateRef = useRef(date);
+  useEffect(() => {
+    dateRef.current = date;
+  }, [date]);
+
   const editor = useCreateBlockNote({
     schema,
     defaultStyles: true,
+    resolveFileUrl: async (url) => resolveAttachmentUrl(url, dateRef.current),
+    uploadFile: async (file) => {
+      if (!file.type.startsWith("image/")) {
+        throw new Error("Only image uploads are supported in notes.");
+      }
+      const uploaded = await uploadDailyNoteAttachment(dateRef.current, file);
+      return {
+        props: {
+          url: uploaded.filename,
+          name: file.name || uploaded.filename,
+        },
+      };
+    },
     ...(placeholder ? { placeholders: { default: placeholder } } : {}),
   });
 
@@ -113,12 +135,6 @@ export default function BlockNoteEditor({
   const lastSetContent = useRef<string>("");
   // Track whether initial content has been loaded
   const initialLoaded = useRef(false);
-
-  // Keep refs for values used in callbacks to avoid stale closures
-  const dateRef = useRef(date);
-  useEffect(() => {
-    dateRef.current = date;
-  }, [date]);
 
   // Use a ref for existingSubpages so it doesn't trigger the content-sync effect.
   const existingSubpagesForSync = useRef(existingSubpages);
@@ -162,7 +178,8 @@ export default function BlockNoteEditor({
     // and nest blocks under headings for collapsible sections
     const rawBlocks = blocks as Array<Record<string, unknown>>;
     rewriteAttachmentUrls(rawBlocks, date);
-    const withYouTube = convertYouTubeBlocks(rawBlocks);
+    const withImages = promoteImageLinks(rawBlocks, date);
+    const withYouTube = convertYouTubeBlocks(withImages);
     const nested = nestBlocksUnderHeadings(withYouTube);
 
     // Pre-expand all toggle blocks so sections start open
