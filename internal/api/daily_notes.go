@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"mime"
 	"net/http"
@@ -18,6 +20,8 @@ import (
 	"github.com/csweichel/blackwood/internal/storage"
 	"github.com/csweichel/blackwood/internal/transcribe"
 )
+
+const maxEditorImageUploadBytes = 25 << 20
 
 var entryTypeToProto = map[string]blackwoodv1.EntryType{
 	"text":    blackwoodv1.EntryType_ENTRY_TYPE_TEXT,
@@ -440,6 +444,125 @@ func ServeAttachmentByFilename(store *storage.Store) http.HandlerFunc {
 		w.Header().Set("Content-Type", ct)
 		http.ServeFile(w, r, filePath)
 	}
+}
+
+// ServeUploadAttachment stores an image attachment for direct editor use.
+// Unlike CreateEntry, this does not append markdown to the daily note; the
+// editor inserts the returned filename at the user's current cursor position.
+func ServeUploadAttachment(store *storage.Store) http.HandlerFunc {
+	type response struct {
+		AttachmentID string `json:"attachmentId"`
+		Filename     string `json:"filename"`
+		URL          string `json:"url"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		date := r.PathValue("date")
+		if !dateRe.MatchString(date) {
+			http.Error(w, "invalid date format", http.StatusBadRequest)
+			return
+		}
+
+		r.Body = http.MaxBytesReader(w, r.Body, maxEditorImageUploadBytes)
+		if err := r.ParseMultipartForm(maxEditorImageUploadBytes); err != nil {
+			http.Error(w, "invalid multipart upload", http.StatusBadRequest)
+			return
+		}
+		if r.MultipartForm != nil {
+			defer func() { _ = r.MultipartForm.RemoveAll() }()
+		}
+
+		file, header, err := r.FormFile("file")
+		if err != nil {
+			http.Error(w, "missing file", http.StatusBadRequest)
+			return
+		}
+		defer func() { _ = file.Close() }()
+
+		data, err := io.ReadAll(file)
+		if err != nil {
+			http.Error(w, "read file", http.StatusBadRequest)
+			return
+		}
+		if len(data) == 0 {
+			http.Error(w, "empty file", http.StatusBadRequest)
+			return
+		}
+
+		filename := sanitizeUploadFilename(header.Filename)
+		contentType := header.Header.Get("Content-Type")
+		if contentType == "" {
+			contentType = mime.TypeByExtension(filepath.Ext(filename))
+		}
+		if contentType == "" || contentType == "application/octet-stream" {
+			contentType = http.DetectContentType(data)
+		}
+		if !strings.HasPrefix(contentType, "image/") {
+			http.Error(w, "file must be an image", http.StatusBadRequest)
+			return
+		}
+
+		note, err := store.GetOrCreateDailyNote(r.Context(), date)
+		if err != nil {
+			http.Error(w, "get or create daily note", http.StatusInternalServerError)
+			return
+		}
+
+		entry := &storage.Entry{
+			DailyNoteID: note.ID,
+			Type:        "photo",
+			Source:      "web",
+			Metadata:    "{}",
+		}
+		if err := store.CreateEntry(r.Context(), entry); err != nil {
+			http.Error(w, "create entry", http.StatusInternalServerError)
+			return
+		}
+
+		att := &storage.Attachment{
+			EntryID:     entry.ID,
+			Filename:    filename,
+			ContentType: contentType,
+		}
+		if err := store.CreateAttachment(r.Context(), att, data, date); err != nil {
+			http.Error(w, "create attachment", http.StatusInternalServerError)
+			return
+		}
+
+		storedFilename := filepath.Base(att.StoragePath)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response{
+			AttachmentID: att.ID,
+			Filename:     storedFilename,
+			URL:          fmt.Sprintf("/api/daily-notes/%s/attachments/%s", date, storedFilename),
+		})
+	}
+}
+
+func sanitizeUploadFilename(name string) string {
+	name = strings.ReplaceAll(strings.TrimSpace(name), "\\", "/")
+	name = filepath.Base(name)
+	if name == "" || name == "." || name == string(filepath.Separator) {
+		return "image.png"
+	}
+	name = strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z':
+			return r
+		case r >= 'A' && r <= 'Z':
+			return r
+		case r >= '0' && r <= '9':
+			return r
+		case r == '.', r == '-', r == '_':
+			return r
+		default:
+			return '-'
+		}
+	}, name)
+	if strings.Trim(name, ".-_") == "" {
+		return "image.png"
+	}
+	return name
 }
 
 // --- conversion helpers ---

@@ -51,6 +51,37 @@ function escapeRegExp(s: string): string {
 
 // ── Attachment URL rewriting ─────────────────────────────────────────
 
+const IMAGE_EXT_RE = /\.(?:apng|avif|bmp|gif|heic|heif|jpe?g|png|svg|tiff?|webp)(?:[?#].*)?$/i;
+
+function isAbsoluteUrl(url: string): boolean {
+  return /^[a-z][a-z0-9+.-]*:/i.test(url);
+}
+
+function encodeAttachmentFilename(filename: string): string {
+  try {
+    return encodeURIComponent(decodeURIComponent(filename));
+  } catch {
+    return encodeURIComponent(filename);
+  }
+}
+
+export function resolveAttachmentUrl(url: string, date: string): string {
+  if (
+    url &&
+    !isAbsoluteUrl(url) &&
+    !url.startsWith("/") &&
+    !url.startsWith("#")
+  ) {
+    return `/api/daily-notes/${date}/attachments/${encodeAttachmentFilename(url)}`;
+  }
+  return url;
+}
+
+function isImageUrl(url: string): boolean {
+  const withoutQuery = url.split(/[?#]/, 1)[0];
+  return IMAGE_EXT_RE.test(withoutQuery);
+}
+
 /**
  * Walk a BlockNote block tree and rewrite relative image/audio URLs to
  * the daily-notes attachment API path.
@@ -73,9 +104,7 @@ export function rewriteAttachmentUrls(
     ) {
       const url = props.url;
       // Rewrite relative paths (no protocol, no leading slash)
-      if (url && !url.startsWith("http") && !url.startsWith("/") && !url.startsWith("data:")) {
-        props.url = `/api/daily-notes/${date}/attachments/${encodeURIComponent(url)}`;
-      }
+      props.url = resolveAttachmentUrl(url, date);
     }
 
     // Recurse into children
@@ -84,6 +113,125 @@ export function rewriteAttachmentUrls(
       rewriteAttachmentUrls(children, date);
     }
   }
+}
+
+function inlineText(content: unknown): string {
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((item) => {
+      if (
+        item &&
+        typeof item === "object" &&
+        (item as Record<string, unknown>).type === "text"
+      ) {
+        return String((item as Record<string, unknown>).text ?? "");
+      }
+      return "";
+    })
+    .join("");
+}
+
+function linkLabel(content: unknown): string {
+  const text = inlineText(content).trim();
+  return text || "image";
+}
+
+function extractStandaloneImage(
+  content: unknown,
+): { name: string; url: string } | null {
+  if (!Array.isArray(content) || content.length !== 1) {
+    return null;
+  }
+
+  const item = content[0] as Record<string, unknown> | undefined;
+  if (!item || typeof item !== "object") {
+    return null;
+  }
+
+  if (item.type === "link" && typeof item.href === "string" && isImageUrl(item.href)) {
+    return {
+      name: linkLabel(item.content),
+      url: item.href,
+    };
+  }
+
+  if (item.type !== "text" || typeof item.text !== "string") {
+    return null;
+  }
+
+  const text = item.text.trim();
+  const imageMatch = text.match(/^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)$/);
+  if (imageMatch) {
+    return {
+      name: imageMatch[1] || "image",
+      url: imageMatch[2],
+    };
+  }
+
+  const linkMatch = text.match(/^\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)$/);
+  if (linkMatch && isImageUrl(linkMatch[2])) {
+    return {
+      name: linkMatch[1] || "image",
+      url: linkMatch[2],
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Promote standalone markdown image/link paragraphs into real BlockNote image
+ * blocks. This makes older notes with `![alt](file.jpg)` or standalone
+ * `[alt](file.jpg)` attachment links render as embedded images.
+ */
+export function promoteImageLinks(
+  blocks: Array<Record<string, unknown>>,
+  date: string,
+): Array<Record<string, unknown>> {
+  return blocks.map((block) => {
+    const children = block.children as Array<Record<string, unknown>> | undefined;
+    const nextChildren = Array.isArray(children)
+      ? promoteImageLinks(children, date)
+      : [];
+
+    if (block.type !== "paragraph") {
+      return {
+        ...block,
+        children: nextChildren,
+      };
+    }
+
+    const image = extractStandaloneImage(block.content);
+    if (!image) {
+      return {
+        ...block,
+        children: nextChildren,
+      };
+    }
+
+    return {
+      id: block.id,
+      type: "image",
+      props: {
+        url: resolveAttachmentUrl(image.url, date),
+        name: image.name,
+        caption: "",
+        showPreview: true,
+      },
+      content: undefined,
+      children: nextChildren,
+    };
+  });
+}
+
+export function postprocessAttachmentUrls(markdown: string, date: string): string {
+  const apiPathPattern = new RegExp(
+    `/api/daily-notes/${escapeRegExp(date)}/attachments/([^\\s)]+)`,
+    "g",
+  );
+  return markdown.replace(apiPathPattern, (_match, filename: string) => {
+    return encodeAttachmentFilename(filename);
+  });
 }
 
 // ── YouTube URL detection ────────────────────────────────────────────
@@ -346,5 +494,5 @@ export function preprocessMarkdown(
  * Post-process markdown output from BlockNote's serializer.
  */
 export function postprocessMarkdown(markdown: string, date: string): string {
-  return postprocessWikilinks(markdown, date);
+  return postprocessWikilinks(postprocessAttachmentUrls(markdown, date), date);
 }

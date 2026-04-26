@@ -110,7 +110,7 @@ The Vite watcher ignores `.blackwood/**` so local note/database writes do not tr
 - **Offline support**: `offlineStore.ts` (IndexedDB via `idb`) + `syncEngine.ts`. API client functions in `client.ts` queue writes when offline.
 - **Routing**: `react-router-dom` v7 with `BrowserRouter`. Routes: `/day/:date`, `/week/:weekId`, `/month/:monthId`, `/chat/:slug`, `/search`, `/clip`.
 - **State**: Local component state with `useState`/`useCallback`/`useEffect`. No global state library.
-- **Markdown**: BlockNote.js (`@blocknote/react` + `@blocknote/mantine`) for rich-text editing with markdown round-tripping. Custom blocks for YouTube embeds. Wikilinks and attachment URLs handled via markdown pre/post-processing in `web/src/lib/markdownTransforms.ts`.
+- **Markdown**: BlockNote.js (`@blocknote/react` + `@blocknote/mantine`) for rich-text editing with markdown round-tripping. Custom blocks for YouTube embeds. Wikilinks and attachment/image URLs handled via markdown pre/post-processing in `web/src/lib/markdownTransforms.ts`; pasted editor images upload through `POST /api/daily-notes/{date}/attachments`.
 
 ### Proto / API
 
@@ -122,6 +122,7 @@ The Vite watcher ignores `.blackwood/**` so local note/database writes do not tr
 - Streaming: Server-streaming for `Chat` RPC using Connect protocol envelopes
 - Live updates: `DailyNotesService.StreamChanges` provides Connect server-streaming invalidation events for daily notes and subpages. Clients should treat these as reload hints, not as authoritative document contents.
 - Optimistic concurrency: `DailyNote.revision` and `Subpage.revision` are opaque concurrency tokens. Clients must send `base_revision` on updates when they want conflict detection; the server returns `failed_precondition` if the document changed meanwhile.
+- Plain HTTP attachment endpoints serve files by ID or day-relative filename, and `POST /api/daily-notes/{date}/attachments` stores editor-pasted images without appending markdown to the note.
 
 When adding a new RPC:
 1. Define messages and service method in the appropriate `.proto` file

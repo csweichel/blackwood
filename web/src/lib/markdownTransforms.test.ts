@@ -5,6 +5,9 @@ import {
   flattenBlockHierarchy,
   nestBlocksUnderHeadings,
   extractYouTubeUrl,
+  promoteImageLinks,
+  postprocessAttachmentUrls,
+  resolveAttachmentUrl,
 } from "./markdownTransforms";
 
 describe("wikilink round-trip", () => {
@@ -160,5 +163,98 @@ describe("extractYouTubeUrl", () => {
     expect(extractYouTubeUrl("youtu.be/dQw4w9WgXcQ")).toBe(
       "https://youtu.be/dQw4w9WgXcQ"
     );
+  });
+});
+
+describe("attachment image handling", () => {
+  const date = "2025-01-15";
+
+  it("resolves day-relative attachment URLs through the attachment endpoint", () => {
+    expect(resolveAttachmentUrl("photo 1.jpg", date)).toBe(
+      "/api/daily-notes/2025-01-15/attachments/photo%201.jpg"
+    );
+    expect(resolveAttachmentUrl("photo%201.jpg", date)).toBe(
+      "/api/daily-notes/2025-01-15/attachments/photo%201.jpg"
+    );
+    expect(resolveAttachmentUrl("/api/daily-notes/2025-01-15/attachments/photo.jpg", date)).toBe(
+      "/api/daily-notes/2025-01-15/attachments/photo.jpg"
+    );
+    expect(resolveAttachmentUrl("https://example.com/photo.jpg", date)).toBe(
+      "https://example.com/photo.jpg"
+    );
+  });
+
+  it("promotes standalone markdown image text to image blocks", () => {
+    const blocks = [
+      {
+        id: "p1",
+        type: "paragraph",
+        props: {},
+        content: [{ type: "text", text: "![photo](photo.jpg)", styles: {} }],
+        children: [],
+      },
+    ];
+
+    const promoted = promoteImageLinks(blocks, date);
+
+    expect(promoted[0].type).toBe("image");
+    expect((promoted[0].props as Record<string, unknown>).url).toBe(
+      "/api/daily-notes/2025-01-15/attachments/photo.jpg"
+    );
+    expect((promoted[0].props as Record<string, unknown>).name).toBe("photo");
+  });
+
+  it("promotes standalone image links to image blocks", () => {
+    const blocks = [
+      {
+        id: "p1",
+        type: "paragraph",
+        props: {},
+        content: [
+          {
+            type: "link",
+            href: "photo.png",
+            content: [{ type: "text", text: "Photo", styles: {} }],
+          },
+        ],
+        children: [],
+      },
+    ];
+
+    const promoted = promoteImageLinks(blocks, date);
+
+    expect(promoted[0].type).toBe("image");
+    expect((promoted[0].props as Record<string, unknown>).url).toBe(
+      "/api/daily-notes/2025-01-15/attachments/photo.png"
+    );
+    expect((promoted[0].props as Record<string, unknown>).name).toBe("Photo");
+  });
+
+  it("does not promote non-image links", () => {
+    const blocks = [
+      {
+        id: "p1",
+        type: "paragraph",
+        props: {},
+        content: [
+          {
+            type: "link",
+            href: "notes.md",
+            content: [{ type: "text", text: "Notes", styles: {} }],
+          },
+        ],
+        children: [],
+      },
+    ];
+
+    const promoted = promoteImageLinks(blocks, date);
+
+    expect(promoted[0].type).toBe("paragraph");
+  });
+
+  it("saves same-day attachment API URLs back as filenames", () => {
+    const md = "![photo](/api/daily-notes/2025-01-15/attachments/photo%201.jpg)";
+
+    expect(postprocessAttachmentUrls(md, date)).toBe("![photo](photo%201.jpg)");
   });
 });
