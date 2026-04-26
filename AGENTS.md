@@ -86,7 +86,8 @@ To run the Vite dev server for frontend work:
 ```sh
 cd web && npm run dev
 ```
-Vite proxies API calls to `localhost:8080` by default. Adjust `vite.config.ts` if the Go server runs on a different port.
+Vite proxies API calls to `localhost:8090` by default. Adjust `vite.config.ts` if the Go server runs on a different port.
+The Vite watcher ignores `.blackwood/**` so local note/database writes do not trigger hot reloads while editing.
 
 ## Code Conventions
 

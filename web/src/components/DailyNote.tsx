@@ -24,12 +24,24 @@ function formatDateHeading(dateStr: string): string {
 
 export default function DailyNoteView({ date }: DailyNoteViewProps) {
   const [content, setContent] = useState("");
-  const [revision, setRevision] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [subpageNames, setSubpageNames] = useState<string[]>([]);
   const existingSubpages = useMemo(() => new Set(subpageNames), [subpageNames]);
   const cancelPendingSaveRef = useRef<(() => void) | null>(null);
+  const contentRef = useRef("");
+  const revisionRef = useRef("");
+  const saveInFlightRef = useRef(false);
+  const deferredChangeRevisionRef = useRef<string | null>(null);
+
+  const updateContent = useCallback((nextContent: string) => {
+    contentRef.current = nextContent;
+    setContent(nextContent);
+  }, []);
+
+  const updateRevision = useCallback((nextRevision: string) => {
+    revisionRef.current = nextRevision;
+  }, []);
 
   // Base content: the last version received from the server (after load or save).
   // Used as the common ancestor for three-way merge.
@@ -51,16 +63,16 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
         listSubpages(date).catch(() => ({ names: [] as string[] })),
       ]);
       const serverContent = data.content ?? "";
-      setContent(serverContent);
-      setRevision(data.revision ?? "");
+      updateContent(serverContent);
+      updateRevision(data.revision ?? "");
       baseContentRef.current = serverContent;
       const names = subpagesResp.names ?? [];
       setSubpageNames((prev) => stableSortedArray(prev, names));
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to load";
       if (msg.includes("404") || msg.includes("not found") || msg.includes("not_found")) {
-        setContent("");
-        setRevision("");
+        updateContent("");
+        updateRevision("");
         baseContentRef.current = "";
       } else {
         setError(msg);
@@ -68,7 +80,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     } finally {
       setLoading(false);
     }
-  }, [date]);
+  }, [date, updateContent, updateRevision]);
 
   // Merge load — used when a change event arrives while the editor may have unsaved edits.
   // Fetches the new server content and three-way merges with the current editor state.
@@ -94,38 +106,38 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
           // on next keystroke or we can trigger a save explicitly).
           cancelPendingSaveRef.current?.();
           baseContentRef.current = remoteContent;
-          setRevision(remoteRevision);
+          updateRevision(remoteRevision);
           setConflicts([]);
-          return result.merged ?? localContent;
+          const mergedContent = result.merged ?? localContent;
+          contentRef.current = mergedContent;
+          return mergedContent;
         }
 
         // Conflict — stash server content, show banner, keep local in editor
         serverContentRef.current = remoteContent;
         setConflicts(result.conflicts);
         // Don't update revision yet — user hasn't resolved the conflict
+        contentRef.current = localContent;
         return localContent;
       });
     } catch (err) {
       console.warn("Merge load failed, falling back to full load", err);
       void load();
     }
-  }, [date, load]);
+  }, [date, load, updateRevision]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  // Use a ref for revision so the change-event listener always sees the latest
-  // value without needing to re-subscribe on every save.
-  const revisionRef = useRef(revision);
-  useEffect(() => {
-    revisionRef.current = revision;
-  }, [revision]);
-
   useEffect(() => {
     return subscribeToChanges((event) => {
       if (event.date !== date) return;
       if (event.kind === "CHANGE_EVENT_KIND_DAILY_NOTE_UPDATED" && event.revision !== revisionRef.current) {
+        if (saveInFlightRef.current) {
+          deferredChangeRevisionRef.current = event.revision;
+          return;
+        }
         void mergeLoad();
       }
     });
@@ -136,6 +148,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     setConflicts([]);
     // The current content is already the local version; trigger a save
     setContent((c) => {
+      contentRef.current = c;
       baseContentRef.current = c;
       return c;
     });
@@ -145,10 +158,10 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     // User chose server version — replace editor content
     cancelPendingSaveRef.current?.();
     const server = serverContentRef.current;
-    setContent(server);
+    updateContent(server);
     baseContentRef.current = server;
     setConflicts([]);
-  }, []);
+  }, [updateContent]);
 
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
@@ -178,22 +191,36 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
 
   const handleSave = useCallback(
     async (text: string) => {
+      const baseRevision = revisionRef.current;
+      let handledPrecondition = false;
+      saveInFlightRef.current = true;
       try {
-        const updated = await updateDailyNoteContent(date, text, revision);
+        const updated = await updateDailyNoteContent(date, text, baseRevision);
         const savedContent = updated.content ?? text;
-        setContent(savedContent);
-        setRevision(updated.revision ?? revision);
+        updateRevision(updated.revision ?? baseRevision);
         baseContentRef.current = savedContent;
+        if (contentRef.current === text) {
+          updateContent(savedContent);
+        }
         setError(null);
       } catch (err) {
         if (err instanceof RPCError && err.code === "failed_precondition") {
-          setError("This note changed on another client. The latest version has been reloaded.");
-          await load();
+          handledPrecondition = true;
+          deferredChangeRevisionRef.current = null;
+          setError("This note changed on another client. I kept your edits and merged in the latest version.");
+          await mergeLoad();
         }
         throw err;
+      } finally {
+        saveInFlightRef.current = false;
+        const deferredRevision = deferredChangeRevisionRef.current;
+        deferredChangeRevisionRef.current = null;
+        if (!handledPrecondition && deferredRevision && deferredRevision !== revisionRef.current) {
+          void mergeLoad();
+        }
       }
     },
-    [date, load, revision]
+    [date, mergeLoad, updateContent, updateRevision]
   );
 
   const downloadPdf = useCallback(async () => {
@@ -242,9 +269,9 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     const locationLabel = address || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
     const snippet = `\n\n---\n*${ts} — 📍 [${locationLabel}](${mapUrl})*\n`;
     const newContent = content + snippet;
-    setContent(newContent);
+    updateContent(newContent);
     handleSave(newContent);
-  }, [geoPosition, locationTagged, content, handleSave]);
+  }, [geoPosition, locationTagged, content, handleSave, updateContent]);
 
   if (loading) {
     return (
@@ -347,7 +374,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
       <NoteEditor
         title={<h2 className="text-lg md:text-xl font-semibold text-foreground truncate">{formatDateHeading(date)}</h2>}
         content={content}
-        onContentChange={setContent}
+        onContentChange={updateContent}
         onSave={handleSave}
         onEntryCreated={load}
         cancelPendingSaveRef={cancelPendingSaveRef}

@@ -6,6 +6,9 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     allowedHosts: true,
+    watch: {
+      ignored: ['**/.blackwood/**'],
+    },
     proxy: {
       '/blackwood.v1': 'http://localhost:8090',
       '/api': 'http://localhost:8090',

@@ -73,6 +73,9 @@ export default function NoteEditor({
 }: NoteEditorProps) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestMarkdownRef = useRef(content);
+  const savingRef = useRef(false);
+  const queuedSaveRef = useRef<string | null>(null);
 
   // Attach state
   const [showAttachMenu, setShowAttachMenu] = useState(false);
@@ -91,12 +94,17 @@ export default function NoteEditor({
           clearTimeout(saveTimerRef.current);
           saveTimerRef.current = null;
         }
+        queuedSaveRef.current = null;
       };
     }
     return () => {
       if (cancelPendingSaveRef) cancelPendingSaveRef.current = null;
     };
   }, [cancelPendingSaveRef]);
+
+  useEffect(() => {
+    latestMarkdownRef.current = content;
+  }, [content]);
 
   // Close attach menu on outside click
   useEffect(() => {
@@ -113,19 +121,52 @@ export default function NoteEditor({
 
   const doSave = useCallback(
     async (text: string) => {
-      setSaveStatus("saving");
+      if (savingRef.current) {
+        queuedSaveRef.current = text;
+        return;
+      }
+
+      savingRef.current = true;
+      let nextText = text;
+
       try {
-        await onSave(text);
-        setSaveStatus("saved");
-        setTimeout(() => setSaveStatus((s) => (s === "saved" ? "idle" : s)), 2000);
-      } catch {
-        setSaveStatus("error");
+        while (true) {
+          queuedSaveRef.current = null;
+          setSaveStatus("saving");
+
+          try {
+            await onSave(nextText);
+          } catch {
+            setSaveStatus("error");
+            return;
+          }
+
+          const latestText = latestMarkdownRef.current;
+          if (latestText === nextText) {
+            if (saveTimerRef.current) {
+              clearTimeout(saveTimerRef.current);
+              saveTimerRef.current = null;
+            }
+            setSaveStatus("saved");
+            setTimeout(() => setSaveStatus((s) => (s === "saved" ? "idle" : s)), 2000);
+            return;
+          }
+
+          if (saveTimerRef.current) {
+            clearTimeout(saveTimerRef.current);
+            saveTimerRef.current = null;
+          }
+          nextText = latestText;
+        }
+      } finally {
+        savingRef.current = false;
       }
     },
     [onSave]
   );
 
   function handleEditorChange(markdown: string) {
+    latestMarkdownRef.current = markdown;
     onContentChange(markdown);
     setSaveStatus("idle");
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
