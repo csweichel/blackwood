@@ -7,8 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/csweichel/blackwood/internal/index"
-	"github.com/csweichel/blackwood/internal/storage"
+	"github.com/csweichel/blackwood/internal/codex"
 )
 
 type searchResult struct {
@@ -22,10 +21,20 @@ type searchResponse struct {
 	Results []searchResult `json:"results"`
 }
 
+type searchEngine interface {
+	Available() bool
+	UnavailableReason() string
+	Search(ctx context.Context, query string, limit int) ([]codex.SearchResult, error)
+}
+
 // ServeSearch returns an HTTP handler for GET /api/search?q=...&limit=20.
-// It performs semantic search and enriches results with dates.
-func ServeSearch(store *storage.Store, idx index.Indexer) http.HandlerFunc {
+// It performs Codex-backed search.
+func ServeSearch(engine searchEngine) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if engine == nil || !engine.Available() {
+			http.Error(w, "search is not available: "+unavailableReason(engine), http.StatusServiceUnavailable)
+			return
+		}
 		query := r.URL.Query().Get("q")
 		if query == "" {
 			http.Error(w, "q parameter is required", http.StatusBadRequest)
@@ -39,7 +48,7 @@ func ServeSearch(store *storage.Store, idx index.Indexer) http.HandlerFunc {
 			}
 		}
 
-		results, err := idx.Search(r.Context(), query, limit)
+		results, err := engine.Search(r.Context(), query, limit)
 		if err != nil {
 			slog.Error("search failed", "query", query, "error", err)
 			http.Error(w, "search failed", http.StatusInternalServerError)
@@ -48,10 +57,9 @@ func ServeSearch(store *storage.Store, idx index.Indexer) http.HandlerFunc {
 
 		out := make([]searchResult, 0, len(results))
 		for _, r := range results {
-			date := lookupEntryDate(store, r.EntryID)
 			out = append(out, searchResult{
 				EntryID: r.EntryID,
-				Date:    date,
+				Date:    r.Date,
 				Snippet: r.Snippet,
 				Score:   r.Score,
 			})
@@ -60,18 +68,4 @@ func ServeSearch(store *storage.Store, idx index.Indexer) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(searchResponse{Results: out})
 	}
-}
-
-// lookupEntryDate finds the date for an entry by looking up its daily note.
-func lookupEntryDate(store *storage.Store, entryID string) string {
-	ctx := context.Background()
-	entry, err := store.GetEntry(ctx, entryID)
-	if err != nil {
-		return ""
-	}
-	note, err := store.GetDailyNote(ctx, entry.DailyNoteID)
-	if err != nil {
-		return ""
-	}
-	return note.Date
 }

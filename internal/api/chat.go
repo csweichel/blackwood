@@ -11,26 +11,32 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	blackwoodv1 "github.com/csweichel/blackwood/gen/blackwood/v1"
-	"github.com/csweichel/blackwood/internal/rag"
+	"github.com/csweichel/blackwood/internal/codex"
 	"github.com/csweichel/blackwood/internal/storage"
 )
 
+type chatEngine interface {
+	Available() bool
+	UnavailableReason() string
+	Chat(ctx context.Context, query string, history []codex.Message) (string, []codex.SourceReference, error)
+}
+
 // ChatHandler implements the ChatService Connect handler.
 type ChatHandler struct {
-	engine *rag.Engine
+	engine chatEngine
 	store  *storage.Store
 }
 
 // NewChatHandler creates a new ChatHandler.
-func NewChatHandler(engine *rag.Engine, store *storage.Store) *ChatHandler {
+func NewChatHandler(engine chatEngine, store *storage.Store) *ChatHandler {
 	return &ChatHandler{engine: engine, store: store}
 }
 
 // Chat handles a streaming chat request. It creates or continues a conversation,
-// queries the RAG engine, and streams response chunks.
+// asks Codex to answer from the notes, and streams the response.
 func (h *ChatHandler) Chat(ctx context.Context, req *connect.Request[blackwoodv1.ChatRequest], stream *connect.ServerStream[blackwoodv1.ChatResponse]) error {
-	if h.engine == nil {
-		return connect.NewError(connect.CodeUnavailable, fmt.Errorf("chat is not available: OpenAI API key not configured"))
+	if h.engine == nil || !h.engine.Available() {
+		return connect.NewError(connect.CodeUnavailable, fmt.Errorf("chat is not available: %s", unavailableReason(h.engine)))
 	}
 	if req.Msg.Message == "" {
 		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("message is required"))
@@ -68,13 +74,13 @@ func (h *ChatHandler) Chat(ctx context.Context, req *connect.Request[blackwoodv1
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("get conversation: %w", err))
 	}
 
-	var history []rag.Message
+	var history []codex.Message
 	// Include all messages except the last one (which is the current user message).
 	for _, m := range conv.Messages {
 		if m.ID == "" {
 			continue
 		}
-		history = append(history, rag.Message{
+		history = append(history, codex.Message{
 			Role:    m.Role,
 			Content: m.Content,
 		})
@@ -84,10 +90,9 @@ func (h *ChatHandler) Chat(ctx context.Context, req *connect.Request[blackwoodv1
 		history = history[:len(history)-1]
 	}
 
-	// Query the RAG engine.
-	chunks, sources, err := h.engine.Query(ctx, req.Msg.Message, history)
+	answer, sources, err := h.engine.Chat(ctx, req.Msg.Message, history)
 	if err != nil {
-		slog.Error("RAG query failed", "error", err)
+		slog.Error("codex chat failed", "error", err)
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("query failed: %w", err))
 	}
 
@@ -102,17 +107,14 @@ func (h *ChatHandler) Chat(ctx context.Context, req *connect.Request[blackwoodv1
 		})
 	}
 
-	// Stream response chunks.
 	var fullResponse strings.Builder
-	for chunk := range chunks {
-		fullResponse.WriteString(chunk)
-		if err := stream.Send(&blackwoodv1.ChatResponse{
-			ConversationId: conversationID,
-			Content:        chunk,
-			Done:           false,
-		}); err != nil {
-			return err
-		}
+	fullResponse.WriteString(answer)
+	if err := stream.Send(&blackwoodv1.ChatResponse{
+		ConversationId: conversationID,
+		Content:        answer,
+		Done:           false,
+	}); err != nil {
+		return err
 	}
 
 	// Send final message with sources.
@@ -136,8 +138,8 @@ func (h *ChatHandler) Chat(ctx context.Context, req *connect.Request[blackwoodv1
 
 // ListConversations returns a paginated list of conversations.
 func (h *ChatHandler) ListConversations(ctx context.Context, req *connect.Request[blackwoodv1.ListConversationsRequest]) (*connect.Response[blackwoodv1.ListConversationsResponse], error) {
-	if h.engine == nil {
-		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("chat is not available: OpenAI API key not configured"))
+	if h.engine == nil || !h.engine.Available() {
+		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("chat is not available: %s", unavailableReason(h.engine)))
 	}
 	limit := int(req.Msg.Limit)
 	if limit <= 0 {
@@ -167,8 +169,8 @@ func (h *ChatHandler) ListConversations(ctx context.Context, req *connect.Reques
 
 // GetConversation returns a conversation with all its messages.
 func (h *ChatHandler) GetConversation(ctx context.Context, req *connect.Request[blackwoodv1.GetConversationRequest]) (*connect.Response[blackwoodv1.Conversation], error) {
-	if h.engine == nil {
-		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("chat is not available: OpenAI API key not configured"))
+	if h.engine == nil || !h.engine.Available() {
+		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("chat is not available: %s", unavailableReason(h.engine)))
 	}
 	if req.Msg.Id == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("id is required"))
@@ -182,7 +184,7 @@ func (h *ChatHandler) GetConversation(ctx context.Context, req *connect.Request[
 	protoMessages := make([]*blackwoodv1.ChatMessage, 0, len(conv.Messages))
 	for _, m := range conv.Messages {
 		// Parse sources JSON into proto format.
-		var sources []rag.SourceReference
+		var sources []codex.SourceReference
 		_ = json.Unmarshal([]byte(m.Sources), &sources)
 
 		protoSources := make([]*blackwoodv1.SourceReference, 0, len(sources))
@@ -211,4 +213,18 @@ func (h *ChatHandler) GetConversation(ctx context.Context, req *connect.Request[
 		CreatedAt: timestamppb.New(conv.CreatedAt),
 		UpdatedAt: timestamppb.New(conv.UpdatedAt),
 	}), nil
+}
+
+type unavailableReporter interface {
+	UnavailableReason() string
+}
+
+func unavailableReason(engine unavailableReporter) string {
+	if engine == nil {
+		return "Codex CLI is not configured"
+	}
+	if reason := engine.UnavailableReason(); reason != "" {
+		return reason
+	}
+	return "Codex CLI is not available"
 }

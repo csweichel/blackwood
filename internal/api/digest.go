@@ -6,14 +6,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/csweichel/blackwood/internal/rag"
 	"github.com/csweichel/blackwood/internal/storage"
 )
 
 // StartNightlyDigest runs a background goroutine that generates a summary for
 // the day that just ended at midnight in the user's configured timezone.
 // It skips notes that are empty or already have a "# Summary" section.
-func StartNightlyDigest(ctx context.Context, store *storage.Store, engine *rag.Engine) {
+func StartNightlyDigest(ctx context.Context, store *storage.Store, engine summaryEngine) {
 	for {
 		loc := UserTimezone(ctx, store)
 		now := time.Now().In(loc)
@@ -37,7 +36,7 @@ func StartNightlyDigest(ctx context.Context, store *storage.Store, engine *rag.E
 	}
 }
 
-func generateDigest(ctx context.Context, store *storage.Store, engine *rag.Engine, date string) {
+func generateDigest(ctx context.Context, store *storage.Store, engine summaryEngine, date string) {
 	note, err := store.GetDailyNoteByDate(ctx, date)
 	if err != nil {
 		slog.Debug("nightly digest: no note for date", "date", date)

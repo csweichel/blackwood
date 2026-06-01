@@ -268,10 +268,10 @@ func (b *Bot) processMessage(ctx context.Context, client *http.Client, msg *Mess
 }
 
 func (b *Bot) handleText(ctx context.Context, client *http.Client, chatID int64, text string, entities []MessageEntity) {
-	// Check for RAG query prefix.
+	// Check for the legacy query prefix.
 	if strings.HasPrefix(text, "Q:") {
-		slog.Warn("telegram: RAG queries not yet supported via Telegram", "chat_id", chatID)
-		b.sendMessage(ctx, client, chatID, "RAG queries are not yet supported via Telegram")
+		slog.Warn("telegram: note queries not yet supported via Telegram", "chat_id", chatID)
+		b.sendMessage(ctx, client, chatID, "Note queries are not yet supported via Telegram")
 		return
 	}
 

@@ -22,8 +22,8 @@ The API uses [Connect-RPC](https://connectrpc.com/) (gRPC-compatible, HTTP/JSON 
 | `internal/api` | Connect-RPC handlers + plain HTTP endpoints. One file per service/feature. |
 | `internal/storage` | SQLite storage layer. Schema in `schema.sql`, embedded via `//go:embed`. Separate read/write connection pools (WAL mode). |
 | `internal/config` | YAML config loading. Secrets read from files, env vars as fallback. |
-| `internal/index` | Semantic index — `Indexer` interface with two backends: OpenAI embeddings (SQLite + cosine similarity) and QMD (local hybrid search via CLI). |
-| `internal/rag` | RAG engine — retrieves context from index, streams OpenAI chat completions. |
+| `internal/codex` | Codex CLI integration for notes chat, search, and summaries. Runs Codex from the notes storage directory with read-only/no-approval settings. |
+| `internal/index` | Legacy optional `Indexer` interface retained for integrations that may index entries; not used for chat/search. |
 | `internal/transcribe` | `Transcriber` interface + Whisper implementation. |
 | `internal/describe` | `Describer` interface + GPT vision implementation. |
 | `internal/ocr` | `Recognizer` interface + GPT vision OCR implementation. |
@@ -97,8 +97,8 @@ The Vite watcher ignores `.blackwood/**` so local note/database writes do not tr
 - **Error handling**: Wrap with `fmt.Errorf("context: %w", err)`. Return `connect.NewError(code, err)` from RPC handlers.
 - **IDs**: Generated with `crypto/rand` hex encoding (see `storage.newID()`).
 - **Interfaces**: Defined in the consumer package, not the provider. Small interfaces (1-2 methods): `Transcriber`, `Describer`, `Recognizer`, `EntryIndexer`.
-- **Nil-safe optionals**: AI features (transcriber, indexer, describer) may be nil when no API key is configured. Always nil-check before use.
-- **Index backends**: The `index.Indexer` interface abstracts over OpenAI embeddings and QMD. Consumers should accept `index.Indexer`, not `*index.Index`. QMD is enabled via config (`qmd.enabled: true`) and takes priority over OpenAI for indexing/search. RAG chat still requires an OpenAI API key for the LLM.
+- **Nil-safe optionals**: AI features (transcriber, describer, indexer, Codex engine) may be nil or unavailable when credentials/tools are not configured. Always nil-check before use.
+- **Codex-backed chat/search**: All note chat, search, and summary generation goes through `internal/codex`. The Codex CLI is assumed logged in, runs with approval prompts disabled, and must not have write access to note files. If Codex is unavailable, these features return unavailable errors while note capture/editing continues.
 - **SQLite**: WAL mode, separate read/write pools. Write pool limited to 1 connection. Use `RetryOnBusy()` for write operations that may contend.
 - **Context**: Thread `context.Context` through all operations. Background goroutines use the signal-notify context from `main()`.
 - **No frameworks**: Standard library `net/http` with `http.ServeMux`. Connect-RPC handlers registered via generated `New*ServiceHandler()` functions.
@@ -217,5 +217,5 @@ GoReleaser (`.goreleaser.yaml`):
 - **Forgetting to rebuild static files**: The Go binary embeds `cmd/blackwood/static/`. After web changes, run `rm -rf cmd/blackwood/static && cp -r web/dist cmd/blackwood/static` before `go build`.
 - **Proto/types drift**: `web/src/api/types.ts` is manually maintained. After proto changes, update it to match.
 - **SQLite busy errors**: All writes go through the single-connection write pool. Use `RetryOnBusy()` when accessing the write DB from outside the storage package.
-- **Nil AI services**: Transcriber, describer, indexer, and RAG engine are all nil when no OpenAI API key is configured. Guard with nil checks.
+- **Nil AI services**: Transcriber, describer, indexer, and Codex-backed note interaction may be nil or unavailable when credentials/tools are not configured. Guard with nil checks.
 - **Proto generation tools**: `buf generate` uses `protoc-gen-go` and `protoc-gen-connect-go` from your `PATH`. Ensure both plugins are installed before regenerating.

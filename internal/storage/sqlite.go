@@ -153,13 +153,13 @@ func (s *Store) notifyDailyNoteChanged(date string, updatedAt time.Time) {
 }
 
 // DB returns the read database connection for use by other packages
-// that need read access to the database (e.g., the embeddings index search).
+// that need read access to the database.
 func (s *Store) DB() *sql.DB {
 	return s.readDB
 }
 
 // WriteDB returns the write database connection for use by other packages
-// that need write access to the database (e.g., the embeddings index).
+// that need write access to the database.
 func (s *Store) WriteDB() *sql.DB {
 	return s.writeDB
 }

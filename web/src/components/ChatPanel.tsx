@@ -142,7 +142,7 @@ export default function ChatPanel({ conversationId, messages, onMessagesUpdate, 
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to send message";
       if (msg.includes("not available") || msg.includes("not configured")) {
-        setError("Chat is not available. Configure an OpenAI API key to enable it.");
+        setError("Chat is not available. Codex CLI must be installed and logged in.");
       } else {
         setError(msg);
       }

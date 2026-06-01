@@ -58,7 +58,7 @@ export default function ChatView({ slug, onNavigateToDate }: ChatViewProps) {
       if (cancelled) return;
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("not available") || msg.includes("not configured") || msg.includes("503")) {
-        setChatError("Chat is not available. Configure an OpenAI API key to enable it.");
+        setChatError("Chat is not available. Codex CLI must be installed and logged in.");
       } else if (!navigator.onLine) {
         setChatError("Chat requires a network connection.");
       } else {

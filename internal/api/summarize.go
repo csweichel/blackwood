@@ -1,11 +1,11 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 
-	"github.com/csweichel/blackwood/internal/rag"
 	"github.com/csweichel/blackwood/internal/storage"
 )
 
@@ -13,12 +13,22 @@ type summarizeResponse struct {
 	Summary string `json:"summary"`
 }
 
+type summaryEngine interface {
+	Available() bool
+	UnavailableReason() string
+	Summarize(ctx context.Context, content string) (string, error)
+}
+
 // ServeSummarize returns an HTTP handler for POST /api/daily-notes/{date}/summarize.
 // It generates an AI summary of the note and writes it into the "# Summary" section.
-func ServeSummarize(store *storage.Store, engine *rag.Engine) http.HandlerFunc {
+func ServeSummarize(store *storage.Store, engine summaryEngine) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if engine == nil || !engine.Available() {
+			http.Error(w, "summarization is not available: "+unavailableReason(engine), http.StatusServiceUnavailable)
 			return
 		}
 

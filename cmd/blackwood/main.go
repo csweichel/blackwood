@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -19,13 +18,12 @@ import (
 	"github.com/csweichel/blackwood/gen/blackwood/v1/blackwoodv1connect"
 	"github.com/csweichel/blackwood/internal/api"
 	"github.com/csweichel/blackwood/internal/auth"
+	"github.com/csweichel/blackwood/internal/codex"
 	"github.com/csweichel/blackwood/internal/config"
 	"github.com/csweichel/blackwood/internal/describe"
 	"github.com/csweichel/blackwood/internal/granola"
 	"github.com/csweichel/blackwood/internal/importqueue"
-	"github.com/csweichel/blackwood/internal/index"
 	"github.com/csweichel/blackwood/internal/ocr"
-	"github.com/csweichel/blackwood/internal/rag"
 	"github.com/csweichel/blackwood/internal/state"
 	"github.com/csweichel/blackwood/internal/storage"
 	"github.com/csweichel/blackwood/internal/telegram"
@@ -119,64 +117,37 @@ func main() {
 		slog.Info("audio transcriber enabled")
 	}
 
-	// Set up the semantic index and RAG engine.
-	// QMD (local) takes priority over OpenAI when enabled.
-	var semanticIndex index.Indexer
-	var ragEngine *rag.Engine
-	if cfg.QMD.Enabled {
-		qmdDataDir := filepath.Join(dataDir, "qmd-entries")
-		qmdIdx, err := index.NewQMD(context.Background(), index.QMDConfig{
-			Collection: cfg.QMD.Collection,
-			DataDir:    qmdDataDir,
-			QMDPath:    cfg.QMD.QMDPath,
-		})
-		if err != nil {
-			slog.Error("create QMD index", "error", err)
-			os.Exit(1)
-		}
-		semanticIndex = qmdIdx
-		if err := reindexExistingEntries(context.Background(), store.DB(), semanticIndex); err != nil {
-			slog.Warn("initial reindex failed", "error", err)
-		}
-		slog.Info("QMD indexing enabled", "collection", cfg.QMD.Collection)
-
-		// RAG chat still requires an OpenAI API key for the LLM.
-		if apiKey := cfg.APIKey(); apiKey != "" {
-			ragEngine = rag.New(semanticIndex, store, apiKey, cfg.OpenAI.ChatModel)
-			slog.Info("chat service enabled", "model", cfg.OpenAI.ChatModel)
-		} else {
-			slog.Warn("chat disabled: QMD handles indexing but no OpenAI API key for LLM chat")
-		}
-	} else if apiKey := cfg.APIKey(); apiKey != "" {
-		embClient := index.NewOpenAIEmbeddingClient(apiKey).WithModel(cfg.OpenAI.EmbeddingModel)
-
-		openaiIdx, err := index.New(store.DB(), store.WriteDB(), embClient)
-		if err != nil {
-			slog.Error("create index", "error", err)
-			os.Exit(1)
-		}
-		semanticIndex = openaiIdx
-		if err := reindexExistingEntries(context.Background(), store.DB(), semanticIndex); err != nil {
-			slog.Warn("initial reindex failed", "error", err)
-		}
-
-		ragEngine = rag.New(semanticIndex, store, apiKey, cfg.OpenAI.ChatModel)
-		slog.Info("chat service enabled", "model", cfg.OpenAI.ChatModel)
+	codexTimeout, err := time.ParseDuration(cfg.Codex.Timeout)
+	if err != nil {
+		slog.Warn("invalid codex timeout, using default", "value", cfg.Codex.Timeout, "error", err)
+		codexTimeout = 2 * time.Minute
+	}
+	codexEngine := codex.New(context.Background(), codex.Config{
+		Enabled:        cfg.Codex.Enabled,
+		Path:           cfg.Codex.Path,
+		NotesDir:       filepath.Join(dataDir, "notes"),
+		Timeout:        codexTimeout,
+		MaxCorpusBytes: cfg.Codex.MaxCorpusBytes,
+		MaxOutputBytes: cfg.Codex.MaxOutputBytes,
+		ExtraArgs:      cfg.Codex.ExtraArgs,
+	})
+	if codexEngine.Available() {
+		slog.Info("Codex-backed chat and search enabled", "path", cfg.Codex.Path)
 	} else {
-		slog.Warn("chat and indexing disabled: no OpenAI API key or QMD configured")
+		slog.Warn("Codex-backed chat and search disabled", "reason", codexEngine.UnavailableReason())
 	}
 
 	// Register the daily notes service.
-	dnPath, dnHandler := blackwoodv1connect.NewDailyNotesServiceHandler(api.NewDailyNotesHandler(store, audioTranscriber, semanticIndex, changes))
+	dnPath, dnHandler := blackwoodv1connect.NewDailyNotesServiceHandler(api.NewDailyNotesHandler(store, audioTranscriber, nil, changes))
 	srv.Handle(dnPath, dnHandler)
 
 	// Create the background import worker (started after context is created below).
-	worker := importqueue.New(store, recognizer, semanticIndex, dataDir)
+	worker := importqueue.New(store, recognizer, nil, dataDir)
 
 	// Register the import service.
-	importPath, importHandler := blackwoodv1connect.NewImportServiceHandler(api.NewImportHandler(store, recognizer, semanticIndex, worker, dataDir))
+	importPath, importHandler := blackwoodv1connect.NewImportServiceHandler(api.NewImportHandler(store, recognizer, nil, worker, dataDir))
 	srv.Handle(importPath, importHandler)
-	chatPath, chatHandler := blackwoodv1connect.NewChatServiceHandler(api.NewChatHandler(ragEngine, store))
+	chatPath, chatHandler := blackwoodv1connect.NewChatServiceHandler(api.NewChatHandler(codexEngine, store))
 	srv.Handle(chatPath, chatHandler)
 
 	// Register the preferences service.
@@ -199,7 +170,7 @@ func main() {
 			d = describe.NewVision(apiKey, cfg.OpenAI.Model)
 		}
 
-		waHandler := whatsapp.NewWebhookHandler(waCfg, store, t, d, semanticIndex)
+		waHandler := whatsapp.NewWebhookHandler(waCfg, store, t, d, nil)
 		srv.Handle("/api/webhooks/whatsapp", waHandler)
 		slog.Info("WhatsApp webhook enabled")
 	}
@@ -212,18 +183,12 @@ func main() {
 	// PDF export for daily notes.
 	srv.Handle("GET /api/daily-notes/{date}/pdf", api.ServePDF(store))
 
-	// Summarize endpoint (requires RAG engine).
-	if ragEngine != nil {
-		srv.Handle("POST /api/daily-notes/{date}/summarize", api.ServeSummarize(store, ragEngine))
-	}
+	srv.Handle("POST /api/daily-notes/{date}/summarize", api.ServeSummarize(store, codexEngine))
 
 	// Range summaries for weekly/monthly views.
 	srv.Handle("GET /api/daily-notes/range", api.ServeRangeSummaries(store))
 
-	// Search endpoint (requires semantic index).
-	if semanticIndex != nil {
-		srv.Handle("GET /api/search", api.ServeSearch(store, semanticIndex))
-	}
+	srv.Handle("GET /api/search", api.ServeSearch(codexEngine))
 
 	// Location tagging endpoint.
 	srv.Handle("POST /api/entries/location", api.ServeSetLocation(store))
@@ -275,9 +240,9 @@ func main() {
 	// Start the background import worker.
 	go worker.Start(ctx)
 
-	// Start the nightly digest if RAG is available.
-	if ragEngine != nil {
-		go api.StartNightlyDigest(ctx, store, ragEngine)
+	// Start the nightly digest if Codex is available.
+	if codexEngine.Available() {
+		go api.StartNightlyDigest(ctx, store, codexEngine)
 	}
 
 	// Telegram bot.
@@ -294,7 +259,7 @@ func main() {
 			d = describe.NewVision(apiKey, cfg.OpenAI.Model)
 		}
 
-		tgBot := telegram.NewBot(tgCfg, store, t, d, semanticIndex)
+		tgBot := telegram.NewBot(tgCfg, store, t, d, nil)
 		go tgBot.Start(ctx)
 		slog.Info("Telegram bot enabled")
 	}
@@ -321,7 +286,7 @@ func main() {
 			ts = granola.NewTokenSource(pt, "")
 		}
 
-		gs := granola.New(ts, store, semanticIndex, pollInterval)
+		gs := granola.New(ts, store, nil, pollInterval)
 		go gs.Start(ctx)
 		slog.Info("Granola sync enabled", "interval", pollInterval)
 	}
@@ -784,32 +749,4 @@ func runSetup() {
 	fmt.Println()
 	fmt.Println("To start Blackwood:")
 	fmt.Printf("  blackwood --config %s\n", configPath)
-}
-func reindexExistingEntries(ctx context.Context, db *sql.DB, idx index.Indexer) error {
-	rows, err := db.QueryContext(ctx, `SELECT id, content FROM entries`)
-	if err != nil {
-		return fmt.Errorf("query entries for reindex: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	var entries []index.EntryForIndex
-	for rows.Next() {
-		var e index.EntryForIndex
-		if err := rows.Scan(&e.ID, &e.Text); err != nil {
-			return fmt.Errorf("scan entry for reindex: %w", err)
-		}
-		entries = append(entries, e)
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("iterate entries for reindex: %w", err)
-	}
-
-	if len(entries) == 0 {
-		return nil
-	}
-	if err := idx.Reindex(ctx, entries); err != nil {
-		return fmt.Errorf("reindex entries: %w", err)
-	}
-	slog.Info("reindexed entries", "count", len(entries))
-	return nil
 }

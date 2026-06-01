@@ -13,6 +13,7 @@ import (
 type ServerConfig struct {
 	Server   ServerSettings   `yaml:"server"`
 	OpenAI   OpenAISettings   `yaml:"openai"`
+	Codex    CodexSettings    `yaml:"codex"`
 	QMD      QMDSettings      `yaml:"qmd"`
 	WhatsApp WhatsAppSettings `yaml:"whatsapp"`
 	Telegram TelegramSettings `yaml:"telegram"`
@@ -46,9 +47,9 @@ type TLS struct {
 
 // WatcherSettings holds configuration for the file watcher.
 type WatcherSettings struct {
-	WatchDir     string   `yaml:"watch_dir"`      // backward compat (singular)
-	WatchDirs    []string `yaml:"watch_dirs"`      // list of directories to watch
-	PollInterval string   `yaml:"poll_interval"`   // e.g. "30s"
+	WatchDir     string   `yaml:"watch_dir"`     // backward compat (singular)
+	WatchDirs    []string `yaml:"watch_dirs"`    // list of directories to watch
+	PollInterval string   `yaml:"poll_interval"` // e.g. "30s"
 }
 
 // ServerSettings holds general server settings.
@@ -62,13 +63,21 @@ type ServerSettings struct {
 type OpenAISettings struct {
 	APIKeyFile     string `yaml:"api_key_file"`
 	Model          string `yaml:"model"`
-	ChatModel      string `yaml:"chat_model"`
 	EmbeddingModel string `yaml:"embedding_model"`
 	OCRPrompt      string `yaml:"ocr_prompt"`
 }
 
-// QMDSettings holds configuration for the QMD local search engine.
-// When enabled, QMD replaces OpenAI embeddings for indexing and search.
+// CodexSettings holds configuration for Codex-backed note chat and search.
+type CodexSettings struct {
+	Enabled        *bool    `yaml:"enabled"`
+	Path           string   `yaml:"path"`
+	Timeout        string   `yaml:"timeout"`
+	MaxCorpusBytes int64    `yaml:"max_corpus_bytes"`
+	MaxOutputBytes int64    `yaml:"max_output_bytes"`
+	ExtraArgs      []string `yaml:"extra_args"`
+}
+
+// QMDSettings holds legacy configuration for the QMD local search engine.
 type QMDSettings struct {
 	Enabled    bool   `yaml:"enabled"`
 	Collection string `yaml:"collection"` // qmd collection name (default: "blackwood")
@@ -187,13 +196,6 @@ func (c *ServerConfig) Resolve() error {
 			c.OpenAI.Model = "gpt-5.2"
 		}
 	}
-	if c.OpenAI.ChatModel == "" {
-		if m := os.Getenv("OPENAI_CHAT_MODEL"); m != "" {
-			c.OpenAI.ChatModel = m
-		} else {
-			c.OpenAI.ChatModel = c.OpenAI.Model
-		}
-	}
 	if c.OpenAI.EmbeddingModel == "" {
 		c.OpenAI.EmbeddingModel = "text-embedding-3-small"
 	}
@@ -203,6 +205,24 @@ func (c *ServerConfig) Resolve() error {
 		} else {
 			c.OpenAI.OCRPrompt = "Transcribe the handwritten text in this image. Return only the transcribed text, no commentary."
 		}
+	}
+
+	// Codex defaults. Authentication is owned by the Codex CLI.
+	if c.Codex.Path == "" {
+		if p := os.Getenv("CODEX_PATH"); p != "" {
+			c.Codex.Path = p
+		} else {
+			c.Codex.Path = "codex"
+		}
+	}
+	if c.Codex.Timeout == "" {
+		c.Codex.Timeout = "2m"
+	}
+	if c.Codex.MaxCorpusBytes <= 0 {
+		c.Codex.MaxCorpusBytes = 10 << 20
+	}
+	if c.Codex.MaxOutputBytes <= 0 {
+		c.Codex.MaxOutputBytes = 1 << 20
 	}
 
 	// QMD defaults.

@@ -14,9 +14,16 @@ server:
 openai:
   api_key_file: /tmp/test-key
   model: gpt-5.2
-  chat_model: gpt-5.2
   embedding_model: text-embedding-3-large
   ocr_prompt: "custom prompt"
+codex:
+  enabled: true
+  path: /usr/local/bin/codex
+  timeout: 3m
+  max_corpus_bytes: 1234
+  max_output_bytes: 5678
+  extra_args:
+    - --experimental-json
 whatsapp:
   verify_token: test-token
   app_secret_file: /tmp/test-secret
@@ -42,11 +49,26 @@ whatsapp:
 	if cfg.OpenAI.Model != "gpt-5.2" {
 		t.Errorf("model = %q, want %q", cfg.OpenAI.Model, "gpt-5.2")
 	}
-	if cfg.OpenAI.ChatModel != "gpt-5.2" {
-		t.Errorf("chat_model = %q, want %q", cfg.OpenAI.ChatModel, "gpt-5.2")
-	}
 	if cfg.OpenAI.EmbeddingModel != "text-embedding-3-large" {
 		t.Errorf("embedding_model = %q, want %q", cfg.OpenAI.EmbeddingModel, "text-embedding-3-large")
+	}
+	if cfg.Codex.Enabled == nil || !*cfg.Codex.Enabled {
+		t.Fatal("expected codex.enabled to parse as true")
+	}
+	if cfg.Codex.Path != "/usr/local/bin/codex" {
+		t.Errorf("codex.path = %q, want %q", cfg.Codex.Path, "/usr/local/bin/codex")
+	}
+	if cfg.Codex.Timeout != "3m" {
+		t.Errorf("codex.timeout = %q, want %q", cfg.Codex.Timeout, "3m")
+	}
+	if cfg.Codex.MaxCorpusBytes != 1234 {
+		t.Errorf("codex.max_corpus_bytes = %d, want %d", cfg.Codex.MaxCorpusBytes, 1234)
+	}
+	if cfg.Codex.MaxOutputBytes != 5678 {
+		t.Errorf("codex.max_output_bytes = %d, want %d", cfg.Codex.MaxOutputBytes, 5678)
+	}
+	if len(cfg.Codex.ExtraArgs) != 1 || cfg.Codex.ExtraArgs[0] != "--experimental-json" {
+		t.Errorf("codex.extra_args = %#v, want --experimental-json", cfg.Codex.ExtraArgs)
 	}
 	if cfg.WhatsApp.VerifyToken != "test-token" {
 		t.Errorf("verify_token = %q, want %q", cfg.WhatsApp.VerifyToken, "test-token")
@@ -68,7 +90,7 @@ func TestLoadServerConfigEmpty(t *testing.T) {
 
 func TestResolveDefaults(t *testing.T) {
 	// Clear env vars that could interfere.
-	for _, k := range []string{"OPENAI_API_KEY", "OPENAI_MODEL", "OPENAI_CHAT_MODEL", "OPENAI_OCR_PROMPT", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_APP_SECRET", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID"} {
+	for _, k := range []string{"OPENAI_API_KEY", "OPENAI_MODEL", "OPENAI_OCR_PROMPT", "CODEX_PATH", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_APP_SECRET", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID"} {
 		t.Setenv(k, "")
 	}
 
@@ -83,14 +105,26 @@ func TestResolveDefaults(t *testing.T) {
 	if cfg.OpenAI.Model != "gpt-5.2" {
 		t.Errorf("default model = %q, want %q", cfg.OpenAI.Model, "gpt-5.2")
 	}
-	if cfg.OpenAI.ChatModel != "gpt-5.2" {
-		t.Errorf("default chat_model = %q, want %q", cfg.OpenAI.ChatModel, "gpt-5.2")
-	}
 	if cfg.OpenAI.EmbeddingModel != "text-embedding-3-small" {
 		t.Errorf("default embedding_model = %q, want %q", cfg.OpenAI.EmbeddingModel, "text-embedding-3-small")
 	}
 	if cfg.OpenAI.OCRPrompt == "" {
 		t.Error("expected non-empty default OCR prompt")
+	}
+	if cfg.Codex.Path != "codex" {
+		t.Errorf("default codex.path = %q, want %q", cfg.Codex.Path, "codex")
+	}
+	if cfg.Codex.Timeout != "2m" {
+		t.Errorf("default codex.timeout = %q, want %q", cfg.Codex.Timeout, "2m")
+	}
+	if cfg.Codex.MaxCorpusBytes != 10<<20 {
+		t.Errorf("default codex.max_corpus_bytes = %d, want %d", cfg.Codex.MaxCorpusBytes, 10<<20)
+	}
+	if cfg.Codex.MaxOutputBytes != 1<<20 {
+		t.Errorf("default codex.max_output_bytes = %d, want %d", cfg.Codex.MaxOutputBytes, 1<<20)
+	}
+	if cfg.Codex.Enabled != nil {
+		t.Error("expected omitted codex.enabled to remain nil for auto-detect")
 	}
 }
 
@@ -139,7 +173,7 @@ func TestResolveSecretFiles(t *testing.T) {
 func TestResolveEnvVarFallback(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "env-key")
 	t.Setenv("OPENAI_MODEL", "env-model")
-	t.Setenv("OPENAI_CHAT_MODEL", "env-chat-model")
+	t.Setenv("CODEX_PATH", "/tmp/codex")
 	t.Setenv("WHATSAPP_VERIFY_TOKEN", "env-vt")
 	t.Setenv("WHATSAPP_APP_SECRET", "env-secret")
 	t.Setenv("WHATSAPP_ACCESS_TOKEN", "env-token")
@@ -156,8 +190,8 @@ func TestResolveEnvVarFallback(t *testing.T) {
 	if cfg.OpenAI.Model != "env-model" {
 		t.Errorf("model = %q, want %q", cfg.OpenAI.Model, "env-model")
 	}
-	if cfg.OpenAI.ChatModel != "env-chat-model" {
-		t.Errorf("chat_model = %q, want %q", cfg.OpenAI.ChatModel, "env-chat-model")
+	if cfg.Codex.Path != "/tmp/codex" {
+		t.Errorf("codex.path = %q, want %q", cfg.Codex.Path, "/tmp/codex")
 	}
 	if cfg.WhatsApp.VerifyToken != "env-vt" {
 		t.Errorf("verify_token = %q, want %q", cfg.WhatsApp.VerifyToken, "env-vt")
@@ -177,7 +211,7 @@ func TestResolveEnvVarFallback(t *testing.T) {
 }
 
 func TestResolveTildeExpansion(t *testing.T) {
-	for _, k := range []string{"OPENAI_API_KEY", "OPENAI_MODEL", "OPENAI_CHAT_MODEL", "OPENAI_OCR_PROMPT", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_APP_SECRET", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID"} {
+	for _, k := range []string{"OPENAI_API_KEY", "OPENAI_MODEL", "OPENAI_OCR_PROMPT", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_APP_SECRET", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID"} {
 		t.Setenv(k, "")
 	}
 

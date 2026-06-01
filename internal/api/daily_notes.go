@@ -184,7 +184,7 @@ func (h *DailyNotesHandler) CreateEntry(ctx context.Context, req *connect.Reques
 		}
 	}
 
-	// Index the entry for semantic search.
+	// Index the entry when a legacy indexer is configured.
 	if h.indexer != nil && entry.Content != "" {
 		if err := h.indexer.IndexEntry(ctx, entry.ID, entry.Content); err != nil {
 			slog.Warn("failed to index entry", "entry_id", entry.ID, "error", err)

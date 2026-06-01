@@ -2,7 +2,7 @@
 
 **Your daily notes, from everywhere.** Blackwood is a local-first daily notes app that captures text, voice memos, photos, and handwritten notes — then makes all of it searchable through AI.
 
-Write from the web, send a WhatsApp message, import from Obsidian, or drop in a Viwoods handwritten note. Everything lands in a single markdown document per day. A semantic index built on top lets you chat with your notes using RAG.
+Write from the web, send a WhatsApp message, import from Obsidian, or drop in a Viwoods handwritten note. Everything lands in a single markdown document per day. Codex can search and chat with your notes directly from the local notes directory.
 
 Blackwood runs entirely on your machine. Your data stays local.
 
@@ -11,8 +11,8 @@ Blackwood runs entirely on your machine. Your data stays local.
 - **Markdown daily notes** — one document per day (`notes/YYYY/MM/DD/index.md`), editable in the browser with auto-save
 - **Voice memos** — record audio in the web UI or send via WhatsApp; transcribed via Whisper and kept as playable audio files
 - **Photo capture** — upload or snap photos; described via gpt-5.2 vision and rendered inline in the daily note
-- **Semantic search** — find anything across your notes with AI-powered semantic search (`Cmd+K`)
-- **RAG chat** — ask questions about your notes in natural language; get answers with source citations
+- **Codex search** — find anything across your notes with Codex (`Cmd+K`)
+- **Codex chat** — ask questions about your notes in natural language; get answers with source citations
 - **Weekly & monthly views** — see notes aggregated by week or month with AI-generated range summaries
 - **Daily digest** — automatic nightly summaries; on-demand summarize for any note
 - **Location tagging** — tag daily notes with your location; reverse-geocoded to show address names
@@ -43,7 +43,8 @@ Blackwood runs entirely on your machine. Your data stays local.
 
 - Go 1.25+
 - Node.js 18+ (for the web UI)
-- An [OpenAI API key](https://platform.openai.com/api-keys) (for transcription, vision, embeddings, and chat)
+- A logged-in `codex` CLI for chat, search, and note summaries
+- An [OpenAI API key](https://platform.openai.com/api-keys) (for transcription, vision, and OCR)
 
 ### Build
 
@@ -119,13 +120,13 @@ Blackwood is a single Go binary (`blackwood`) serving a React frontend over a si
 │  WhatsApp · Telegram · Granola Sync · Clipper   │
 ├─────────────────────────────────────────────────┤
 │  AI Pipelines                                   │
-│  Whisper (audio) · gpt-5.2 (vision/chat/OCR)   │
-│  text-embedding-3-small (semantic index)        │
+│  Codex CLI (chat/search/summaries)              │
+│  Whisper (audio) · gpt-5.2 (vision/OCR)         │
 ├─────────────────────────────────────────────────┤
 │  Storage                                        │
 │  Markdown files  notes/YYYY/MM/DD/index.md      │
 │  Attachments     notes/YYYY/MM/DD/<file>        │
-│  SQLite (entries, conversations, embeddings)    │
+│  SQLite (entries, conversations, preferences)   │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -137,8 +138,8 @@ Blackwood is a single Go binary (`blackwood`) serving a React frontend over a si
 | `internal/config` | YAML config loading with secret file and env var resolution |
 | `internal/storage` | SQLite + filesystem storage (daily notes as markdown, attachments on disk) |
 | `internal/api` | Connect-RPC service handlers |
-| `internal/rag` | RAG engine (search + LLM) |
-| `internal/index` | Semantic index (embeddings + vector search) |
+| `internal/codex` | Codex CLI integration for notes chat, search, and summaries |
+| `internal/index` | Legacy optional indexing abstractions used by integrations when configured |
 | `internal/transcribe` | Whisper audio transcription |
 | `internal/describe` | gpt-5.2 photo description |
 | `internal/ocr` | gpt-5.2 handwriting OCR |
@@ -179,8 +180,14 @@ server:
 openai:
   api_key_file: ~/.blackwood/secrets/openai-api-key
   model: gpt-5.2
-  chat_model: gpt-5.2
   embedding_model: text-embedding-3-small
+
+codex:
+  enabled: true
+  path: codex
+  timeout: 2m
+  max_corpus_bytes: 10485760
+  max_output_bytes: 1048576
 
 # WhatsApp integration (optional)
 # whatsapp:
@@ -214,9 +221,9 @@ When no config file is used, the following environment variables are recognized:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OPENAI_API_KEY` | — | OpenAI API key for all AI features |
+| `OPENAI_API_KEY` | — | OpenAI API key for transcription, vision, and OCR |
 | `OPENAI_MODEL` | `gpt-5.2` | Model for vision and OCR |
-| `OPENAI_CHAT_MODEL` | same as `OPENAI_MODEL` | Model for RAG chat |
+| `CODEX_PATH` | `codex` | Path to the Codex CLI for chat, search, and summaries |
 | `WHATSAPP_VERIFY_TOKEN` | — | Webhook verification token |
 | `WHATSAPP_APP_SECRET` | — | App secret for signature verification |
 | `WHATSAPP_ACCESS_TOKEN` | — | Permanent access token |
@@ -347,7 +354,7 @@ Daily notes are stored as markdown files on disk:
 
 ```
 ~/.blackwood/
-├── blackwood.db              # SQLite: entries, conversations, embeddings index
+├── blackwood.db              # SQLite: entries, conversations, preferences
 ├── notes/
 │   └── 2025/
 │       └── 01/

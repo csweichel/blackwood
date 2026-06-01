@@ -10,7 +10,10 @@ interface SearchResult {
 
 async function fetchSearch(query: string, limit = 20): Promise<SearchResult[]> {
   const resp = await fetch(`/api/search?q=${encodeURIComponent(query)}&limit=${limit}`);
-  if (!resp.ok) throw new Error("Search failed");
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(resp.status === 503 ? "Search is not available. Codex CLI must be installed and logged in." : text || "Search failed");
+  }
   const data = await resp.json();
   return data.results || [];
 }
@@ -30,20 +33,24 @@ export default function SearchPage() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) {
       setResults([]);
       setSearched(false);
+      setError(null);
       return;
     }
     setLoading(true);
     setSearched(true);
+    setError(null);
     try {
       const data = await fetchSearch(q);
       setResults(data);
-    } catch {
+    } catch (err) {
       setResults([]);
+      setError(err instanceof Error ? err.message : "Search failed");
     } finally {
       setLoading(false);
     }
@@ -124,13 +131,19 @@ export default function SearchPage() {
           </div>
         )}
 
-        {!loading && searched && results.length === 0 && (
+        {!loading && error && (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground text-sm">{error}</p>
+          </div>
+        )}
+
+        {!loading && !error && searched && results.length === 0 && (
           <div className="text-center py-12">
             <p className="text-muted-foreground text-sm">No results found for "{query}"</p>
           </div>
         )}
 
-        {!loading && results.length > 0 && (
+        {!loading && !error && results.length > 0 && (
           <div>
             <p className="text-xs text-muted-foreground mb-4">
               {results.length} result{results.length !== 1 ? "s" : ""}
@@ -188,7 +201,7 @@ export default function SearchPage() {
         {!loading && !searched && (
           <div className="text-center py-12">
             <p className="text-muted-foreground text-sm">
-              Search across all your notes using semantic search.
+              Search across all your notes with Codex.
             </p>
             <p className="text-muted-foreground text-xs mt-2">
               <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Cmd+K</kbd> to focus search from anywhere

@@ -11,19 +11,22 @@ server:
 
 openai:
   # Path to a file containing your OpenAI API key
+  # Used for OCR, transcription, and vision. Chat/search use Codex below.
   api_key_file: ~/.blackwood/secrets/openai-api-key
   model: gpt-5.2
-  chat_model: gpt-5.2
   embedding_model: text-embedding-3-small
   # ocr_prompt: "Custom OCR prompt here"
 
-# QMD local search engine (optional)
-# When enabled, QMD replaces OpenAI embeddings for indexing and search.
-# Requires the qmd CLI: https://github.com/tobi/qmd
-# qmd:
-#   enabled: true
-#   collection: blackwood       # qmd collection name
-#   qmd_path: qmd               # path to qmd binary
+# Codex-backed chat and search (optional)
+# Requires the codex CLI to be installed and logged in.
+# Codex runs in ~/.blackwood/notes with a read-only sandbox.
+# codex:
+#   enabled: true               # omit for auto-detect, false to disable
+#   path: codex
+#   timeout: 2m
+#   max_corpus_bytes: 10485760
+#   max_output_bytes: 1048576
+#   extra_args: []
 
 # WhatsApp integration (optional)
 # whatsapp:
