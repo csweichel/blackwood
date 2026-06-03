@@ -99,3 +99,74 @@ func TestServeUploadAttachmentStoresImageWithoutAppendingToNote(t *testing.T) {
 		t.Fatalf("entries = %#v, want one photo entry", entries)
 	}
 }
+
+func TestServeUploadAttachmentStoresArbitraryFile(t *testing.T) {
+	store := newUploadTestStore(t)
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "report.pdf")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	pdf := []byte("%PDF-1.7\nhello\n")
+	if _, err := part.Write(pdf); err != nil {
+		t.Fatalf("write form file: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/daily-notes/2025-01-16/attachments", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.SetPathValue("date", "2025-01-16")
+	rec := httptest.NewRecorder()
+
+	ServeUploadAttachment(store).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		AttachmentID string `json:"attachmentId"`
+		Filename     string `json:"filename"`
+		URL          string `json:"url"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.AttachmentID == "" {
+		t.Fatal("expected attachment ID")
+	}
+	if !strings.HasPrefix(resp.Filename, "report-") || !strings.HasSuffix(resp.Filename, ".pdf") {
+		t.Fatalf("filename = %q, want stored pdf filename", resp.Filename)
+	}
+
+	path, err := store.AttachmentPath("2025-01-16", resp.Filename)
+	if err != nil {
+		t.Fatalf("attachment path: %v", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read attachment: %v", err)
+	}
+	if !bytes.Equal(got, pdf) {
+		t.Fatalf("stored bytes = %v, want %v", got, pdf)
+	}
+
+	note, err := store.GetDailyNoteByDate(context.Background(), "2025-01-16")
+	if err != nil {
+		t.Fatalf("get note: %v", err)
+	}
+	if note.Content != "" {
+		t.Fatalf("note content = %q, want empty", note.Content)
+	}
+	entries, err := store.ListEntries(context.Background(), note.ID)
+	if err != nil {
+		t.Fatalf("list entries: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Type != "text" || entries[0].Content != "report.pdf" {
+		t.Fatalf("entries = %#v, want one text entry named report.pdf", entries)
+	}
+}

@@ -21,7 +21,7 @@ import (
 	"github.com/csweichel/blackwood/internal/transcribe"
 )
 
-const maxEditorImageUploadBytes = 25 << 20
+const maxEditorAttachmentUploadBytes = 100 << 20
 
 var entryTypeToProto = map[string]blackwoodv1.EntryType{
 	"text":    blackwoodv1.EntryType_ENTRY_TYPE_TEXT,
@@ -446,7 +446,7 @@ func ServeAttachmentByFilename(store *storage.Store) http.HandlerFunc {
 	}
 }
 
-// ServeUploadAttachment stores an image attachment for direct editor use.
+// ServeUploadAttachment stores an attachment for direct editor use.
 // Unlike CreateEntry, this does not append markdown to the daily note; the
 // editor inserts the returned filename at the user's current cursor position.
 func ServeUploadAttachment(store *storage.Store) http.HandlerFunc {
@@ -463,8 +463,8 @@ func ServeUploadAttachment(store *storage.Store) http.HandlerFunc {
 			return
 		}
 
-		r.Body = http.MaxBytesReader(w, r.Body, maxEditorImageUploadBytes)
-		if err := r.ParseMultipartForm(maxEditorImageUploadBytes); err != nil {
+		r.Body = http.MaxBytesReader(w, r.Body, maxEditorAttachmentUploadBytes)
+		if err := r.ParseMultipartForm(maxEditorAttachmentUploadBytes); err != nil {
 			http.Error(w, "invalid multipart upload", http.StatusBadRequest)
 			return
 		}
@@ -497,10 +497,6 @@ func ServeUploadAttachment(store *storage.Store) http.HandlerFunc {
 		if contentType == "" || contentType == "application/octet-stream" {
 			contentType = http.DetectContentType(data)
 		}
-		if !strings.HasPrefix(contentType, "image/") {
-			http.Error(w, "file must be an image", http.StatusBadRequest)
-			return
-		}
 
 		note, err := store.GetOrCreateDailyNote(r.Context(), date)
 		if err != nil {
@@ -510,7 +506,9 @@ func ServeUploadAttachment(store *storage.Store) http.HandlerFunc {
 
 		entry := &storage.Entry{
 			DailyNoteID: note.ID,
-			Type:        "photo",
+			Type:        editorUploadEntryType(contentType),
+			Content:     filename,
+			RawContent:  filename,
 			Source:      "web",
 			Metadata:    "{}",
 		}
@@ -536,6 +534,17 @@ func ServeUploadAttachment(store *storage.Store) http.HandlerFunc {
 			Filename:     storedFilename,
 			URL:          fmt.Sprintf("/api/daily-notes/%s/attachments/%s", date, storedFilename),
 		})
+	}
+}
+
+func editorUploadEntryType(contentType string) string {
+	switch {
+	case strings.HasPrefix(contentType, "image/"):
+		return "photo"
+	case strings.HasPrefix(contentType, "audio/"):
+		return "audio"
+	default:
+		return "text"
 	}
 }
 

@@ -119,15 +119,17 @@ export default function BlockNoteEditor({
     defaultStyles: true,
     resolveFileUrl: async (url) => resolveAttachmentUrl(url, dateRef.current),
     uploadFile: async (file) => {
-      if (!file.type.startsWith("image/")) {
-        throw new Error("Only image uploads are supported in notes.");
-      }
       const uploaded = await uploadDailyNoteAttachment(dateRef.current, file);
+      const props: Record<string, unknown> = {
+        url: uploaded.filename,
+        name: file.name || uploaded.filename,
+        caption: "",
+      };
+      if (file.type.startsWith("image/")) {
+        props.showPreview = true;
+      }
       return {
-        props: {
-          url: uploaded.filename,
-          name: file.name || uploaded.filename,
-        },
+        props,
       };
     },
     ...(placeholder ? { placeholders: { default: placeholder } } : {}),
@@ -140,6 +142,50 @@ export default function BlockNoteEditor({
     const processed = postprocessMarkdown(markdown, dateRef.current);
     return appendBlockState(processed, documentBlocks);
   }, [editor]);
+
+  const insertUploadedFiles = useCallback(
+    async (files: File[]) => {
+      if (!editor || files.length === 0) return;
+
+      const insertedBlocks: Array<Record<string, unknown>> = [];
+      for (const file of files) {
+        const uploaded = await uploadDailyNoteAttachment(dateRef.current, file);
+        const name = file.name || uploaded.filename;
+        if (file.type.startsWith("image/")) {
+          insertedBlocks.push({
+            type: "image",
+            props: {
+              url: uploaded.filename,
+              name,
+              caption: "",
+              showPreview: true,
+            },
+          });
+        } else {
+          insertedBlocks.push({
+            type: "file",
+            props: {
+              url: uploaded.filename,
+              name,
+              caption: "",
+            },
+          });
+        }
+      }
+
+      const cursor = editor.getTextCursorPosition();
+      const inserted = editor.insertBlocks(
+        insertedBlocks as Parameters<typeof editor.insertBlocks>[0],
+        cursor.block,
+        "after",
+      );
+      const lastInserted = inserted[inserted.length - 1];
+      if (lastInserted) {
+        editor.setTextCursorPosition(lastInserted, "end");
+      }
+    },
+    [editor],
+  );
 
   // Track the last markdown we set into the editor to avoid echo loops
   const lastSetContent = useRef<string>("");
@@ -264,7 +310,20 @@ export default function BlockNoteEditor({
   );
 
   return (
-    <div className="bn-blackwood-wrapper">
+    <div
+      className="bn-blackwood-wrapper"
+      onDragOver={(event) => {
+        if (event.dataTransfer.types.includes("Files")) {
+          event.preventDefault();
+        }
+      }}
+      onDrop={(event) => {
+        const files = Array.from(event.dataTransfer.files);
+        if (files.length === 0) return;
+        event.preventDefault();
+        void insertUploadedFiles(files);
+      }}
+    >
       <BlockNoteView
         editor={editor}
         onChange={handleChange}
