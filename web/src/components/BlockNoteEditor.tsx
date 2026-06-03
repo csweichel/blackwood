@@ -15,6 +15,8 @@ import { YouTubeBlock, getYouTubeSlashMenuItem } from "./blocknote/YouTubeBlock"
 import {
   preprocessMarkdown,
   postprocessMarkdown,
+  splitMarkdownStorage,
+  appendBlockState,
   rewriteAttachmentUrls,
   resolveAttachmentUrl,
   promoteImageLinks,
@@ -131,6 +133,14 @@ export default function BlockNoteEditor({
     ...(placeholder ? { placeholders: { default: placeholder } } : {}),
   });
 
+  const serializeEditorContent = useCallback((): string => {
+    const documentBlocks = editor.document as Array<Record<string, unknown>>;
+    const flat = flattenBlockHierarchy(documentBlocks);
+    const markdown = editor.blocksToMarkdownLossy(flat as typeof editor.document);
+    const processed = postprocessMarkdown(markdown, dateRef.current);
+    return appendBlockState(processed, documentBlocks);
+  }, [editor]);
+
   // Track the last markdown we set into the editor to avoid echo loops
   const lastSetContent = useRef<string>("");
   // Track whether initial content has been loaded
@@ -153,56 +163,57 @@ export default function BlockNoteEditor({
     // Skip if the content matches what we last set (avoids clobbering edits)
     if (initialLoaded.current && content === lastSetContent.current) return;
 
+    const { markdown: visibleMarkdown, blockState } = splitMarkdownStorage(content);
+
     // If already loaded, check if editor content actually differs
     if (initialLoaded.current) {
-      const flat = flattenBlockHierarchy(
-        editor.document as Array<Record<string, unknown>>,
-      );
-      const currentMarkdown = editor.blocksToMarkdownLossy(
-        flat as typeof editor.document,
-      );
-      const currentPostprocessed = postprocessMarkdown(currentMarkdown, date);
-      if (currentPostprocessed.trim() === content.trim()) {
+      const currentStoredContent = serializeEditorContent();
+      if (currentStoredContent.trim() === content.trim()) {
         lastSetContent.current = content;
         return;
       }
     }
 
-    // Pre-process: convert wikilinks to standard markdown links
-    const preprocessed = preprocessMarkdown(content, date, existingSubpagesForSync.current);
+    let nextBlocks: Array<Record<string, unknown>>;
+    if (blockState) {
+      nextBlocks = JSON.parse(JSON.stringify(blockState.blocks)) as Array<
+        Record<string, unknown>
+      >;
+      rewriteAttachmentUrls(nextBlocks, date);
+    } else {
+      // Pre-process: convert wikilinks to standard markdown links
+      const preprocessed = preprocessMarkdown(
+        visibleMarkdown,
+        date,
+        existingSubpagesForSync.current,
+      );
 
-    // Parse markdown to blocks
-    const blocks = editor.tryParseMarkdownToBlocks(preprocessed);
+      // Parse markdown to blocks
+      const blocks = editor.tryParseMarkdownToBlocks(preprocessed);
 
-    // Post-process blocks: rewrite attachment URLs, convert YouTube URLs,
-    // and nest blocks under headings for collapsible sections
-    const rawBlocks = blocks as Array<Record<string, unknown>>;
-    rewriteAttachmentUrls(rawBlocks, date);
-    const withImages = promoteImageLinks(rawBlocks, date);
-    const withYouTube = convertYouTubeBlocks(withImages);
-    const nested = nestBlocksUnderHeadings(withYouTube);
+      // Post-process blocks: rewrite attachment URLs, convert YouTube URLs,
+      // and nest blocks under headings for collapsible sections
+      const rawBlocks = blocks as Array<Record<string, unknown>>;
+      rewriteAttachmentUrls(rawBlocks, date);
+      const withImages = promoteImageLinks(rawBlocks, date);
+      const withYouTube = convertYouTubeBlocks(withImages);
+      nextBlocks = nestBlocksUnderHeadings(withYouTube);
+    }
 
     // Pre-expand all toggle blocks so sections start open
-    expandAllToggleBlocks(nested);
+    expandAllToggleBlocks(nextBlocks);
 
-    editor.replaceBlocks(editor.document, nested as typeof blocks);
+    editor.replaceBlocks(editor.document, nextBlocks as typeof editor.document);
     lastSetContent.current = content;
     initialLoaded.current = true;
-  }, [editor, content, date]);
+  }, [editor, content, date, serializeEditorContent]);
 
   const handleChange = useCallback(() => {
     if (!editor) return;
-    // Flatten the nested hierarchy before serializing so headings don't
-    // produce indented markdown content
-    const flat = flattenBlockHierarchy(
-      editor.document as Array<Record<string, unknown>>,
-    );
-    const markdown = editor.blocksToMarkdownLossy(flat as typeof editor.document);
-    // Post-process: convert wikilink-pattern links back to [[...]] syntax
-    const processed = postprocessMarkdown(markdown, dateRef.current);
+    const processed = serializeEditorContent();
     lastSetContent.current = processed;
     onChange(processed);
-  }, [editor, onChange]);
+  }, [editor, onChange, serializeEditorContent]);
 
   // Build slash menu items with YouTube added
   const getSlashMenuItems = useMemo(

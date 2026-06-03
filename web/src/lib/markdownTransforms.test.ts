@@ -8,6 +8,8 @@ import {
   promoteImageLinks,
   postprocessAttachmentUrls,
   resolveAttachmentUrl,
+  appendBlockState,
+  splitMarkdownStorage,
 } from "./markdownTransforms";
 
 describe("wikilink round-trip", () => {
@@ -139,6 +141,56 @@ describe("nestBlocksUnderHeadings / flattenBlockHierarchy round-trip", () => {
 
     expect(flat2.map((b) => b.id)).toEqual(flat1.map((b) => b.id));
     expect(flat2.map((b) => b.type)).toEqual(flat1.map((b) => b.type));
+  });
+});
+
+describe("BlockNote markdown storage metadata", () => {
+  it("appends and reads a matching block tree trailer", () => {
+    const markdown = "# Notes\n\n- Parent\n  - Child\n";
+    const blocks = [
+      {
+        id: "1",
+        type: "bulletListItem",
+        props: {},
+        content: [{ type: "text", text: "Parent", styles: {} }],
+        children: [
+          {
+            id: "2",
+            type: "bulletListItem",
+            props: {},
+            content: [{ type: "text", text: "Child", styles: {} }],
+            children: [],
+          },
+        ],
+      },
+    ];
+
+    const stored = appendBlockState(markdown, blocks);
+    const split = splitMarkdownStorage(stored);
+
+    expect(split.markdown).toBe(markdown.trimEnd());
+    expect(split.blockState?.blocks).toEqual(blocks);
+  });
+
+  it("ignores stale block metadata when visible markdown changed", () => {
+    const stored = appendBlockState("# Notes\n", [
+      { id: "1", type: "paragraph", props: {}, content: [], children: [] },
+    ]);
+    const changed = stored.replace("# Notes", "# Changed");
+
+    const split = splitMarkdownStorage(changed);
+
+    expect(split.markdown).toBe("# Changed");
+    expect(split.blockState).toBeNull();
+  });
+
+  it("leaves malformed trailers as ordinary markdown", () => {
+    const content = "# Notes\n\n<!-- blackwood:block-state:v1\nnot-json\n-->\n";
+
+    const split = splitMarkdownStorage(content);
+
+    expect(split.markdown).toBe("# Notes");
+    expect(split.blockState).toBeNull();
   });
 });
 

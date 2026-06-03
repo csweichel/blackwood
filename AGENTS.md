@@ -202,6 +202,14 @@ Daily notes on disk: `<data_dir>/notes/YYYY/MM/DD/index.md`
 Attachments alongside: `<data_dir>/notes/YYYY/MM/DD/<filename>`
 SQLite database: `<data_dir>/blackwood.db`
 
+Markdown note files may end with a hidden `blackwood:block-state:v1` HTML
+comment containing JSON BlockNote metadata. The visible markdown remains first
+and human-editable; the JSON trailer stores editor-only block structure that
+markdown cannot faithfully represent. Frontend loads trust the trailer only
+when its markdown hash matches the visible markdown. Backend append/section
+helpers strip stale trailers before mutating markdown so external imports do not
+resurrect old block trees.
+
 Schema is in `internal/storage/schema.sql`. Migrations are applied via `CREATE TABLE IF NOT EXISTS` — additive only. When adding tables or columns, append to `schema.sql`.
 
 ## Release

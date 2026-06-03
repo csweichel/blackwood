@@ -273,6 +273,30 @@ func (s *Store) writeNoteContent(date, content string) error {
 	return os.WriteFile(path, []byte(content), 0o644)
 }
 
+const editorBlockStateMarker = "<!-- blackwood:block-state:v1\n"
+const editorBlockStateEnd = "\n-->"
+
+func stripEditorBlockState(content string) string {
+	markerIdx := strings.LastIndex(content, editorBlockStateMarker)
+	if markerIdx < 0 {
+		return content
+	}
+
+	jsonStart := markerIdx + len(editorBlockStateMarker)
+	endRelIdx := strings.Index(content[jsonStart:], editorBlockStateEnd)
+	if endRelIdx < 0 {
+		return content
+	}
+
+	endIdx := jsonStart + endRelIdx + len(editorBlockStateEnd)
+	if strings.TrimSpace(content[endIdx:]) != "" {
+		return content
+	}
+
+	visible := content[:markerIdx]
+	return strings.TrimRight(visible, "\r\n")
+}
+
 // getNoteDate looks up the date for a daily note by its ID.
 func (s *Store) getNoteDate(ctx context.Context, id string) (string, error) {
 	var date string
@@ -384,7 +408,7 @@ func (s *Store) AppendDailyNoteContent(ctx context.Context, id string, text stri
 	if err != nil {
 		return err
 	}
-	existing := s.readNoteContent(date)
+	existing := stripEditorBlockState(s.readNoteContent(date))
 	if err := s.writeNoteContent(date, existing+text); err != nil {
 		return fmt.Errorf("write note file: %w", err)
 	}
@@ -411,7 +435,7 @@ func (s *Store) AppendToSection(ctx context.Context, id string, section string, 
 		return err
 	}
 
-	content := s.readNoteContent(date)
+	content := stripEditorBlockState(s.readNoteContent(date))
 
 	// If the note is empty, initialize with the default structure.
 	// If it has legacy content (no section headings), prepend it before the structure.
@@ -514,7 +538,7 @@ func (s *Store) SetSection(ctx context.Context, id string, section string, text 
 		return err
 	}
 
-	content := s.readNoteContent(date)
+	content := stripEditorBlockState(s.readNoteContent(date))
 	content = replaceSection(content, section, text)
 
 	if err := s.writeNoteContent(date, content); err != nil {
@@ -606,7 +630,7 @@ func (s *Store) ListDatesWithContent(ctx context.Context, startDate, endDate str
 			return nil, fmt.Errorf("scan date: %w", err)
 		}
 		// Only include dates whose note file exists and is non-empty.
-		if content := s.readNoteContent(d); content != "" {
+		if content := strings.TrimSpace(stripEditorBlockState(s.readNoteContent(d))); content != "" {
 			dates = append(dates, d)
 		}
 	}
@@ -637,7 +661,7 @@ func (s *Store) ListSummariesInRange(ctx context.Context, startDate, endDate str
 		if err := rows.Scan(&d); err != nil {
 			return nil, fmt.Errorf("scan date: %w", err)
 		}
-		content := s.readNoteContent(d)
+		content := stripEditorBlockState(s.readNoteContent(d))
 		if content == "" {
 			continue
 		}
@@ -650,6 +674,7 @@ func (s *Store) ListSummariesInRange(ctx context.Context, startDate, endDate str
 // extractSection returns the body text under a markdown heading, or empty string
 // if the heading is not found. The body extends until the next "# " heading or EOF.
 func extractSection(content, heading string) string {
+	content = stripEditorBlockState(content)
 	sectionIdx := -1
 	if strings.HasPrefix(content, heading+"\n") {
 		sectionIdx = 0

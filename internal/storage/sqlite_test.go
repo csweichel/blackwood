@@ -484,6 +484,43 @@ func TestAppendToSectionLegacyNote(t *testing.T) {
 	}
 }
 
+func TestStripEditorBlockState(t *testing.T) {
+	content := "# Notes\n\n- Parent\n\n<!-- blackwood:block-state:v1\n{\"version\":1,\"markdownHash\":\"abc\",\"blocks\":[]}\n-->\n"
+
+	got := stripEditorBlockState(content)
+
+	if got != "# Notes\n\n- Parent" {
+		t.Fatalf("stripEditorBlockState() = %q", got)
+	}
+}
+
+func TestAppendToSectionDropsEditorBlockState(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	note, err := s.CreateDailyNote(ctx, "2025-06-03")
+	if err != nil {
+		t.Fatalf("create note: %v", err)
+	}
+
+	stored := "# Notes\n\nExisting\n\n# Links\n\n<!-- blackwood:block-state:v1\n{\"version\":1,\"markdownHash\":\"abc\",\"blocks\":[]}\n-->\n"
+	if err := s.writeNoteContent("2025-06-03", stored); err != nil {
+		t.Fatalf("write note content: %v", err)
+	}
+
+	if err := s.AppendToSection(ctx, note.ID, "# Notes", "\n\nNew note\n"); err != nil {
+		t.Fatalf("append to section: %v", err)
+	}
+
+	content := s.readNoteContent("2025-06-03")
+	if strings.Contains(content, "blackwood:block-state") {
+		t.Fatalf("expected stale block state to be dropped, got %q", content)
+	}
+	if !strings.Contains(content, "Existing") || !strings.Contains(content, "New note") {
+		t.Fatalf("expected markdown content to be preserved and appended, got %q", content)
+	}
+}
+
 func TestGranolaSyncState(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()

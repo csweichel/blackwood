@@ -6,6 +6,101 @@
  * Blackwood-specific syntax without custom inline content types.
  */
 
+// ── BlockNote storage metadata ───────────────────────────────────────
+
+const BLOCK_STATE_MARKER = "<!-- blackwood:block-state:v1\n";
+const BLOCK_STATE_END = "\n-->";
+
+export interface StoredBlockState {
+  version: 1;
+  markdownHash: string;
+  blocks: Array<Block>;
+}
+
+export interface SplitMarkdownStorage {
+  markdown: string;
+  blockState: StoredBlockState | null;
+}
+
+function markdownHash(markdown: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < markdown.length; i++) {
+    hash ^= markdown.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function trimTrailerSeparator(markdown: string): string {
+  if (markdown.endsWith("\n\n")) return markdown.slice(0, -2);
+  if (markdown.endsWith("\n")) return markdown.slice(0, -1);
+  return markdown;
+}
+
+function isBlockArray(value: unknown): value is Array<Block> {
+  return (
+    Array.isArray(value) &&
+    value.every((item) => item && typeof item === "object" && "type" in item)
+  );
+}
+
+function parseBlockState(raw: string, markdown: string): StoredBlockState | null {
+  try {
+    const parsed = JSON.parse(raw) as Partial<StoredBlockState>;
+    if (
+      parsed.version !== 1 ||
+      parsed.markdownHash !== markdownHash(markdown) ||
+      !isBlockArray(parsed.blocks)
+    ) {
+      return null;
+    }
+    return parsed as StoredBlockState;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Split the visible markdown from Blackwood's hidden BlockNote metadata trailer.
+ * The trailer is trusted only when its markdown hash matches, so external edits
+ * to the markdown automatically fall back to parsing the markdown source.
+ */
+export function splitMarkdownStorage(content: string): SplitMarkdownStorage {
+  const markerIdx = content.lastIndexOf(BLOCK_STATE_MARKER);
+  if (markerIdx < 0) {
+    return { markdown: content, blockState: null };
+  }
+
+  const jsonStart = markerIdx + BLOCK_STATE_MARKER.length;
+  const endIdx = content.indexOf(BLOCK_STATE_END, jsonStart);
+  if (endIdx < 0 || content.slice(endIdx + BLOCK_STATE_END.length).trim() !== "") {
+    return { markdown: content, blockState: null };
+  }
+
+  const markdown = trimTrailerSeparator(content.slice(0, markerIdx));
+  const blockState = parseBlockState(content.slice(jsonStart, endIdx), markdown);
+  return { markdown, blockState };
+}
+
+/**
+ * Append an exact BlockNote document snapshot to the markdown file. Markdown
+ * remains the readable source, while the JSON trailer preserves block details
+ * that markdown cannot faithfully represent, such as heading children and
+ * toggle state.
+ */
+export function appendBlockState(
+  markdown: string,
+  blocks: Array<Block>,
+): string {
+  const normalizedMarkdown = markdown.replace(/\s*$/u, "");
+  const blockState: StoredBlockState = {
+    version: 1,
+    markdownHash: markdownHash(normalizedMarkdown),
+    blocks,
+  };
+  return `${normalizedMarkdown}\n\n${BLOCK_STATE_MARKER}${JSON.stringify(blockState)}${BLOCK_STATE_END}\n`;
+}
+
 // ── Wikilinks ────────────────────────────────────────────────────────
 
 const WIKILINK_RE = /\[\[([^\]]+)\]\]/g;
@@ -454,13 +549,13 @@ export function flattenBlockHierarchy(
 
     if (block.type === "heading") {
       // Strip toggle props for serialization
-      const props = block.props as Record<string, unknown>;
+      const props = { ...(block.props as Record<string, unknown>) };
       if (props) {
         delete props.isToggleable;
       }
 
       // Push the heading itself with empty children
-      result.push({ ...block, children: [] });
+      result.push({ ...block, props, children: [] });
 
       // Flatten and append its children after it
       if (children && children.length > 0) {
@@ -468,13 +563,36 @@ export function flattenBlockHierarchy(
       }
     } else if (block.type === "toggleListItem") {
       // Convert back to bulletListItem for markdown
-      result.push({ ...block, type: "bulletListItem" });
+      result.push({
+        ...block,
+        type: "bulletListItem",
+        children: children ? flattenListChildrenForMarkdown(children) : [],
+      });
     } else {
-      result.push(block);
+      result.push({
+        ...block,
+        children: children ? flattenListChildrenForMarkdown(children) : [],
+      });
     }
   }
 
   return result;
+}
+
+function flattenListChildrenForMarkdown(blocks: Array<Block>): Array<Block> {
+  return blocks.map((block) => {
+    const children = block.children as Array<Block> | undefined;
+    const props = { ...((block.props as Record<string, unknown> | undefined) ?? {}) };
+    if (block.type === "heading") {
+      delete props.isToggleable;
+    }
+    return {
+      ...block,
+      type: block.type === "toggleListItem" ? "bulletListItem" : block.type,
+      props,
+      children: children ? flattenListChildrenForMarkdown(children) : [],
+    };
+  });
 }
 
 // ── Combined transforms ──────────────────────────────────────────────
