@@ -181,6 +181,36 @@ export default function NoteEditor({
     onEntryCreated?.();
   }
 
+  const renderAttachMenuItems = useCallback(
+    (closeMenu: () => void) => (
+      <>
+        <button
+          onClick={() => { closeMenu(); setShowCamera(false); setShowRecorder(true); }}
+          className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+          Voice memo
+        </button>
+        <button
+          onClick={() => { closeMenu(); setShowRecorder(false); setShowCamera(true); }}
+          className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+          Photo
+        </button>
+        {attachMenuExtra}
+        <button
+          onClick={() => { closeMenu(); setShowClipForm(true); }}
+          className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          Clip page
+        </button>
+      </>
+    ),
+    [attachMenuExtra],
+  );
+
   const effectiveContent = content.trim() ? content : (emptyTemplate ?? "");
 
   return (
@@ -191,7 +221,7 @@ export default function NoteEditor({
         <SaveStatusIndicator status={saveStatus} />
         {toolbarExtra}
         {showAttach && (
-          <div className="relative" ref={attachRef}>
+          <div className="relative hidden md:block" ref={attachRef}>
             <button
               onClick={() => setShowAttachMenu((v) => !v)}
               className={`p-1.5 rounded-md transition-colors ${showAttachMenu ? "text-accent bg-muted" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
@@ -201,28 +231,7 @@ export default function NoteEditor({
             </button>
             {showAttachMenu && (
               <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg z-50 min-w-[160px]">
-                <button
-                  onClick={() => { setShowAttachMenu(false); setShowCamera(false); setShowRecorder(true); }}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
-                  Voice memo
-                </button>
-                <button
-                  onClick={() => { setShowAttachMenu(false); setShowRecorder(false); setShowCamera(true); }}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
-                  Photo
-                </button>
-                {attachMenuExtra}
-                <button
-                  onClick={() => { setShowAttachMenu(false); setShowClipForm(true); }}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted w-full text-left"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                  Clip page
-                </button>
+                {renderAttachMenuItems(() => setShowAttachMenu(false))}
               </div>
             )}
           </div>
@@ -312,6 +321,8 @@ export default function NoteEditor({
           existingSubpages={existingSubpages}
           placeholder={emptyMessage}
           onFocusChange={onEditorFocusChange}
+          showMobileAttach={showAttach}
+          renderMobileAttachMenu={({ close }) => renderAttachMenuItems(close)}
         />
       </div>
 

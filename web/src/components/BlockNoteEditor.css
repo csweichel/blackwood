@@ -165,3 +165,107 @@
 .bn-blackwood-wrapper [data-content-type="youtube"] {
   margin: 8px 0;
 }
+
+.bn-mobile-toolbar,
+.bn-mobile-file-input {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .bn-blackwood-wrapper {
+    padding-bottom: 4.75rem;
+  }
+
+  .bn-mobile-toolbar {
+    position: fixed;
+    left: 50%;
+    bottom: max(0.75rem, env(safe-area-inset-bottom));
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    width: max-content;
+    max-width: calc(100vw - 2rem);
+    min-height: 3rem;
+    padding: 0.25rem;
+    background: color-mix(in srgb, var(--card) 94%, transparent);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--foreground) 14%, transparent);
+    transform: translateX(-50%);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .bn-mobile-toolbar-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    color: var(--foreground);
+    background: transparent;
+    border: 0;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .bn-mobile-toolbar-button:hover,
+  .bn-mobile-toolbar-button:focus-visible,
+  .bn-mobile-toolbar-button.is-active {
+    background: var(--muted);
+    color: var(--accent);
+    outline: none;
+  }
+
+  .bn-mobile-toolbar-button:disabled {
+    color: var(--muted-foreground);
+    cursor: default;
+    opacity: 0.38;
+  }
+
+  .bn-mobile-toolbar-button:disabled:hover {
+    background: transparent;
+    color: var(--muted-foreground);
+  }
+
+  .bn-mobile-file-input {
+    display: none;
+  }
+
+  .bn-mobile-attach-menu {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 0.5rem);
+    display: flex;
+    flex-direction: column;
+    min-width: 11rem;
+    overflow: hidden;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--foreground) 14%, transparent);
+  }
+
+  .bn-mobile-attach-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    color: var(--foreground);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    text-align: left;
+    background: transparent;
+    border: 0;
+  }
+
+  .bn-mobile-attach-menu-item:hover,
+  .bn-mobile-attach-menu-item:focus-visible {
+    background: var(--muted);
+    outline: none;
+  }
+}
