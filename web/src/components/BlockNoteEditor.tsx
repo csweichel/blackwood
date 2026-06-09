@@ -120,6 +120,8 @@ export default function BlockNoteEditor({
   const [mobileToolbarState, setMobileToolbarState] = useState({
     canNest: false,
     canUnnest: false,
+    canMoveUp: false,
+    canMoveDown: false,
     uploading: false,
   });
   const [showMobileAttachMenu, setShowMobileAttachMenu] = useState(false);
@@ -210,16 +212,31 @@ export default function BlockNoteEditor({
     setMobileToolbarState((state) => {
       let canNest = false;
       let canUnnest = false;
+      let canMoveUp = false;
+      let canMoveDown = false;
       try {
+        const selectionBlocks =
+          editor.getSelection()?.blocks ?? [editor.getTextCursorPosition().block];
+        const firstBlock = selectionBlocks[0];
+        const lastBlock = selectionBlocks[selectionBlocks.length - 1];
         canNest = editor.canNestBlock();
         canUnnest = editor.canUnnestBlock();
+        canMoveUp =
+          !!editor.getPrevBlock(firstBlock) || !!editor.getParentBlock(firstBlock);
+        canMoveDown =
+          !!editor.getNextBlock(lastBlock) || !!editor.getParentBlock(lastBlock);
       } catch {
         // Selection can be unavailable while the editor is mounting.
       }
-      if (state.canNest === canNest && state.canUnnest === canUnnest) {
+      if (
+        state.canNest === canNest &&
+        state.canUnnest === canUnnest &&
+        state.canMoveUp === canMoveUp &&
+        state.canMoveDown === canMoveDown
+      ) {
         return state;
       }
-      return { ...state, canNest, canUnnest };
+      return { ...state, canNest, canUnnest, canMoveUp, canMoveDown };
     });
   }, [editor]);
 
@@ -270,6 +287,18 @@ export default function BlockNoteEditor({
       if (inserted[0]) {
         editor.setTextCursorPosition(inserted[0], "start");
       }
+    });
+  }, [editor, runMobileToolbarAction]);
+
+  const handleMoveBlockUp = useCallback(() => {
+    runMobileToolbarAction(() => {
+      editor.moveBlocksUp();
+    });
+  }, [editor, runMobileToolbarAction]);
+
+  const handleMoveBlockDown = useCallback(() => {
+    runMobileToolbarAction(() => {
+      editor.moveBlocksDown();
     });
   }, [editor, runMobileToolbarAction]);
 
@@ -528,6 +557,22 @@ export default function BlockNoteEditor({
           onPress={handleAddBlock}
           icon={
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          }
+        />
+        <MobileToolbarButton
+          label="Move block up"
+          disabled={!mobileToolbarState.canMoveUp || mobileToolbarState.uploading}
+          onPress={handleMoveBlockUp}
+          icon={
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 5-6 6"/><path d="m12 5 6 6"/><path d="M12 5v14"/></svg>
+          }
+        />
+        <MobileToolbarButton
+          label="Move block down"
+          disabled={!mobileToolbarState.canMoveDown || mobileToolbarState.uploading}
+          onPress={handleMoveBlockDown}
+          icon={
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19-6-6"/><path d="m12 19 6-6"/><path d="M12 5v14"/></svg>
           }
         />
         {showMobileAttach && (
