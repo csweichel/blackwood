@@ -51,9 +51,16 @@ func main() {
 	configFile := flag.String("config", "", "path to config file")
 	addrFlag := flag.String("addr", "", "listen address (overrides config)")
 	dataDirFlag := flag.String("data-dir", "", "data directory (overrides config)")
+	versionFlag := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 
+	if *versionFlag {
+		fmt.Println(Version)
+		return
+	}
+
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+	api.Version = Version
 
 	cfg, err := config.LoadServerConfig(*configFile)
 	if err != nil {

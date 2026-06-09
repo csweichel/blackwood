@@ -74,6 +74,7 @@ make build-server   # Regenerate protos + build Go binary
 make web-build      # Web UI only
 make generate       # Regenerate proto code (requires buf)
 make test           # go test ./...
+make install-user-service  # Install user systemd service + GitHub release updater
 ```
 
 The Ona automation task `build` runs the full pipeline on devcontainer start.
@@ -218,7 +219,8 @@ GoReleaser (`.goreleaser.yaml`):
 1. Builds web UI, copies to `cmd/blackwood/static/`
 2. Cross-compiles for linux/darwin × amd64/arm64
 3. Sets version via ldflags: `-X main.Version={{.Version}}`
-4. Triggered by pushing a `v*` tag
+4. Archives include `extras/install.sh`, `extras/blackwood.service`, the user `blackwood.service` template, and the user updater service/timer assets
+5. Triggered by pushing a `v*` tag
 
 ## Common Pitfalls
 

@@ -6,6 +6,14 @@ Write from the web, send a WhatsApp message, import from Obsidian, or drop in a 
 
 Blackwood runs entirely on your machine. Your data stays local.
 
+## Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/csweichel/blackwood/main/extras/install.sh | sh
+```
+
+The installer downloads the latest Linux release, verifies the release checksum, installs Blackwood into `~/.local/bin`, creates a minimal `~/.blackwood/config.yaml` if needed, and enables the user `blackwood.service` plus automatic update timer.
+
 ## Features
 
 - **Markdown daily notes** — one document per day (`notes/YYYY/MM/DD/index.md`), editable in the browser with auto-save
@@ -41,11 +49,11 @@ Blackwood runs entirely on your machine. Your data stays local.
 
 ### Prerequisites
 
-- Go 1.25+
-- Node.js 18+ (for the web UI)
-- An [OpenAI API key](https://platform.openai.com/api-keys) (for transcription, vision, embeddings, and chat)
+- `curl`, `tar`, and `systemctl --user` for the one-line Linux install
+- Go 1.25+ and Node.js 18+ for source builds
+- An [OpenAI API key](https://platform.openai.com/api-keys) for transcription, vision, embeddings, and chat
 
-### Build
+### Build from source
 
 ```sh
 # Build the single binary
@@ -98,6 +106,36 @@ make build-server   # Build with protobuf regeneration (requires buf)
 make test           # Run all tests
 make web-build      # Build the web UI
 make generate       # Regenerate protobuf/Connect code
+make install-user-service  # Install user systemd service + release updater
+```
+
+### User systemd updates
+
+Release archives include user-scoped systemd units for running Blackwood and checking GitHub releases for updates:
+
+- `extras/blackwood-user.service` runs `~/.local/bin/blackwood --config ~/.blackwood/config.yaml` and should be installed as `~/.config/systemd/user/blackwood.service`.
+- `extras/blackwood-update.service` runs `~/.local/bin/blackwood-update`.
+- `extras/blackwood-update.timer` checks on boot and then every six hours with a randomized delay.
+
+The updater resolves the latest GitHub release, downloads the matching `blackwood_linux_amd64.tar.gz` or `blackwood_linux_arm64.tar.gz` asset, verifies it against `checksums.txt`, installs the binary to `~/.local/bin/blackwood`, records the installed tag in `~/.local/state/blackwood-updater/version`, and restarts `blackwood.service` with `systemctl --user`.
+
+From a source checkout, install the user service and updater with:
+
+```sh
+make install-user-service
+systemctl --user enable --now blackwood.service blackwood-update.timer
+```
+
+The one-line installer does the same work from the latest release archive. To install from an already-downloaded release archive, copy the files manually:
+
+```sh
+install -Dm755 blackwood ~/.local/bin/blackwood
+install -Dm755 extras/blackwood-update ~/.local/bin/blackwood-update
+install -Dm644 extras/blackwood-user.service ~/.config/systemd/user/blackwood.service
+install -Dm644 extras/blackwood-update.service ~/.config/systemd/user/blackwood-update.service
+install -Dm644 extras/blackwood-update.timer ~/.config/systemd/user/blackwood-update.timer
+systemctl --user daemon-reload
+systemctl --user enable --now blackwood.service blackwood-update.timer
 ```
 
 ## Architecture

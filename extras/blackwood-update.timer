@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodically check for Blackwood updates
+
+[Timer]
+OnBootSec=5m
+OnUnitActiveSec=6h
+RandomizedDelaySec=30m
+Persistent=true
+Unit=blackwood-update.service
+
+[Install]
+WantedBy=timers.target

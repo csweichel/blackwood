@@ -1,0 +1,7 @@
+[Unit]
+Description=Update Blackwood from GitHub releases
+Documentation=https://github.com/csweichel/blackwood/releases
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/blackwood-update

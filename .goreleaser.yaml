@@ -31,7 +31,12 @@ archives:
       - LICENSE
       - README.md
       - blackwood.example.yaml
+      - extras/install.sh
       - extras/blackwood.service
+      - extras/blackwood-user.service
+      - extras/blackwood-update
+      - extras/blackwood-update.service
+      - extras/blackwood-update.timer
   - id: blackwood-latest
     builds:
       - blackwood
@@ -41,7 +46,12 @@ archives:
       - LICENSE
       - README.md
       - blackwood.example.yaml
+      - extras/install.sh
       - extras/blackwood.service
+      - extras/blackwood-user.service
+      - extras/blackwood-update
+      - extras/blackwood-update.service
+      - extras/blackwood-update.timer
 
 checksum:
   name_template: "checksums.txt"

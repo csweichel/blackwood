@@ -1,0 +1,15 @@
+[Unit]
+Description=Blackwood - daily notes server
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/blackwood --config %h/.blackwood/config.yaml
+Restart=on-failure
+RestartSec=5
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=blackwood
+
+[Install]
+WantedBy=default.target
