@@ -97,6 +97,7 @@ interface BlockNoteEditorProps {
   date: string;
   existingSubpages: Set<string>;
   placeholder?: string;
+  onFocusChange?: (focused: boolean) => void;
 }
 
 export default function BlockNoteEditor({
@@ -105,8 +106,10 @@ export default function BlockNoteEditor({
   date,
   existingSubpages,
   placeholder,
+  onFocusChange,
 }: BlockNoteEditorProps) {
   const colorScheme = useColorScheme();
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   // Keep refs for values used in callbacks to avoid stale closures
   const dateRef = useRef(date);
@@ -192,6 +195,10 @@ export default function BlockNoteEditor({
   // Track whether initial content has been loaded
   const initialLoaded = useRef(false);
 
+  function visibleMarkdownOf(content: string): string {
+    return splitMarkdownStorage(content).markdown.trim();
+  }
+
   // Use a ref for existingSubpages so it doesn't trigger the content-sync effect.
   const existingSubpagesForSync = useRef(existingSubpages);
   useEffect(() => {
@@ -209,12 +216,15 @@ export default function BlockNoteEditor({
     // Skip if the content matches what we last set (avoids clobbering edits)
     if (initialLoaded.current && content === lastSetContent.current) return;
 
-    const { markdown: visibleMarkdown, blockState } = splitMarkdownStorage(content);
+    const { markdown: sourceMarkdown, blockState } = splitMarkdownStorage(content);
 
     // If already loaded, check if editor content actually differs
     if (initialLoaded.current) {
       const currentStoredContent = serializeEditorContent();
-      if (currentStoredContent.trim() === content.trim()) {
+      if (
+        currentStoredContent.trim() === content.trim() ||
+        visibleMarkdownOf(currentStoredContent) === visibleMarkdownOf(content)
+      ) {
         lastSetContent.current = content;
         return;
       }
@@ -229,7 +239,7 @@ export default function BlockNoteEditor({
     } else {
       // Pre-process: convert wikilinks to standard markdown links
       const preprocessed = preprocessMarkdown(
-        visibleMarkdown,
+        sourceMarkdown,
         date,
         existingSubpagesForSync.current,
       );
@@ -311,7 +321,19 @@ export default function BlockNoteEditor({
 
   return (
     <div
+      ref={wrapperRef}
       className="bn-blackwood-wrapper"
+      onFocusCapture={() => onFocusChange?.(true)}
+      onBlurCapture={(event) => {
+        const nextTarget = event.relatedTarget;
+        if (
+          nextTarget instanceof Node &&
+          wrapperRef.current?.contains(nextTarget)
+        ) {
+          return;
+        }
+        onFocusChange?.(false);
+      }}
       onDragOver={(event) => {
         if (event.dataTransfer.types.includes("Files")) {
           event.preventDefault();

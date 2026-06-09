@@ -38,6 +38,7 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
   const contentRef = useRef("");
   const revisionRef = useRef("");
   const saveInFlightRef = useRef(false);
+  const editorFocusedRef = useRef(false);
   const deferredChangeRevisionRef = useRef<string | null>(null);
 
   const updateContent = useCallback((nextContent: string) => {
@@ -148,6 +149,20 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
     }
   }, [date, name, load, updateRevision]);
 
+  const handleEditorFocusChange = useCallback(
+    (focused: boolean) => {
+      editorFocusedRef.current = focused;
+      if (focused) return;
+
+      const deferredRevision = deferredChangeRevisionRef.current;
+      deferredChangeRevisionRef.current = null;
+      if (deferredRevision && deferredRevision !== revisionRef.current) {
+        void mergeLoad();
+      }
+    },
+    [mergeLoad],
+  );
+
   useEffect(() => {
     load();
   }, [load]);
@@ -156,7 +171,7 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
     return subscribeToChanges((event) => {
       if (event.date !== date || event.subpageName !== name) return;
       if (event.kind === "CHANGE_EVENT_KIND_SUBPAGE_UPDATED" && event.revision !== revisionRef.current) {
-        if (saveInFlightRef.current) {
+        if (saveInFlightRef.current || editorFocusedRef.current) {
           deferredChangeRevisionRef.current = event.revision;
           return;
         }
@@ -200,15 +215,25 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
         if (err instanceof RPCError && err.code === "failed_precondition") {
           handledPrecondition = true;
           deferredChangeRevisionRef.current = null;
-          setError("This subpage changed on another client. I kept your edits and merged in the latest version.");
-          await mergeLoad();
+          if (editorFocusedRef.current) {
+            deferredChangeRevisionRef.current = "__latest__";
+            setError("This subpage changed on another client. I kept your edits and will merge in the latest version when you finish editing.");
+          } else {
+            setError("This subpage changed on another client. I kept your edits and merged in the latest version.");
+            await mergeLoad();
+          }
         }
         throw err;
       } finally {
         saveInFlightRef.current = false;
         const deferredRevision = deferredChangeRevisionRef.current;
-        deferredChangeRevisionRef.current = null;
-        if (!handledPrecondition && deferredRevision && deferredRevision !== revisionRef.current) {
+        if (
+          !handledPrecondition &&
+          deferredRevision &&
+          deferredRevision !== revisionRef.current &&
+          !editorFocusedRef.current
+        ) {
+          deferredChangeRevisionRef.current = null;
           void mergeLoad();
         }
       }
@@ -258,6 +283,7 @@ export default function SubpageView({ date, name }: SubpageViewProps) {
         onSave={handleSave}
         onEntryCreated={load}
         cancelPendingSaveRef={cancelPendingSaveRef}
+        onEditorFocusChange={handleEditorFocusChange}
         date={date}
         existingSubpages={existingSubpages}
         emptyMessage="No content yet. Click to start writing."

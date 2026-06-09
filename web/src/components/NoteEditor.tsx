@@ -27,6 +27,7 @@ interface NoteEditorProps {
    *  Call before reloading content from the server to prevent a stale save
    *  from overwriting the freshly loaded data. */
   cancelPendingSaveRef?: React.MutableRefObject<(() => void) | null>;
+  onEditorFocusChange?: (focused: boolean) => void;
 }
 
 function SaveStatusIndicator({ status }: { status: SaveStatus }) {
@@ -70,6 +71,7 @@ export default function NoteEditor({
   title,
   showAttach = true,
   cancelPendingSaveRef,
+  onEditorFocusChange,
 }: NoteEditorProps) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -309,6 +311,7 @@ export default function NoteEditor({
           date={date}
           existingSubpages={existingSubpages}
           placeholder={emptyMessage}
+          onFocusChange={onEditorFocusChange}
         />
       </div>
 

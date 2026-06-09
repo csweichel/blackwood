@@ -32,6 +32,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
   const contentRef = useRef("");
   const revisionRef = useRef("");
   const saveInFlightRef = useRef(false);
+  const editorFocusedRef = useRef(false);
   const deferredChangeRevisionRef = useRef<string | null>(null);
 
   const updateContent = useCallback((nextContent: string) => {
@@ -126,6 +127,20 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     }
   }, [date, load, updateRevision]);
 
+  const handleEditorFocusChange = useCallback(
+    (focused: boolean) => {
+      editorFocusedRef.current = focused;
+      if (focused) return;
+
+      const deferredRevision = deferredChangeRevisionRef.current;
+      deferredChangeRevisionRef.current = null;
+      if (deferredRevision && deferredRevision !== revisionRef.current) {
+        void mergeLoad();
+      }
+    },
+    [mergeLoad],
+  );
+
   useEffect(() => {
     load();
   }, [load]);
@@ -134,7 +149,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
     return subscribeToChanges((event) => {
       if (event.date !== date) return;
       if (event.kind === "CHANGE_EVENT_KIND_DAILY_NOTE_UPDATED" && event.revision !== revisionRef.current) {
-        if (saveInFlightRef.current) {
+        if (saveInFlightRef.current || editorFocusedRef.current) {
           deferredChangeRevisionRef.current = event.revision;
           return;
         }
@@ -207,15 +222,25 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
         if (err instanceof RPCError && err.code === "failed_precondition") {
           handledPrecondition = true;
           deferredChangeRevisionRef.current = null;
-          setError("This note changed on another client. I kept your edits and merged in the latest version.");
-          await mergeLoad();
+          if (editorFocusedRef.current) {
+            deferredChangeRevisionRef.current = "__latest__";
+            setError("This note changed on another client. I kept your edits and will merge in the latest version when you finish editing.");
+          } else {
+            setError("This note changed on another client. I kept your edits and merged in the latest version.");
+            await mergeLoad();
+          }
         }
         throw err;
       } finally {
         saveInFlightRef.current = false;
         const deferredRevision = deferredChangeRevisionRef.current;
-        deferredChangeRevisionRef.current = null;
-        if (!handledPrecondition && deferredRevision && deferredRevision !== revisionRef.current) {
+        if (
+          !handledPrecondition &&
+          deferredRevision &&
+          deferredRevision !== revisionRef.current &&
+          !editorFocusedRef.current
+        ) {
+          deferredChangeRevisionRef.current = null;
           void mergeLoad();
         }
       }
@@ -378,6 +403,7 @@ export default function DailyNoteView({ date }: DailyNoteViewProps) {
         onSave={handleSave}
         onEntryCreated={load}
         cancelPendingSaveRef={cancelPendingSaveRef}
+        onEditorFocusChange={handleEditorFocusChange}
         date={date}
         existingSubpages={existingSubpages}
         emptyMessage="No entries yet. Click to start writing, or add an entry below."
