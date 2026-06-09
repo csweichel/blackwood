@@ -18,6 +18,7 @@
 		BWBUILDFILE00000000000009 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000009 /* LaunchScreen.storyboard */; };
 		BWBUILDFILE00000000000010 /* BlackwoodWordmark.png in Resources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000010 /* BlackwoodWordmark.png */; };
 		BWBUILDFILE00000000000011 /* BlackwoodAuthClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000011 /* BlackwoodAuthClient.swift */; };
+		BWBUILDFILE00000000000012 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000012 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,6 +33,7 @@
 		BWFILE00000000000009 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		BWFILE00000000000010 /* BlackwoodWordmark.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = BlackwoodWordmark.png; sourceTree = "<group>"; };
 		BWFILE00000000000011 /* BlackwoodAuthClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlackwoodAuthClient.swift; sourceTree = "<group>"; };
+		BWFILE00000000000012 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BWPRODUCT00000000000001 /* BlackwoodMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BlackwoodMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -50,6 +52,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BWBUILDFILE00000000000012 /* Assets.xcassets in Resources */,
 				BWBUILDFILE00000000000010 /* BlackwoodWordmark.png in Resources */,
 				BWBUILDFILE00000000000009 /* LaunchScreen.storyboard in Resources */,
 			);
@@ -72,6 +75,7 @@
 			children = (
 				BWFILE00000000000001 /* BlackwoodMobileApp.swift */,
 				BWFILE00000000000002 /* AppModel.swift */,
+				BWFILE00000000000012 /* Assets.xcassets */,
 				BWFILE00000000000010 /* BlackwoodWordmark.png */,
 				BWFILE00000000000009 /* LaunchScreen.storyboard */,
 				BWGROUP00000000000005 /* Views */,
@@ -250,6 +254,7 @@
 		BWBUILDCONFIGTARGETDEBUG0001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = SBFM8LSJQ6;
@@ -277,6 +282,7 @@
 		BWBUILDCONFIGTARGETRELEASE0001 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = SBFM8LSJQ6;
