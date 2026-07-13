@@ -42,7 +42,7 @@ struct MarkdownCellEditor: View {
                     onEndMultilineBlock: { range in session.endMultilineBlock(block.id, at: range) },
                     onBackspaceAtStart: { session.handleBackspaceAtStart(in: block.id) },
                     onToggleTask: { session.toggleTask(block.id) },
-                    onSelect: { session.select(block.id) }
+                    onSelect: { session.activate(block.id) }
                 )
             }
 
@@ -214,11 +214,7 @@ struct MarkdownCellEditor: View {
         Binding(
             get: { session.focusedBlockID == id },
             set: { focused in
-                if focused {
-                    session.focusedBlockID = id
-                } else if session.focusedBlockID == id {
-                    session.focusedBlockID = nil
-                }
+                session.updateFocus(for: id, isFocused: focused)
             }
         )
     }

@@ -92,3 +92,29 @@ import Testing
     #expect(session.blocks[0].text == "Hello 👋\nworld")
     #expect(session.selectedRange == NSRange(location: 9, length: 0))
 }
+
+@Test func markdownEditingSessionKeepsActiveBlockAfterKeyboardDismissal() {
+    var session = MarkdownEditingSession(markdown: "First\n\nSecond")
+    let secondID = session.blocks[1].id
+    session.select(secondID, atEnd: false)
+    session.selectedRange = NSRange(location: 0, length: 6)
+
+    session.updateFocus(for: secondID, isFocused: false)
+    session.wrapSelection(prefix: "**", suffix: "**")
+
+    #expect(session.focusedBlockID == secondID)
+    #expect(session.activeBlockID == secondID)
+    #expect(session.blocks[0].text == "First")
+    #expect(session.blocks[1].text == "**Second**")
+}
+
+@Test func markdownEditingSessionActivatesNonTextBlockWithoutRequestingFocus() {
+    var session = MarkdownEditingSession(markdown: "First\n\n---")
+    let dividerID = session.blocks[1].id
+
+    session.activate(dividerID)
+
+    #expect(session.activeBlockID == dividerID)
+    #expect(session.activeIndex == 1)
+    #expect(session.focusedBlockID == nil)
+}

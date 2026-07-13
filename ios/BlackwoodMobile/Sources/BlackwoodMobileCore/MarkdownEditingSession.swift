@@ -2,11 +2,14 @@ import Foundation
 
 public struct MarkdownEditingSession: Equatable, Sendable {
     public var blocks: [MarkdownEditorBlock]
+    public var activeBlockID: UUID?
     public var focusedBlockID: UUID?
     public var selectedRange: NSRange
 
     public init(markdown: String) {
-        blocks = MarkdownDocument(markdown: markdown).blocks
+        let parsedBlocks = MarkdownDocument(markdown: markdown).blocks
+        blocks = parsedBlocks
+        activeBlockID = parsedBlocks.first?.id
         focusedBlockID = nil
         selectedRange = NSRange(location: 0, length: 0)
     }
@@ -16,8 +19,9 @@ public struct MarkdownEditingSession: Equatable, Sendable {
     }
 
     public var activeIndex: Int? {
-        guard let focusedBlockID else { return blocks.indices.first }
-        return blocks.firstIndex { $0.id == focusedBlockID }
+        let selectedID = focusedBlockID ?? activeBlockID
+        guard let selectedID else { return blocks.indices.first }
+        return blocks.firstIndex { $0.id == selectedID } ?? blocks.indices.first
     }
 
     public var activeKind: MarkdownBlockKind {
@@ -51,13 +55,33 @@ public struct MarkdownEditingSession: Equatable, Sendable {
         let document = MarkdownDocument(markdown: markdown)
         guard document.markdown != self.markdown else { return }
         blocks = document.blocks
+        activeBlockID = blocks.first?.id
         focusedBlockID = nil
         selectedRange = NSRange(location: 0, length: 0)
     }
 
     public mutating func select(_ id: UUID, atEnd: Bool = true) {
+        guard let index = blockIndex(id) else { return }
+        activeBlockID = id
         focusedBlockID = id
-        guard atEnd, let index = blockIndex(id) else { return }
+        guard atEnd else { return }
+        selectedRange = NSRange(location: utf16Length(blocks[index].text), length: 0)
+    }
+
+    public mutating func updateFocus(for id: UUID, isFocused: Bool) {
+        guard blockIndex(id) != nil else { return }
+        if isFocused {
+            activeBlockID = id
+            focusedBlockID = id
+        } else if focusedBlockID == id {
+            focusedBlockID = nil
+        }
+    }
+
+    public mutating func activate(_ id: UUID) {
+        guard let index = blockIndex(id) else { return }
+        activeBlockID = id
+        focusedBlockID = nil
         selectedRange = NSRange(location: utf16Length(blocks[index].text), length: 0)
     }
 
@@ -155,7 +179,8 @@ public struct MarkdownEditingSession: Equatable, Sendable {
         blocks[activeIndex].kind = kind
         if kind == .divider {
             blocks[activeIndex].text = ""
-            focusedBlockID = blocks[activeIndex].id
+            activeBlockID = blocks[activeIndex].id
+            focusedBlockID = nil
         } else {
             focus(blocks[activeIndex], selection: selectedRange)
         }
@@ -266,6 +291,7 @@ public struct MarkdownEditingSession: Equatable, Sendable {
     }
 
     private mutating func focus(_ block: MarkdownEditorBlock, selection: NSRange) {
+        activeBlockID = block.id
         focusedBlockID = block.id
         selectedRange = selection
     }
