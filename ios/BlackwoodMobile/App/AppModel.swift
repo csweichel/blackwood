@@ -465,6 +465,10 @@ final class AppModel: ObservableObject {
         defer { isSyncing = false }
 
         do {
+            if force {
+                let health = try await client.checkHealth()
+                markServerReachable(version: health.version)
+            }
             let engine = SyncEngine(store: store, remote: client)
             let report = try await engine.sync()
             if let nextUploadRetryAt = report.nextUploadRetryAt {

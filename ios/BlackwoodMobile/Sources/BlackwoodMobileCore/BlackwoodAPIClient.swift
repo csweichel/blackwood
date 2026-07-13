@@ -152,36 +152,25 @@ public struct BlackwoodAPIClient: BlackwoodRemote, Sendable {
                     try validate(response: response, data: Data())
 
                     var iterator = bytes.makeAsyncIterator()
-                    var buffer = Data()
+                    var frameDecoder = ConnectStreamFrameDecoder()
                     let decoder = JSONDecoder()
                     decoder.keyDecodingStrategy = .convertFromSnakeCase
 
                     while let byte = try await iterator.next() {
-                        buffer.append(byte)
-
-                        while buffer.count >= 5 {
-                            let flags = buffer[0]
-                            let lengthData = buffer[1..<5]
-                            let length = lengthData.reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
-                            let frameSize = 5 + Int(length)
-                            guard buffer.count >= frameSize else { break }
-
-                            let payload = buffer[5..<frameSize]
-                            buffer.removeFirst(frameSize)
-
-                            if (flags & 0x01) != 0 {
+                        for frame in frameDecoder.append(byte) {
+                            if (frame.flags & 0x01) != 0 {
                                 throw SyncFailure(message: "Compressed stream frames are not supported.", disposition: .terminal)
                             }
 
-                            if (flags & 0x02) != 0 {
-                                let streamError = parsedErrorPayload(from: Data(payload))
+                            if (frame.flags & 0x02) != 0 {
+                                let streamError = parsedErrorPayload(from: frame.payload)
                                 if let message = streamError.message {
                                     throw SyncFailure(message: message, disposition: .retryable, code: streamError.code)
                                 }
                                 continue
                             }
 
-                            let envelope = try decoder.decode(StreamEnvelope<APIChangeEvent>.self, from: Data(payload))
+                            let envelope = try decoder.decode(StreamEnvelope<APIChangeEvent>.self, from: frame.payload)
                             continuation.yield(envelope.result ?? envelope.directResult)
                         }
                     }
@@ -260,6 +249,42 @@ public struct BlackwoodAPIClient: BlackwoodRemote, Sendable {
         withUnsafeBytes(of: length) { framed.replaceSubrange(1..<5, with: $0) }
         framed.append(json)
         return framed
+    }
+}
+
+struct ConnectStreamFrame: Equatable {
+    let flags: UInt8
+    let payload: Data
+}
+
+struct ConnectStreamFrameDecoder {
+    private var buffer = Data()
+
+    mutating func append(_ byte: UInt8) -> [ConnectStreamFrame] {
+        buffer.append(byte)
+        var frames: [ConnectStreamFrame] = []
+
+        while buffer.count >= 5 {
+            let frameStart = buffer.startIndex
+            let lengthStart = buffer.index(after: frameStart)
+            let payloadStart = buffer.index(lengthStart, offsetBy: 4)
+            let length = buffer[lengthStart..<payloadStart].reduce(UInt32(0)) {
+                ($0 << 8) | UInt32($1)
+            }
+            let payloadLength = Int(length)
+            guard buffer.count >= 5 + payloadLength else { break }
+
+            let payloadEnd = buffer.index(payloadStart, offsetBy: payloadLength)
+            frames.append(
+                ConnectStreamFrame(
+                    flags: buffer[frameStart],
+                    payload: Data(buffer[payloadStart..<payloadEnd])
+                )
+            )
+            buffer.removeSubrange(frameStart..<payloadEnd)
+        }
+
+        return frames
     }
 }
 
