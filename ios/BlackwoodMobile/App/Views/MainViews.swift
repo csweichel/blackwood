@@ -1,3 +1,5 @@
+import AVFoundation
+import Combine
 import SwiftUI
 import UIKit
 
@@ -1279,7 +1281,9 @@ private struct NoteDocument {
                 return
             }
 
-            if let youtubeURL = Self.youtubeURL(from: text) {
+            if let audioSource = Self.standaloneAudio(from: text) {
+                blocks.append(.audio(source: audioSource))
+            } else if let youtubeURL = Self.youtubeURL(from: text) {
                 blocks.append(.youtube(youtubeURL))
             } else if let image = Self.standaloneImage(from: text) {
                 blocks.append(.image(source: image.source, alt: image.alt))
@@ -1333,6 +1337,13 @@ private struct NoteDocument {
             if let image = standaloneImage(from: line) {
                 flushParagraph()
                 blocks.append(.image(source: image.source, alt: image.alt))
+                index += 1
+                continue
+            }
+
+            if let audioSource = standaloneAudio(from: line) {
+                flushParagraph()
+                blocks.append(.audio(source: audioSource))
                 index += 1
                 continue
             }
@@ -1420,6 +1431,15 @@ private struct NoteDocument {
         }
 
         return nil
+    }
+
+    private static func standaloneAudio(from text: String) -> String? {
+        let pattern = #"^<audio\b[^>]*\bsrc=["']([^"']+)["'][^>]*>(?:\s*</audio>)?$"#
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let match = firstMatch(pattern: pattern, in: trimmed, options: [.caseInsensitive]) else {
+            return nil
+        }
+        return capture(1, in: trimmed, match: match)
     }
 
     private static func youtubeURL(from text: String) -> String? {
@@ -1542,6 +1562,7 @@ private enum NoteBlock: Hashable {
     case numberedList([NoteListItem])
     case quote(String)
     case image(source: String, alt: String?)
+    case audio(source: String)
     case youtube(String)
     case codeBlock(language: String?, code: String)
     case rule
@@ -1610,6 +1631,10 @@ private struct NoteBlockView: View {
                 altText: alt
             )
             .padding(.vertical, 6)
+
+        case .audio(let source):
+            NoteAudioView(audioURL: resolvedURL(for: source))
+                .padding(.vertical, 4)
 
         case .youtube(let url):
             Link(destination: URL(string: url) ?? URL(string: "https://youtube.com")!) {
@@ -1758,6 +1783,82 @@ private struct NoteBlockView: View {
             return "YouTube: \(videoID)"
         }
         return "YouTube"
+    }
+}
+
+private struct NoteAudioView: View {
+    let audioURL: URL?
+
+    @State private var player: AVPlayer?
+    @State private var isPlaying = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button(action: togglePlayback) {
+                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.white)
+                    .frame(width: 38, height: 38)
+                    .background(BlackwoodPalette.accent)
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(audioURL == nil)
+            .accessibilityLabel(isPlaying ? "Pause voice recording" : "Play voice recording")
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Voice recording")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(BlackwoodPalette.foreground)
+                Text(audioURL?.lastPathComponent.removingPercentEncoding ?? "Audio attachment")
+                    .font(.system(size: 12))
+                    .foregroundStyle(BlackwoodPalette.mutedForeground)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "waveform")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(BlackwoodPalette.accent)
+                .accessibilityHidden(true)
+        }
+        .padding(11)
+        .background(BlackwoodPalette.accentSubtle.opacity(0.48))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(BlackwoodPalette.border.opacity(0.7), lineWidth: 1)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)) { notification in
+            guard let finishedItem = notification.object as? AVPlayerItem,
+                  finishedItem === player?.currentItem else { return }
+            player?.seek(to: .zero)
+            isPlaying = false
+        }
+        .onDisappear {
+            player?.pause()
+            isPlaying = false
+        }
+    }
+
+    private func togglePlayback() {
+        guard let audioURL else { return }
+        let activePlayer: AVPlayer
+        if let player {
+            activePlayer = player
+        } else {
+            let newPlayer = AVPlayer(url: audioURL)
+            player = newPlayer
+            activePlayer = newPlayer
+        }
+
+        if isPlaying {
+            activePlayer.pause()
+        } else {
+            activePlayer.play()
+        }
+        isPlaying.toggle()
     }
 }
 

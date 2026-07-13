@@ -23,6 +23,8 @@ import Testing
 
     ![Sketch](sketch.png)
 
+    <audio controls src="recording.m4a"></audio>
+
     ---
     """
 
@@ -38,6 +40,7 @@ import Testing
         .numbered(ordinal: 1, indentation: 0),
         .quote,
         .code(language: "swift"),
+        .media,
         .media,
         .divider,
     ])

@@ -177,8 +177,53 @@ func queuedUploadsPersistAcrossStoreInstances() async throws {
 
     let reloaded = QueueStore(baseDirectory: base)
     let uploads = try await reloaded.pendingUploads()
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    let storedUploads = try decoder.decode(
+        [PendingEntryUpload].self,
+        from: Data(contentsOf: base.appendingPathComponent("pending-entry-uploads.json"))
+    )
     #expect(uploads.count == 1)
     #expect(uploads[0].localFilePath == fileURL.path)
+    #expect(storedUploads[0].localFilePath == "recording.m4a")
+}
+
+@Test
+func queuedUploadRebasesLegacyAbsolutePathAfterContainerMoves() async throws {
+    let parent = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let oldBase = parent.appendingPathComponent("old-container")
+    let newBase = parent.appendingPathComponent("new-container")
+    let filename = "recording-relocated.m4a"
+    let oldFile = oldBase.appendingPathComponent("Recordings").appendingPathComponent(filename)
+    let newFile = newBase.appendingPathComponent("Recordings").appendingPathComponent(filename)
+    try FileManager.default.createDirectory(at: newFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data("audio".utf8).write(to: newFile)
+
+    let legacyUpload = PendingEntryUpload(
+        date: "2026-03-25",
+        localFilePath: oldFile.path,
+        filename: filename,
+        duration: 12,
+        status: .failed,
+        attemptCount: 1,
+        lastError: "This recording is no longer stored on the device. Remove it from the queue and record again."
+    )
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    try encoder.encode([legacyUpload]).write(
+        to: newBase.appendingPathComponent("pending-entry-uploads.json"),
+        options: .atomic
+    )
+
+    let store = QueueStore(baseDirectory: newBase)
+    let uploads = try await store.pendingUploads()
+    let claimed = try await store.claimNextUpload()
+
+    #expect(uploads.count == 1)
+    #expect(uploads[0].localFilePath == newFile.path)
+    #expect(uploads[0].status == .pending)
+    #expect(uploads[0].lastError == nil)
+    #expect(claimed?.localFilePath == newFile.path)
 }
 
 @Test

@@ -217,7 +217,7 @@ public actor QueueStore {
         }
         uploads.append(upload)
         uploads.sort { $0.createdAt < $1.createdAt }
-        try save(uploads, to: uploadsFile)
+        try saveUploads(uploads)
     }
 
     public func pendingUploads() async throws -> [PendingEntryUpload] {
@@ -228,7 +228,7 @@ public actor QueueStore {
         var uploads = try loadUploads()
         if let index = uploads.firstIndex(where: { $0.id == upload.id }) {
             uploads[index] = upload
-            try save(uploads, to: uploadsFile)
+            try saveUploads(uploads)
         }
     }
 
@@ -249,7 +249,7 @@ public actor QueueStore {
 
         uploads[index].status = .uploading
         uploads[index].lastError = nil
-        try save(uploads, to: uploadsFile)
+        try saveUploads(uploads)
         return uploads[index]
     }
 
@@ -263,7 +263,7 @@ public actor QueueStore {
             changed = true
         }
         if changed {
-            try save(uploads, to: uploadsFile)
+            try saveUploads(uploads)
         }
     }
 
@@ -271,7 +271,7 @@ public actor QueueStore {
         var uploads = try loadUploads()
         guard let index = uploads.firstIndex(where: { $0.id == id }) else { return }
         let removed = uploads.remove(at: index)
-        try save(uploads, to: uploadsFile)
+        try saveUploads(uploads)
         if deleteLocalFile {
             try? FileManager.default.removeItem(atPath: removed.localFilePath)
         }
@@ -307,7 +307,72 @@ public actor QueueStore {
     }
 
     private func loadUploads() throws -> [PendingEntryUpload] {
-        try load([PendingEntryUpload].self, from: uploadsFile, defaultValue: [])
+        var uploads = try load([PendingEntryUpload].self, from: uploadsFile, defaultValue: [])
+        var migratedLegacyPath = false
+
+        for index in uploads.indices {
+            let storedPath = uploads[index].localFilePath
+            let resolvedPath = resolveUploadPath(uploads[index])
+            uploads[index].localFilePath = resolvedPath
+
+            if (storedPath as NSString).isAbsolutePath,
+               storedPath != resolvedPath,
+               FileManager.default.fileExists(atPath: resolvedPath) {
+                migratedLegacyPath = true
+            }
+
+            if storedPath != resolvedPath,
+               FileManager.default.fileExists(atPath: resolvedPath),
+               uploads[index].status == .failed,
+               uploads[index].nextRetryAt == nil,
+               uploads[index].lastError?.contains("no longer stored on the device") == true {
+                uploads[index].status = .pending
+                uploads[index].lastError = nil
+                migratedLegacyPath = true
+            }
+        }
+
+        if migratedLegacyPath {
+            try saveUploads(uploads)
+        }
+        return uploads
+    }
+
+    private func saveUploads(_ uploads: [PendingEntryUpload]) throws {
+        try save(uploads.map(portableUpload), to: uploadsFile)
+    }
+
+    private func portableUpload(_ upload: PendingEntryUpload) -> PendingEntryUpload {
+        var portable = upload
+        let rootPath = baseDirectory.standardizedFileURL.path
+        let filePath = URL(fileURLWithPath: upload.localFilePath).standardizedFileURL.path
+        let rootedPrefix = rootPath.hasSuffix("/") ? rootPath : "\(rootPath)/"
+        if filePath.hasPrefix(rootedPrefix) {
+            portable.localFilePath = String(filePath.dropFirst(rootedPrefix.count))
+        }
+        return portable
+    }
+
+    private func resolveUploadPath(_ upload: PendingEntryUpload) -> String {
+        let storedPath = upload.localFilePath
+        if !(storedPath as NSString).isAbsolutePath {
+            let candidate = baseDirectory.appendingPathComponent(storedPath).standardizedFileURL
+            let rootPath = baseDirectory.standardizedFileURL.path
+            if candidate.path == rootPath || candidate.path.hasPrefix("\(rootPath)/") {
+                return candidate.path
+            }
+        } else if FileManager.default.fileExists(atPath: storedPath) {
+            return storedPath
+        }
+
+        let relocated = baseDirectory
+            .appendingPathComponent("Recordings", isDirectory: true)
+            .appendingPathComponent(upload.filename)
+            .standardizedFileURL
+        if FileManager.default.fileExists(atPath: relocated.path) {
+            return relocated.path
+        }
+        return storedPath
     }
 
     private func save<T: Encodable>(_ value: T, to url: URL) throws {

@@ -31,6 +31,22 @@ struct MarkdownEditorRow: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Divider block")
+            } else if block.kind == .media {
+                Button(action: onSelect) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(mediaTitle)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(BlackwoodPalette.foreground)
+                        Text(mediaDetail)
+                            .font(.system(size: 12))
+                            .foregroundStyle(BlackwoodPalette.mutedForeground)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
+                    .padding(.horizontal, 5)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(mediaTitle), \(mediaDetail)")
             } else {
                 ZStack(alignment: .topLeading) {
                     if block.text.isEmpty {
@@ -193,5 +209,29 @@ struct MarkdownEditorRow: View {
         case .divider: return "Divider block"
         case .media: return "Attachment block"
         }
+    }
+
+    private var mediaTitle: String {
+        block.text.range(of: #"^\s*<audio\b"#, options: [.regularExpression, .caseInsensitive]) == nil
+            ? "Attachment"
+            : "Voice recording"
+    }
+
+    private var mediaDetail: String {
+        let patterns = [
+            #"\bsrc=["']([^"']+)["']"#,
+            #"\]\(([^)\s]+)"#,
+        ]
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+                  let match = regex.firstMatch(
+                    in: block.text,
+                    range: NSRange(block.text.startIndex..., in: block.text)
+                  ),
+                  let range = Range(match.range(at: 1), in: block.text) else { continue }
+            let source = String(block.text[range])
+            return URL(fileURLWithPath: source).lastPathComponent.removingPercentEncoding ?? source
+        }
+        return "Markdown attachment"
     }
 }

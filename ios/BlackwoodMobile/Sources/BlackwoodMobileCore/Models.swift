@@ -411,7 +411,7 @@ public struct PendingEntryUpload: Codable, Equatable, Sendable, Identifiable {
     public let content: String
     public let source: Int
     public let type: Int
-    public let localFilePath: String
+    public var localFilePath: String
     public let filename: String
     public let contentType: String
     public let createdAt: Date

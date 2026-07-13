@@ -277,6 +277,7 @@ public struct MarkdownDocument: Equatable, Sendable {
             #"^!\[[^\]]*\]\([^)]+\)$"#,
             #"^\[[^\]]+\]\([^\s)]+\.(?:apng|avif|bmp|gif|heic|heif|jpe?g|png|svg|tiff?|webp)(?:[?#][^)]*)?\)$"#,
             #"^<img\b[^>]*>$"#,
+            #"^<audio\b[^>]*\bsrc=["'][^"']+["'][^>]*>(?:\s*</audio>)?$"#,
         ]
         return patterns.contains { trimmed.range(of: $0, options: [.regularExpression, .caseInsensitive]) != nil }
     }

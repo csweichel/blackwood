@@ -251,12 +251,43 @@ func retryableUploadFailureLeavesUploadQueued() async throws {
     let remote = MockRemote()
     await remote.setFailFirstUpload()
     let engine = SyncEngine(store: store, remote: remote)
-    _ = try await engine.sync(now: Date(timeIntervalSince1970: 1_000))
+    let report = try await engine.sync(now: Date(timeIntervalSince1970: 1_000))
 
     let uploads = try await store.pendingUploads()
     #expect(uploads.count == 1)
     #expect(uploads[0].status == .failed)
     #expect(uploads[0].nextRetryAt != nil)
+    #expect(report.nextUploadRetryAt == Date(timeIntervalSince1970: 1_005))
+    #expect(report.retryableUploadFailureMessage == "temporary outage")
+}
+
+@Test
+func futureUploadRetryIsReportedAfterEngineRestart() async throws {
+    let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+    let audioURL = base.appendingPathComponent("clip.m4a")
+    try Data("audio".utf8).write(to: audioURL)
+    let retryAt = Date(timeIntervalSince1970: 1_010)
+
+    let store = QueueStore(baseDirectory: base)
+    try await store.queueAudioUpload(
+        PendingEntryUpload(
+            date: "2026-03-25",
+            localFilePath: audioURL.path,
+            duration: 3,
+            status: .failed,
+            attemptCount: 1,
+            lastError: "temporary outage",
+            nextRetryAt: retryAt
+        )
+    )
+
+    let engine = SyncEngine(store: store, remote: MockRemote())
+    let report = try await engine.sync(now: Date(timeIntervalSince1970: 1_000))
+
+    #expect(report.syncedUploads == 0)
+    #expect(report.nextUploadRetryAt == retryAt)
+    #expect(report.retryableUploadFailureMessage == nil)
 }
 
 @Test
@@ -280,4 +311,6 @@ func terminalUploadFailureDoesNotRetryInSameSync() async throws {
     #expect(uploads[0].status == .failed)
     #expect(uploads[0].attemptCount == 1)
     #expect(uploads[0].nextRetryAt == nil)
+    #expect(report.nextUploadRetryAt == nil)
+    #expect(report.retryableUploadFailureMessage == nil)
 }

@@ -93,6 +93,7 @@ final class AppModel: ObservableObject {
     private var didStart = false
     private var syncRetryAttempt = 0
     private var nextAutomaticSyncAllowedAt = Date.distantPast
+    private var automaticSyncRetryTask: Task<Void, Never>?
     private var changeStreamTask: Task<Void, Never>?
     private var isSyncing = false
     private var noteSaveGeneration = 0
@@ -465,10 +466,16 @@ final class AppModel: ObservableObject {
 
         do {
             let engine = SyncEngine(store: store, remote: client)
-            _ = try await engine.sync()
-            markServerReachable()
-            syncRetryAttempt = 0
-            nextAutomaticSyncAllowedAt = .distantPast
+            let report = try await engine.sync()
+            if let nextUploadRetryAt = report.nextUploadRetryAt {
+                if let failureMessage = report.retryableUploadFailureMessage {
+                    serverReachability = .unreachable(message: failureMessage)
+                }
+                scheduleAutomaticSyncRetry(at: nextUploadRetryAt)
+            } else {
+                markServerReachable()
+                resetAutomaticSyncRetry()
+            }
             await refreshQueueSnapshot()
             _ = await loadCachedNote(for: Self.dayString(from: selectedDate))
             if let activeSubpage {
@@ -1059,10 +1066,37 @@ final class AppModel: ObservableObject {
         return true
     }
 
-    private func scheduleAutomaticSyncRetry() {
-        syncRetryAttempt += 1
-        let cappedAttempt = min(syncRetryAttempt, 5)
-        nextAutomaticSyncAllowedAt = Date().addingTimeInterval(pow(2, Double(cappedAttempt - 1)) * 5)
+    private func scheduleAutomaticSyncRetry(at requestedDate: Date? = nil) {
+        automaticSyncRetryTask?.cancel()
+
+        let retryDate: Date
+        if let requestedDate {
+            retryDate = max(requestedDate, Date())
+        } else {
+            syncRetryAttempt += 1
+            let cappedAttempt = min(syncRetryAttempt, 5)
+            retryDate = Date().addingTimeInterval(pow(2, Double(cappedAttempt - 1)) * 5)
+        }
+        nextAutomaticSyncAllowedAt = retryDate
+
+        let delay = min(max(retryDate.timeIntervalSinceNow, 0), 300)
+        automaticSyncRetryTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled, let self else { return }
+            self.automaticSyncRetryTask = nil
+            await self.syncNow(force: true)
+        }
+    }
+
+    private func resetAutomaticSyncRetry() {
+        automaticSyncRetryTask?.cancel()
+        automaticSyncRetryTask = nil
+        syncRetryAttempt = 0
+        nextAutomaticSyncAllowedAt = .distantPast
     }
 
     private func isConnectivityFailure(_ error: Error) -> Bool {

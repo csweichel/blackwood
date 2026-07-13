@@ -4,6 +4,8 @@ public struct SyncReport: Equatable, Sendable {
     public let syncedNoteUpdates: Int
     public let syncedSubpageUpdates: Int
     public let syncedUploads: Int
+    public let nextUploadRetryAt: Date?
+    public let retryableUploadFailureMessage: String?
 }
 
 public final class SyncEngine: @unchecked Sendable {
@@ -19,6 +21,8 @@ public final class SyncEngine: @unchecked Sendable {
         var syncedNoteUpdates = 0
         var syncedSubpageUpdates = 0
         var syncedUploads = 0
+        var nextUploadRetryAt: Date?
+        var retryableUploadFailureMessage: String?
 
         let noteUpdates = try await store.pendingNoteUpdates()
         for update in noteUpdates {
@@ -124,6 +128,8 @@ public final class SyncEngine: @unchecked Sendable {
                     : nil
                 try await store.updateUpload(upload)
                 if failure.disposition == .retryable {
+                    nextUploadRetryAt = upload.nextRetryAt
+                    retryableUploadFailureMessage = failure.message
                     break
                 }
             } catch {
@@ -132,14 +138,25 @@ public final class SyncEngine: @unchecked Sendable {
                 upload.lastError = error.localizedDescription
                 upload.nextRetryAt = now.addingTimeInterval(Self.retryDelay(forAttempt: upload.attemptCount))
                 try await store.updateUpload(upload)
+                nextUploadRetryAt = upload.nextRetryAt
+                retryableUploadFailureMessage = error.localizedDescription
                 break
             }
+        }
+
+        if let scheduledRetry = try await store.pendingUploads()
+            .compactMap(\.nextRetryAt)
+            .min(),
+           nextUploadRetryAt.map({ scheduledRetry < $0 }) ?? true {
+            nextUploadRetryAt = scheduledRetry
         }
 
         return SyncReport(
             syncedNoteUpdates: syncedNoteUpdates,
             syncedSubpageUpdates: syncedSubpageUpdates,
-            syncedUploads: syncedUploads
+            syncedUploads: syncedUploads,
+            nextUploadRetryAt: nextUploadRetryAt,
+            retryableUploadFailureMessage: retryableUploadFailureMessage
         )
     }
 
