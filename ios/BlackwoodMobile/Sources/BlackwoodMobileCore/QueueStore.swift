@@ -6,13 +6,19 @@ public actor QueueStore {
     private let baseDirectory: URL
     private let cacheFile: URL
     private let noteUpdatesFile: URL
+    private let subpageCacheFile: URL
+    private let subpageUpdatesFile: URL
     private let uploadsFile: URL
+    private var latestDailyNoteSaveSequence: [String: Int] = [:]
+    private var latestSubpageSaveSequence: [String: Int] = [:]
 
     public init(baseDirectory: URL? = nil) {
         let root = baseDirectory ?? QueueStore.defaultBaseDirectory()
         self.baseDirectory = root
         self.cacheFile = root.appendingPathComponent("daily-note-cache.json")
         self.noteUpdatesFile = root.appendingPathComponent("pending-note-updates.json")
+        self.subpageCacheFile = root.appendingPathComponent("subpage-cache.json")
+        self.subpageUpdatesFile = root.appendingPathComponent("pending-subpage-updates.json")
         self.uploadsFile = root.appendingPathComponent("pending-entry-uploads.json")
         encoder.dateEncodingStrategy = .iso8601
         decoder.dateDecodingStrategy = .iso8601
@@ -28,23 +34,166 @@ public actor QueueStore {
         try loadCache()[date]
     }
 
-    public func queueNoteUpdate(date: String, content: String, updatedAt: Date = Date(), baseRevision: String) async throws {
+    public func cacheSubpage(date: String, name: String, content: String, updatedAt: Date = Date(), revision: String = "") async throws {
+        var cache = try loadSubpageCache()
+        cache[Self.subpageKey(date: date, name: name)] = CachedSubpage(
+            date: date,
+            name: name,
+            content: content,
+            updatedAt: updatedAt,
+            revision: revision
+        )
+        try save(cache, to: subpageCacheFile)
+    }
+
+    public func cachedSubpage(date: String, name: String) async throws -> CachedSubpage? {
+        try loadSubpageCache()[Self.subpageKey(date: date, name: name)]
+    }
+
+    public func savePendingDailyNote(
+        date: String,
+        content: String,
+        updatedAt: Date = Date(),
+        revision: String,
+        baseContent: String,
+        saveSequence: Int
+    ) async throws {
+        guard saveSequence >= latestDailyNoteSaveSequence[date, default: 0] else { return }
+        latestDailyNoteSaveSequence[date] = saveSequence
+
+        var cache = try loadCache()
+        cache[date] = CachedDailyNote(
+            date: date,
+            content: content,
+            updatedAt: updatedAt,
+            revision: revision
+        )
+
         var updates = try loadNoteUpdates()
         if let existingIndex = updates.firstIndex(where: { $0.date == date }) {
             updates[existingIndex].content = content
             updates[existingIndex].updatedAt = updatedAt
-            if updates[existingIndex].baseRevision.isEmpty {
-                updates[existingIndex].baseRevision = baseRevision
-            }
         } else {
-            updates.append(PendingNoteUpdate(date: date, content: content, updatedAt: updatedAt, baseRevision: baseRevision))
+            updates.append(
+                PendingNoteUpdate(
+                    date: date,
+                    content: content,
+                    updatedAt: updatedAt,
+                    baseRevision: revision,
+                    baseContent: baseContent
+                )
+            )
+        }
+        updates.sort { $0.updatedAt < $1.updatedAt }
+
+        try save(cache, to: cacheFile)
+        try save(updates, to: noteUpdatesFile)
+    }
+
+    public func savePendingSubpage(
+        date: String,
+        name: String,
+        content: String,
+        updatedAt: Date = Date(),
+        revision: String,
+        baseContent: String,
+        saveSequence: Int
+    ) async throws {
+        let key = Self.subpageKey(date: date, name: name)
+        guard saveSequence >= latestSubpageSaveSequence[key, default: 0] else { return }
+        latestSubpageSaveSequence[key] = saveSequence
+
+        var cache = try loadSubpageCache()
+        cache[key] = CachedSubpage(
+            date: date,
+            name: name,
+            content: content,
+            updatedAt: updatedAt,
+            revision: revision
+        )
+
+        var updates = try loadSubpageUpdates()
+        if let existingIndex = updates.firstIndex(where: { $0.date == date && $0.name == name }) {
+            updates[existingIndex].content = content
+            updates[existingIndex].updatedAt = updatedAt
+        } else {
+            updates.append(
+                PendingSubpageUpdate(
+                    date: date,
+                    name: name,
+                    content: content,
+                    updatedAt: updatedAt,
+                    baseRevision: revision,
+                    baseContent: baseContent
+                )
+            )
+        }
+        updates.sort { $0.updatedAt < $1.updatedAt }
+
+        try save(cache, to: subpageCacheFile)
+        try save(updates, to: subpageUpdatesFile)
+    }
+
+    public func queueNoteUpdate(
+        date: String,
+        content: String,
+        updatedAt: Date = Date(),
+        baseRevision: String,
+        baseContent: String = ""
+    ) async throws {
+        var updates = try loadNoteUpdates()
+        if let existingIndex = updates.firstIndex(where: { $0.date == date }) {
+            updates[existingIndex].content = content
+            updates[existingIndex].updatedAt = updatedAt
+        } else {
+            updates.append(
+                PendingNoteUpdate(
+                    date: date,
+                    content: content,
+                    updatedAt: updatedAt,
+                    baseRevision: baseRevision,
+                    baseContent: baseContent
+                )
+            )
         }
         updates.sort { $0.updatedAt < $1.updatedAt }
         try save(updates, to: noteUpdatesFile)
     }
 
+    public func queueSubpageUpdate(
+        date: String,
+        name: String,
+        content: String,
+        updatedAt: Date = Date(),
+        baseRevision: String,
+        baseContent: String = ""
+    ) async throws {
+        var updates = try loadSubpageUpdates()
+        if let existingIndex = updates.firstIndex(where: { $0.date == date && $0.name == name }) {
+            updates[existingIndex].content = content
+            updates[existingIndex].updatedAt = updatedAt
+        } else {
+            updates.append(
+                PendingSubpageUpdate(
+                    date: date,
+                    name: name,
+                    content: content,
+                    updatedAt: updatedAt,
+                    baseRevision: baseRevision,
+                    baseContent: baseContent
+                )
+            )
+        }
+        updates.sort { $0.updatedAt < $1.updatedAt }
+        try save(updates, to: subpageUpdatesFile)
+    }
+
     public func pendingNoteUpdates() async throws -> [PendingNoteUpdate] {
         try loadNoteUpdates()
+    }
+
+    public func pendingSubpageUpdates() async throws -> [PendingSubpageUpdate] {
+        try loadSubpageUpdates()
     }
 
     public func removeNoteUpdate(id: String) async throws {
@@ -53,8 +202,19 @@ public actor QueueStore {
         try save(updates, to: noteUpdatesFile)
     }
 
+    public func removeSubpageUpdate(id: String) async throws {
+        var updates = try loadSubpageUpdates()
+        updates.removeAll { $0.id == id }
+        try save(updates, to: subpageUpdatesFile)
+    }
+
     public func queueAudioUpload(_ upload: PendingEntryUpload) async throws {
         var uploads = try loadUploads()
+        guard !uploads.contains(where: { existing in
+            existing.clientRequestId == upload.clientRequestId || existing.localFilePath == upload.localFilePath
+        }) else {
+            return
+        }
         uploads.append(upload)
         uploads.sort { $0.createdAt < $1.createdAt }
         try save(uploads, to: uploadsFile)
@@ -72,6 +232,41 @@ public actor QueueStore {
         }
     }
 
+    public func claimNextUpload(now: Date = Date()) async throws -> PendingEntryUpload? {
+        var uploads = try loadUploads()
+        guard let index = uploads.firstIndex(where: { upload in
+            switch upload.status {
+            case .pending:
+                return true
+            case .failed:
+                return upload.nextRetryAt.map { $0 <= now } ?? false
+            case .uploading:
+                return false
+            }
+        }) else {
+            return nil
+        }
+
+        uploads[index].status = .uploading
+        uploads[index].lastError = nil
+        try save(uploads, to: uploadsFile)
+        return uploads[index]
+    }
+
+    public func resetInterruptedUploads() async throws {
+        var uploads = try loadUploads()
+        var changed = false
+        for index in uploads.indices where uploads[index].status == .uploading {
+            uploads[index].status = .pending
+            uploads[index].lastError = nil
+            uploads[index].nextRetryAt = nil
+            changed = true
+        }
+        if changed {
+            try save(uploads, to: uploadsFile)
+        }
+    }
+
     public func removeUpload(id: String, deleteLocalFile: Bool) async throws {
         var uploads = try loadUploads()
         guard let index = uploads.firstIndex(where: { $0.id == id }) else { return }
@@ -84,17 +279,31 @@ public actor QueueStore {
 
     public func snapshot() async throws -> QueueSnapshot {
         let updates = try loadNoteUpdates()
+        let subpageUpdates = try loadSubpageUpdates()
         let uploads = try loadUploads()
         let failed = uploads.filter { $0.status == .failed }.count
-        return QueueSnapshot(noteUpdateCount: updates.count, uploadCount: uploads.count, failedUploadCount: failed)
+        return QueueSnapshot(
+            noteUpdateCount: updates.count,
+            subpageUpdateCount: subpageUpdates.count,
+            uploadCount: uploads.count,
+            failedUploadCount: failed
+        )
     }
 
     private func loadCache() throws -> [String: CachedDailyNote] {
         try load([String: CachedDailyNote].self, from: cacheFile, defaultValue: [:])
     }
 
+    private func loadSubpageCache() throws -> [String: CachedSubpage] {
+        try load([String: CachedSubpage].self, from: subpageCacheFile, defaultValue: [:])
+    }
+
     private func loadNoteUpdates() throws -> [PendingNoteUpdate] {
         try load([PendingNoteUpdate].self, from: noteUpdatesFile, defaultValue: [])
+    }
+
+    private func loadSubpageUpdates() throws -> [PendingSubpageUpdate] {
+        try load([PendingSubpageUpdate].self, from: subpageUpdatesFile, defaultValue: [])
     }
 
     private func loadUploads() throws -> [PendingEntryUpload] {
@@ -119,5 +328,9 @@ public actor QueueStore {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
         return base.appendingPathComponent("BlackwoodMobile", isDirectory: true)
+    }
+
+    private static func subpageKey(date: String, name: String) -> String {
+        "\(date)|\(name)"
     }
 }

@@ -264,19 +264,61 @@ public struct CachedDailyNote: Codable, Equatable, Sendable {
     }
 }
 
+public struct CachedSubpage: Codable, Equatable, Sendable {
+    public let date: String
+    public let name: String
+    public var content: String
+    public var updatedAt: Date
+    public var revision: String
+
+    enum CodingKeys: String, CodingKey {
+        case date
+        case name
+        case content
+        case updatedAt
+        case revision
+    }
+
+    public init(date: String, name: String, content: String, updatedAt: Date, revision: String) {
+        self.date = date
+        self.name = name
+        self.content = content
+        self.updatedAt = updatedAt
+        self.revision = revision
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        date = try container.decode(String.self, forKey: .date)
+        name = try container.decode(String.self, forKey: .name)
+        content = try container.decode(String.self, forKey: .content)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        revision = try container.decodeIfPresent(String.self, forKey: .revision) ?? ""
+    }
+}
+
 public struct PendingNoteUpdate: Codable, Equatable, Sendable, Identifiable {
     public let id: String
     public let date: String
     public var content: String
     public var updatedAt: Date
     public var baseRevision: String
+    public var baseContent: String
 
-    public init(id: String = UUID().uuidString, date: String, content: String, updatedAt: Date = Date(), baseRevision: String) {
+    public init(
+        id: String = UUID().uuidString,
+        date: String,
+        content: String,
+        updatedAt: Date = Date(),
+        baseRevision: String,
+        baseContent: String = ""
+    ) {
         self.id = id
         self.date = date
         self.content = content
         self.updatedAt = updatedAt
         self.baseRevision = baseRevision
+        self.baseContent = baseContent
     }
 
     enum CodingKeys: String, CodingKey {
@@ -285,6 +327,7 @@ public struct PendingNoteUpdate: Codable, Equatable, Sendable, Identifiable {
         case content
         case updatedAt
         case baseRevision
+        case baseContent
     }
 
     public init(from decoder: Decoder) throws {
@@ -294,6 +337,56 @@ public struct PendingNoteUpdate: Codable, Equatable, Sendable, Identifiable {
         content = try container.decode(String.self, forKey: .content)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         baseRevision = try container.decodeIfPresent(String.self, forKey: .baseRevision) ?? ""
+        baseContent = try container.decodeIfPresent(String.self, forKey: .baseContent) ?? ""
+    }
+}
+
+public struct PendingSubpageUpdate: Codable, Equatable, Sendable, Identifiable {
+    public let id: String
+    public let date: String
+    public let name: String
+    public var content: String
+    public var updatedAt: Date
+    public var baseRevision: String
+    public var baseContent: String
+
+    public init(
+        id: String = UUID().uuidString,
+        date: String,
+        name: String,
+        content: String,
+        updatedAt: Date = Date(),
+        baseRevision: String,
+        baseContent: String = ""
+    ) {
+        self.id = id
+        self.date = date
+        self.name = name
+        self.content = content
+        self.updatedAt = updatedAt
+        self.baseRevision = baseRevision
+        self.baseContent = baseContent
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case date
+        case name
+        case content
+        case updatedAt
+        case baseRevision
+        case baseContent
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        date = try container.decode(String.self, forKey: .date)
+        name = try container.decode(String.self, forKey: .name)
+        content = try container.decode(String.self, forKey: .content)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        baseRevision = try container.decodeIfPresent(String.self, forKey: .baseRevision) ?? ""
+        baseContent = try container.decodeIfPresent(String.self, forKey: .baseContent) ?? ""
     }
 }
 
@@ -368,8 +461,13 @@ public struct PendingEntryUpload: Codable, Equatable, Sendable, Identifiable {
 
 public struct QueueSnapshot: Equatable, Sendable {
     public let noteUpdateCount: Int
+    public let subpageUpdateCount: Int
     public let uploadCount: Int
     public let failedUploadCount: Int
+
+    public var totalNoteUpdateCount: Int {
+        noteUpdateCount + subpageUpdateCount
+    }
 }
 
 public enum SyncFailureDisposition: Equatable, Sendable {
@@ -386,5 +484,176 @@ public struct SyncFailure: Error, Equatable, Sendable {
         self.message = message
         self.disposition = disposition
         self.code = code
+    }
+}
+
+public enum MarkdownStorage {
+    private static let blockStateMarker = "<!-- blackwood:block-state:v1\n"
+    private static let blockStateEnd = "\n-->"
+
+    public static func visibleMarkdown(from content: String) -> String {
+        guard let markerRange = content.range(of: blockStateMarker, options: .backwards) else {
+            return content.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        let trailerStart = markerRange.upperBound
+        guard let endRange = content[trailerStart...].range(of: blockStateEnd) else {
+            return content.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        let trailing = content[endRange.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trailing.isEmpty else {
+            return content.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return content[..<markerRange.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+public struct MarkdownMergeResult: Equatable, Sendable {
+    public let merged: String?
+    public let ok: Bool
+    public let conflicts: [String]
+}
+
+public enum MarkdownMerge {
+    private struct Section {
+        let heading: String
+        let text: String
+    }
+
+    public static func merge(base: String, local: String, remote: String) -> MarkdownMergeResult {
+        if base == local {
+            return MarkdownMergeResult(merged: remote, ok: true, conflicts: [])
+        }
+        if base == remote || local == remote {
+            return MarkdownMergeResult(merged: local, ok: true, conflicts: [])
+        }
+
+        guard hasTopLevelHeading(base) else {
+            return mergeAppend(base: base, local: local, remote: remote)
+        }
+
+        let baseSections = splitSections(base)
+        let localSections = splitSections(local)
+        let remoteSections = splitSections(remote)
+        let localMap = sectionMap(localSections)
+        let remoteMap = sectionMap(remoteSections)
+        let baseMap = sectionMap(baseSections)
+
+        var headings: [String] = []
+        var seen = Set<String>()
+        func appendHeading(_ heading: String) {
+            guard !seen.contains(heading) else { return }
+            seen.insert(heading)
+            headings.append(heading)
+        }
+
+        baseSections.forEach { appendHeading($0.heading) }
+        remoteSections.forEach { appendHeading($0.heading) }
+        localSections.forEach { appendHeading($0.heading) }
+
+        var mergedSections: [String] = []
+        var conflicts: [String] = []
+
+        for heading in headings {
+            let baseText = baseMap[heading]
+            let localText = localMap[heading]
+            let remoteText = remoteMap[heading]
+            let localChanged = localText != baseText
+            let remoteChanged = remoteText != baseText
+
+            if !localChanged && !remoteChanged {
+                mergedSections.append(baseText ?? "")
+            } else if localChanged && !remoteChanged {
+                if let localText {
+                    mergedSections.append(localText)
+                }
+            } else if !localChanged && remoteChanged {
+                if let remoteText {
+                    mergedSections.append(remoteText)
+                }
+            } else if localText == remoteText {
+                mergedSections.append(localText ?? "")
+            } else {
+                conflicts.append(heading.isEmpty ? "(preamble)" : heading)
+                mergedSections.append(localText ?? remoteText ?? "")
+            }
+        }
+
+        if !conflicts.isEmpty {
+            return MarkdownMergeResult(merged: nil, ok: false, conflicts: conflicts)
+        }
+
+        return MarkdownMergeResult(merged: mergedSections.joined(separator: "\n"), ok: true, conflicts: [])
+    }
+
+    public static func preservingBothSides(local: String, remote: String) -> String {
+        let trimmedRemote = remote.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedLocal = local.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmedRemote.isEmpty {
+            return trimmedLocal
+        }
+        if trimmedLocal.isEmpty || trimmedLocal == trimmedRemote {
+            return trimmedRemote
+        }
+
+        return "\(trimmedRemote)\n\n# Offline edits from iOS\n\n\(trimmedLocal)"
+    }
+
+    private static func hasTopLevelHeading(_ content: String) -> Bool {
+        content
+            .components(separatedBy: .newlines)
+            .contains { $0.hasPrefix("# ") }
+    }
+
+    private static func splitSections(_ content: String) -> [Section] {
+        let lines = content.components(separatedBy: .newlines)
+        var sections: [Section] = []
+        var currentHeading = ""
+        var currentLines: [String] = []
+
+        for line in lines {
+            if line.hasPrefix("# ") {
+                sections.append(Section(heading: currentHeading, text: currentLines.joined(separator: "\n")))
+                currentHeading = line
+                currentLines = [line]
+            } else {
+                currentLines.append(line)
+            }
+        }
+
+        sections.append(Section(heading: currentHeading, text: currentLines.joined(separator: "\n")))
+        return sections
+    }
+
+    private static func sectionMap(_ sections: [Section]) -> [String: String] {
+        var map: [String: String] = [:]
+        for section in sections {
+            map[section.heading] = section.text
+        }
+        return map
+    }
+
+    private static func mergeAppend(base: String, local: String, remote: String) -> MarkdownMergeResult {
+        if let remoteAppended = extractAppend(prefix: base, text: remote) {
+            return MarkdownMergeResult(merged: local + remoteAppended, ok: true, conflicts: [])
+        }
+        if let localAppended = extractAppend(prefix: base, text: local) {
+            return MarkdownMergeResult(merged: remote + localAppended, ok: true, conflicts: [])
+        }
+        return MarkdownMergeResult(merged: nil, ok: false, conflicts: ["(entire note)"])
+    }
+
+    private static func extractAppend(prefix: String, text: String) -> String? {
+        guard text.hasPrefix(prefix) else {
+            return nil
+        }
+        let rest = String(text.dropFirst(prefix.count))
+        if rest.isEmpty || rest.hasPrefix("\n") {
+            return rest
+        }
+        return nil
     }
 }

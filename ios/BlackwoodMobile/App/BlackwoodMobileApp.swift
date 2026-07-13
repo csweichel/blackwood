@@ -122,6 +122,8 @@ struct BlackwoodMobileApp: App {
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
                     Task { await model.handleAppBecameActive() }
+                } else {
+                    Task { await model.flushEditingDrafts() }
                 }
             }
         }

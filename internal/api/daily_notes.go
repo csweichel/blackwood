@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -57,10 +58,11 @@ var protoToEntrySource = map[blackwoodv1.EntrySource]string{
 
 // DailyNotesHandler implements the DailyNotesService Connect handler.
 type DailyNotesHandler struct {
-	store       *storage.Store
-	transcriber transcribe.Transcriber // may be nil if not configured
-	indexer     EntryIndexer           // may be nil if chat index is disabled
-	changes     *ChangeBroadcaster
+	store         *storage.Store
+	transcriber   transcribe.Transcriber // may be nil if not configured
+	indexer       EntryIndexer           // may be nil if chat index is disabled
+	changes       *ChangeBroadcaster
+	createEntryMu sync.Mutex
 }
 
 // NewDailyNotesHandler creates a new DailyNotesHandler backed by the given store.
@@ -116,6 +118,26 @@ func (h *DailyNotesHandler) ListDailyNotes(ctx context.Context, req *connect.Req
 
 // CreateEntry creates a new entry in the daily note for the given date.
 func (h *DailyNotesHandler) CreateEntry(ctx context.Context, req *connect.Request[blackwoodv1.CreateEntryRequest]) (*connect.Response[blackwoodv1.Entry], error) {
+	clientRequestID := strings.TrimSpace(req.Msg.ClientRequestId)
+	if clientRequestID != "" {
+		// Serialize idempotent entry creation so overlapping retries cannot both
+		// pass the lookup before the first request records its result.
+		h.createEntryMu.Lock()
+		defer h.createEntryMu.Unlock()
+
+		existing, err := h.store.GetEntryByClientRequestID(ctx, clientRequestID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get existing create entry request: %w", err))
+		}
+		if existing != nil {
+			protoEntry, err := h.entryToProto(ctx, existing)
+			if err != nil {
+				return nil, connect.NewError(connect.CodeInternal, err)
+			}
+			return connect.NewResponse(protoEntry), nil
+		}
+	}
+
 	date := req.Msg.Date
 	if date == "" {
 		date = UserTimezoneNowDate(ctx, h.store)
@@ -228,6 +250,12 @@ func (h *DailyNotesHandler) CreateEntry(ctx context.Context, req *connect.Reques
 	if h.indexer != nil && entry.Content != "" {
 		if err := h.indexer.IndexEntry(ctx, entry.ID, entry.Content); err != nil {
 			slog.Warn("index entry failed", "entry_id", entry.ID, "error", err)
+		}
+	}
+
+	if clientRequestID != "" {
+		if err := h.store.RecordCreateEntryRequest(ctx, clientRequestID, entry.ID); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("record create entry request: %w", err))
 		}
 	}
 

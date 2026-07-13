@@ -2,6 +2,7 @@ import Foundation
 
 public struct SyncReport: Equatable, Sendable {
     public let syncedNoteUpdates: Int
+    public let syncedSubpageUpdates: Int
     public let syncedUploads: Int
 }
 
@@ -16,6 +17,7 @@ public final class SyncEngine: @unchecked Sendable {
 
     public func sync(now: Date = Date()) async throws -> SyncReport {
         var syncedNoteUpdates = 0
+        var syncedSubpageUpdates = 0
         var syncedUploads = 0
 
         let noteUpdates = try await store.pendingNoteUpdates()
@@ -36,23 +38,79 @@ public final class SyncEngine: @unchecked Sendable {
                 syncedNoteUpdates += 1
             } catch let failure as SyncFailure {
                 if failure.code == "failed_precondition" {
+                    let remoteNote = try await remote.fetchDailyNote(date: update.date)
+                    let mergedContent = Self.mergedQueuedContent(
+                        base: update.baseContent,
+                        local: update.content,
+                        remote: remoteNote.content
+                    )
+                    let note = try await remote.updateDailyNoteContent(
+                        date: update.date,
+                        content: mergedContent,
+                        baseRevision: remoteNote.revision
+                    )
+                    try await store.cacheDailyNote(
+                        date: update.date,
+                        content: note.content,
+                        updatedAt: Self.date(from: note.updatedAt),
+                        revision: note.revision
+                    )
                     try await store.removeNoteUpdate(id: update.id)
-                    throw failure
+                    syncedNoteUpdates += 1
+                    continue
                 }
                 throw failure
             }
         }
 
-        let uploads = try await store.pendingUploads()
-        for var upload in uploads {
-            if let nextRetryAt = upload.nextRetryAt, nextRetryAt > now {
-                continue
+        let subpageUpdates = try await store.pendingSubpageUpdates()
+        for update in subpageUpdates {
+            do {
+                let subpage = try await remote.updateSubpageContent(
+                    date: update.date,
+                    name: update.name,
+                    content: update.content,
+                    baseRevision: update.baseRevision
+                )
+                try await store.cacheSubpage(
+                    date: update.date,
+                    name: update.name,
+                    content: subpage.content,
+                    updatedAt: ISO8601DateFormatter().date(from: subpage.updatedAt) ?? Date(),
+                    revision: subpage.revision
+                )
+                try await store.removeSubpageUpdate(id: update.id)
+                syncedSubpageUpdates += 1
+            } catch let failure as SyncFailure {
+                if failure.code == "failed_precondition" {
+                    let remoteSubpage = try await remote.fetchSubpage(date: update.date, name: update.name)
+                    let mergedContent = Self.mergedQueuedContent(
+                        base: update.baseContent,
+                        local: update.content,
+                        remote: remoteSubpage.content
+                    )
+                    let subpage = try await remote.updateSubpageContent(
+                        date: update.date,
+                        name: update.name,
+                        content: mergedContent,
+                        baseRevision: remoteSubpage.revision
+                    )
+                    try await store.cacheSubpage(
+                        date: update.date,
+                        name: update.name,
+                        content: subpage.content,
+                        updatedAt: Self.date(from: subpage.updatedAt),
+                        revision: subpage.revision
+                    )
+                    try await store.removeSubpageUpdate(id: update.id)
+                    syncedSubpageUpdates += 1
+                    continue
+                }
+                throw failure
             }
+        }
 
-            upload.status = .uploading
-            upload.lastError = nil
-            try await store.updateUpload(upload)
-
+        while var upload = try await store.claimNextUpload(now: now) {
             do {
                 _ = try await remote.createAudioEntry(upload: upload)
                 try await store.removeUpload(id: upload.id, deleteLocalFile: true)
@@ -78,11 +136,27 @@ public final class SyncEngine: @unchecked Sendable {
             }
         }
 
-        return SyncReport(syncedNoteUpdates: syncedNoteUpdates, syncedUploads: syncedUploads)
+        return SyncReport(
+            syncedNoteUpdates: syncedNoteUpdates,
+            syncedSubpageUpdates: syncedSubpageUpdates,
+            syncedUploads: syncedUploads
+        )
     }
 
     public static func retryDelay(forAttempt attempt: Int) -> TimeInterval {
         let capped = min(max(attempt, 1), 5)
         return pow(2, Double(capped - 1)) * 5
+    }
+
+    private static func mergedQueuedContent(base: String, local: String, remote: String) -> String {
+        let visibleBase = MarkdownStorage.visibleMarkdown(from: base)
+        let visibleLocal = MarkdownStorage.visibleMarkdown(from: local)
+        let visibleRemote = MarkdownStorage.visibleMarkdown(from: remote)
+        let result = MarkdownMerge.merge(base: visibleBase, local: visibleLocal, remote: visibleRemote)
+        return result.merged ?? MarkdownMerge.preservingBothSides(local: visibleLocal, remote: visibleRemote)
+    }
+
+    private static func date(from value: String) -> Date {
+        ISO8601DateFormatter().date(from: value) ?? Date()
     }
 }

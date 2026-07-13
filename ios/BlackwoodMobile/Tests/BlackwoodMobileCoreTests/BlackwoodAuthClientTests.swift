@@ -4,7 +4,7 @@ import XCTest
 
 final class BlackwoodAuthClientTests: XCTestCase {
     final class MockURLProtocol: URLProtocol {
-        static var handler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
+        nonisolated(unsafe) static var handler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
 
         override class func canInit(with request: URLRequest) -> Bool {
             true
@@ -83,5 +83,63 @@ final class BlackwoodAuthClientTests: XCTestCase {
             XCTAssertEqual(challenge.kind, .unauthorized)
             XCTAssertEqual(challenge.message, "Authentication required")
         }
+    }
+
+    func testAuthStatusDefaultsMissingProtoBooleansToFalse() async throws {
+        MockURLProtocol.handler = { request in
+            XCTAssertEqual(request.url?.path, "/blackwood.v1.AuthService/Status")
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, Data("{}".utf8))
+        }
+
+        let client = BlackwoodAuthClient(baseURL: URL(string: "http://example.com")!, session: makeSession())
+        let status = try await client.status()
+
+        XCTAssertFalse(status.authenticated)
+        XCTAssertFalse(status.setupRequired)
+    }
+
+    func testAuthStatusTreatsMissingAuthServiceAsAuthDisabled() async throws {
+        MockURLProtocol.handler = { request in
+            XCTAssertEqual(request.url?.path, "/blackwood.v1.AuthService/Status")
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "text/html; charset=utf-8"]
+            )!
+            let data = Data("<!doctype html><html><body>Blackwood</body></html>".utf8)
+            return (response, data)
+        }
+
+        let client = BlackwoodAuthClient(baseURL: URL(string: "http://example.com")!, session: makeSession())
+        let status = try await client.status()
+
+        XCTAssertTrue(status.authenticated)
+        XCTAssertFalse(status.setupRequired)
+    }
+
+    func testLoginDefaultsMissingOkToFalse() async throws {
+        MockURLProtocol.handler = { request in
+            XCTAssertEqual(request.url?.path, "/blackwood.v1.AuthService/Login")
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, Data(#"{"error":"Invalid code. Please try again."}"#.utf8))
+        }
+
+        let client = BlackwoodAuthClient(baseURL: URL(string: "http://example.com")!, session: makeSession())
+        let result = try await client.login(code: "123456")
+
+        XCTAssertFalse(result.ok)
+        XCTAssertEqual(result.error, "Invalid code. Please try again.")
     }
 }

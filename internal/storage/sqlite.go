@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -733,6 +734,9 @@ func (s *Store) GetEntryByClientRequestID(ctx context.Context, requestID string)
 		 WHERE cer.request_id = ?`,
 		requestID,
 	).Scan(&e.ID, &e.DailyNoteID, &e.Type, &e.Content, &e.RawContent, &e.Source, &e.Metadata, &e.CreatedAt, &e.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("get entry by client request ID: %w", err)
 	}

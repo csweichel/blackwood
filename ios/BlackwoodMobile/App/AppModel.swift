@@ -47,15 +47,18 @@ final class AppModel: ObservableObject {
     private static let lastAuthenticatedKey = "blackwood.auth.lastAuthenticated"
     private static let lastSetupRequiredKey = "blackwood.auth.lastSetupRequired"
     private static let shortcutStore = ShortcutStore.defaults
+    private static let defaultDailyNoteTemplate = "# Summary\n\n# Notes\n\n# Links\n"
 
     @Published var selectedTab: Tab = .today
     @Published var selectedDate = Date()
     @Published var noteContent = ""
-    @Published var draftContent = ""
+    // Draft bindings intentionally do not publish every keystroke. The editor owns
+    // its fine-grained rendering state and saves the latest value explicitly.
+    var draftContent = ""
     @Published var noteRevision = ""
     @Published var activeSubpage: SubpageRoute?
     @Published var subpageContent = ""
-    @Published var subpageDraftContent = ""
+    var subpageDraftContent = ""
     @Published var subpageRevision = ""
     @Published var isEditingSubpage = false
     @Published var isLoadingSubpage = false
@@ -72,7 +75,12 @@ final class AppModel: ObservableObject {
     @Published var authSetupInfo: AuthSetupInfo?
     @Published var isNetworkAvailable = true
     @Published var serverReachability: ServerReachability = .unknown
-    @Published var queueSnapshot = QueueSnapshot(noteUpdateCount: 0, uploadCount: 0, failedUploadCount: 0)
+    @Published var queueSnapshot = QueueSnapshot(
+        noteUpdateCount: 0,
+        subpageUpdateCount: 0,
+        uploadCount: 0,
+        failedUploadCount: 0
+    )
     @Published var serverURLString = UserDefaults.standard.string(forKey: "blackwood.serverURL") ?? "http://127.0.0.1:8080"
     @Published var connectionTestState: ConnectionTestState = .idle
     @Published var presentedSheet: PresentedSheet?
@@ -86,6 +94,9 @@ final class AppModel: ObservableObject {
     private var syncRetryAttempt = 0
     private var nextAutomaticSyncAllowedAt = Date.distantPast
     private var changeStreamTask: Task<Void, Never>?
+    private var isSyncing = false
+    private var noteSaveGeneration = 0
+    private var subpageSaveGeneration = 0
 
     init() {
         authState = UserDefaults.standard.bool(forKey: Self.lastAuthenticatedKey)
@@ -152,6 +163,7 @@ final class AppModel: ObservableObject {
             }
         }
         monitor.start(queue: monitorQueue)
+        try? await store.resetInterruptedUploads()
         await refreshAuthStatus()
         if isAuthenticated {
             await enterAuthenticatedWorkspace()
@@ -170,6 +182,15 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func flushEditingDrafts() async {
+        if isEditing {
+            _ = await autoSaveCurrentNote(draftContent)
+        }
+        if isEditingSubpage {
+            _ = await autoSaveCurrentSubpage(subpageDraftContent)
+        }
+    }
+
     func loadSelectedDate() async {
         guard isAuthenticated else { return }
         let date = Self.dayString(from: selectedDate)
@@ -179,17 +200,36 @@ final class AppModel: ObservableObject {
     }
 
     func changeDate(to date: Date) {
+        if isEditing {
+            Task {
+                guard await saveCurrentNote() else { return }
+                selectedDate = date
+                await loadSelectedDate()
+            }
+            return
+        }
         selectedDate = date
         Task { await loadSelectedDate() }
     }
 
+    @discardableResult
+    func selectTab(_ tab: Tab) async -> Bool {
+        guard selectedTab != tab else { return true }
+        if selectedTab == .today, isEditing {
+            guard await saveCurrentNote() else { return false }
+        }
+        selectedTab = tab
+        return true
+    }
+
     func beginEditing() {
-        draftContent = noteContent.isEmpty ? "# Summary\n\n# Notes\n\n# Links\n" : noteContent
+        let editableContent = MarkdownStorage.visibleMarkdown(from: noteContent)
+        draftContent = editableContent.isEmpty ? Self.defaultDailyNoteTemplate : editableContent
         isEditing = true
     }
 
     func cancelEditing() {
-        draftContent = noteContent
+        draftContent = MarkdownStorage.visibleMarkdown(from: noteContent)
         isEditing = false
     }
 
@@ -202,12 +242,12 @@ final class AppModel: ObservableObject {
     }
 
     func beginEditingSubpage() {
-        subpageDraftContent = subpageContent
+        subpageDraftContent = MarkdownStorage.visibleMarkdown(from: subpageContent)
         isEditingSubpage = true
     }
 
     func cancelEditingSubpage() {
-        subpageDraftContent = subpageContent
+        subpageDraftContent = MarkdownStorage.visibleMarkdown(from: subpageContent)
         isEditingSubpage = false
     }
 
@@ -218,54 +258,107 @@ final class AppModel: ObservableObject {
         subpageRevision = ""
         subpageError = nil
         isEditingSubpage = false
+        isLoadingSubpage = false
     }
 
-    func saveCurrentNote() async {
-        guard isAuthenticated else { return }
+    @discardableResult
+    func saveCurrentNote() async -> Bool {
+        await persistCurrentNote(draftContent, endingEditing: true)
+    }
+
+    @discardableResult
+    func autoSaveCurrentNote(_ content: String) async -> Bool {
+        await persistCurrentNote(content, endingEditing: false)
+    }
+
+    @discardableResult
+    private func persistCurrentNote(_ content: String, endingEditing: Bool) async -> Bool {
+        guard isAuthenticated else { return false }
+        noteSaveGeneration += 1
+        let saveGeneration = noteSaveGeneration
+
+        if MarkdownStorage.visibleMarkdown(from: noteContent) == content {
+            if endingEditing {
+                isEditing = false
+            }
+            return true
+        }
+
         let date = Self.dayString(from: selectedDate)
-        noteContent = draftContent
-        isEditing = false
+        let baseContent = noteContent
 
         do {
-            try await store.cacheDailyNote(date: date, content: draftContent, revision: noteRevision)
-            try await store.queueNoteUpdate(date: date, content: draftContent, baseRevision: noteRevision)
+            try await store.savePendingDailyNote(
+                date: date,
+                content: content,
+                revision: noteRevision,
+                baseContent: baseContent,
+                saveSequence: saveGeneration
+            )
+            guard saveGeneration == noteSaveGeneration else { return true }
+            noteContent = content
+            if endingEditing {
+                isEditing = false
+            }
             await refreshQueueSnapshot()
-            await syncNow()
+            Task { [weak self] in
+                await self?.syncNow()
+            }
+            return true
         } catch {
             noteError = error.localizedDescription
+            return false
         }
     }
 
-    func saveCurrentSubpage() async {
-        guard isAuthenticated, let route = activeSubpage, let client = apiClient else { return }
+    @discardableResult
+    func saveCurrentSubpage() async -> Bool {
+        await persistCurrentSubpage(subpageDraftContent, endingEditing: true)
+    }
 
-        let draft = subpageDraftContent
-        subpageContent = draft
-        isEditingSubpage = false
+    @discardableResult
+    func autoSaveCurrentSubpage(_ content: String) async -> Bool {
+        await persistCurrentSubpage(content, endingEditing: false)
+    }
+
+    @discardableResult
+    private func persistCurrentSubpage(_ content: String, endingEditing: Bool) async -> Bool {
+        guard isAuthenticated, let route = activeSubpage else { return false }
+        subpageSaveGeneration += 1
+        let saveGeneration = subpageSaveGeneration
+
+        if MarkdownStorage.visibleMarkdown(from: subpageContent) == content {
+            if endingEditing {
+                isEditingSubpage = false
+            }
+            return true
+        }
+
+        let baseContent = subpageContent
         subpageError = nil
 
         do {
-            let subpage = try await client.updateSubpageContent(
+            try await store.savePendingSubpage(
                 date: route.date,
                 name: route.name,
-                content: draft,
-                baseRevision: subpageRevision
+                content: content,
+                revision: subpageRevision,
+                baseContent: baseContent,
+                saveSequence: saveGeneration
             )
-            subpageContent = subpage.content
-            subpageDraftContent = subpage.content
-            subpageRevision = subpage.revision
-            markServerReachable()
+            guard saveGeneration == subpageSaveGeneration else { return true }
+            subpageContent = content
+            if endingEditing {
+                isEditingSubpage = false
+            }
+            await refreshQueueSnapshot()
+            Task { [weak self] in
+                await self?.syncNow()
+            }
+            return true
         } catch {
-            if await handleAuthFailure(error) {
-                return
-            }
-            if let failure = error as? SyncFailure, failure.code == "failed_precondition" {
-                subpageError = failure.message
-                await loadSubpage(route)
-                return
-            }
-            handleConnectionFailure(error)
-            subpageError = userFacingMessage(for: error, fallback: "Blackwood couldn’t save this subpage.")
+            subpageError = error.localizedDescription
+            return false
         }
     }
 
@@ -366,6 +459,10 @@ final class AppModel: ObservableObject {
         guard isAuthenticated else { return }
         guard isNetworkAvailable, let client = apiClient else { return }
         guard force || Date() >= nextAutomaticSyncAllowedAt else { return }
+        guard !isSyncing else { return }
+        isSyncing = true
+        defer { isSyncing = false }
+
         do {
             let engine = SyncEngine(store: store, remote: client)
             _ = try await engine.sync()
@@ -373,6 +470,10 @@ final class AppModel: ObservableObject {
             syncRetryAttempt = 0
             nextAutomaticSyncAllowedAt = .distantPast
             await refreshQueueSnapshot()
+            _ = await loadCachedNote(for: Self.dayString(from: selectedDate))
+            if let activeSubpage {
+                _ = await loadCachedSubpage(for: activeSubpage)
+            }
         } catch {
             if await handleAuthFailure(error) {
                 return
@@ -380,6 +481,9 @@ final class AppModel: ObservableObject {
             if let failure = error as? SyncFailure, failure.code == "failed_precondition" {
                 noteError = failure.message
                 await refreshSelectedDateFromServer(date: Self.dayString(from: selectedDate), showLoadingState: false)
+                if let activeSubpage {
+                    await loadSubpage(activeSubpage)
+                }
                 await refreshQueueSnapshot()
                 return
             }
@@ -663,22 +767,49 @@ final class AppModel: ObservableObject {
 
     private func loadSubpage(_ route: SubpageRoute) async {
         guard isAuthenticated else { return }
-        guard let client = apiClient else { return }
+        let hasCachedSubpage = await loadCachedSubpage(for: route)
+        guard activeSubpage == route else { return }
 
-        isLoadingSubpage = true
-        defer { isLoadingSubpage = false }
+        isLoadingSubpage = !hasCachedSubpage
+        defer {
+            if activeSubpage == route {
+                isLoadingSubpage = false
+            }
+        }
+
+        guard let client = apiClient else {
+            if !hasCachedSubpage {
+                subpageContent = ""
+                subpageDraftContent = ""
+                subpageRevision = ""
+                isEditingSubpage = true
+                subpageError = "Set a server URL to sync this subpage. Your edits will stay on this device."
+            }
+            return
+        }
 
         do {
             let subpage = try await client.fetchSubpage(date: route.date, name: route.name)
+            if activeSubpage != route || !isEditingSubpage {
+                try? await store.cacheSubpage(
+                    date: route.date,
+                    name: route.name,
+                    content: subpage.content,
+                    revision: subpage.revision
+                )
+            }
+            markServerReachable()
+            guard activeSubpage == route else { return }
+            guard !isEditingSubpage else { return }
             subpageContent = subpage.content
-            subpageDraftContent = subpage.content
+            subpageDraftContent = MarkdownStorage.visibleMarkdown(from: subpage.content)
             subpageRevision = subpage.revision
             subpageError = nil
-            markServerReachable()
         } catch {
             if await handleAuthFailure(error) {
                 return
             }
+            guard activeSubpage == route else { return }
             if let failure = error as? SyncFailure, failure.code == "not_found" {
                 do {
                     let created = try await client.updateSubpageContent(
@@ -687,20 +818,52 @@ final class AppModel: ObservableObject {
                         content: "",
                         baseRevision: ""
                     )
+                    if activeSubpage != route || !isEditingSubpage {
+                        try? await store.cacheSubpage(
+                            date: route.date,
+                            name: route.name,
+                            content: created.content,
+                            revision: created.revision
+                        )
+                    }
+                    markServerReachable()
+                    guard activeSubpage == route else { return }
+                    guard !isEditingSubpage else { return }
                     subpageContent = created.content
-                    subpageDraftContent = created.content
+                    subpageDraftContent = MarkdownStorage.visibleMarkdown(from: created.content)
                     subpageRevision = created.revision
                     subpageError = nil
                     isEditingSubpage = true
-                    markServerReachable()
                     return
                 } catch {
-                    subpageError = userFacingMessage(for: error, fallback: "Blackwood couldn’t create this subpage.")
+                    guard activeSubpage == route else { return }
+                    if isConnectivityFailure(error) {
+                        handleConnectionFailure(error)
+                        if !hasCachedSubpage {
+                            subpageContent = ""
+                            subpageDraftContent = ""
+                            subpageRevision = ""
+                            isEditingSubpage = true
+                            subpageError = "Blackwood is unreachable. Start writing here and the subpage will sync later."
+                        }
+                    } else {
+                        subpageError = userFacingMessage(for: error, fallback: "Blackwood couldn’t create this subpage.")
+                    }
                     return
                 }
             }
             handleConnectionFailure(error)
-            subpageError = userFacingMessage(for: error, fallback: "Blackwood couldn’t load this subpage.")
+            if hasCachedSubpage {
+                subpageError = nil
+            } else if isConnectivityFailure(error) {
+                subpageContent = ""
+                subpageDraftContent = ""
+                subpageRevision = ""
+                isEditingSubpage = true
+                subpageError = "Blackwood is unreachable. Start writing here and the subpage will sync later."
+            } else {
+                subpageError = userFacingMessage(for: error, fallback: "Blackwood couldn’t load this subpage.")
+            }
         }
     }
 
@@ -709,41 +872,62 @@ final class AppModel: ObservableObject {
         guard let cached = try? await store.cachedDailyNote(date: date) else {
             return false
         }
+        guard Self.dayString(from: selectedDate) == date else { return false }
+        guard !isEditing else { return true }
         noteContent = cached.content
         noteRevision = cached.revision
-        if !isEditing {
-            draftContent = cached.content
+        draftContent = MarkdownStorage.visibleMarkdown(from: cached.content)
+        return true
+    }
+
+    @discardableResult
+    private func loadCachedSubpage(for route: SubpageRoute) async -> Bool {
+        guard let cached = try? await store.cachedSubpage(date: route.date, name: route.name) else {
+            return false
         }
+        guard activeSubpage == route else { return false }
+        guard !isEditingSubpage else { return true }
+        subpageContent = cached.content
+        subpageRevision = cached.revision
+        subpageDraftContent = MarkdownStorage.visibleMarkdown(from: cached.content)
         return true
     }
 
     private func refreshSelectedDateFromServer(date: String, showLoadingState: Bool) async {
         guard isAuthenticated else { return }
-        if showLoadingState {
+        let isSelectedDate = Self.dayString(from: selectedDate) == date
+        if showLoadingState, isSelectedDate {
             isLoadingNote = true
         }
-        defer { isLoadingNote = false }
+        defer {
+            if Self.dayString(from: selectedDate) == date {
+                isLoadingNote = false
+            }
+        }
 
         guard let client = apiClient else { return }
 
         do {
             let note = try await client.fetchDailyNote(date: date)
+            if Self.dayString(from: selectedDate) != date || !isEditing {
+                try await store.cacheDailyNote(
+                    date: date,
+                    content: note.content,
+                    updatedAt: ISO8601DateFormatter().date(from: note.updatedAt) ?? Date(),
+                    revision: note.revision
+                )
+            }
+            markServerReachable()
+            guard Self.dayString(from: selectedDate) == date else { return }
+            guard !isEditing else { return }
             noteContent = note.content
             noteRevision = note.revision
-            if !isEditing {
-                draftContent = note.content
-            }
-            try await store.cacheDailyNote(
-                date: date,
-                content: note.content,
-                updatedAt: ISO8601DateFormatter().date(from: note.updatedAt) ?? Date(),
-                revision: note.revision
-            )
-            markServerReachable()
+            draftContent = MarkdownStorage.visibleMarkdown(from: note.content)
         } catch {
             if await handleAuthFailure(error) {
                 return
             }
+            guard Self.dayString(from: selectedDate) == date else { return }
             if let failure = error as? SyncFailure, failure.code == "failed_precondition" {
                 noteError = "This note changed on another client. The latest version has been reloaded."
                 await refreshSelectedDateFromServer(date: date, showLoadingState: false)

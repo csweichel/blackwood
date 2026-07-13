@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-private enum BlackwoodPalette {
+enum BlackwoodPalette {
     static let background = dynamicColor(
         light: UIColor(red: 250/255, green: 248/255, blue: 243/255, alpha: 1),
         dark: UIColor(red: 18/255, green: 22/255, blue: 30/255, alpha: 1)
@@ -167,9 +167,6 @@ struct RootTabView: View {
             }
 
             if model.isEditing {
-                actionIconButton(systemImage: "xmark", filled: false) {
-                    model.cancelEditing()
-                }
                 actionIconButton(systemImage: "checkmark", filled: true) {
                     Task { await model.saveCurrentNote() }
                 }
@@ -463,14 +460,12 @@ struct NotesScreen: View {
                 }
 
                 if model.isEditing {
-                    TextEditor(text: $model.draftContent)
-                        .font(.system(size: 17))
-                        .foregroundStyle(BlackwoodPalette.foreground)
-                        .scrollContentBackground(.hidden)
-                        .frame(minHeight: 360)
-                        .padding(12)
-                        .background(BlackwoodPalette.muted.opacity(0.25))
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    MarkdownCellEditor(
+                        markdown: $model.draftContent,
+                        placeholder: "Start writing your day…",
+                        onSave: { await model.autoSaveCurrentNote($0) }
+                    )
+                    .id(AppModel.dayString(from: model.selectedDate))
                 } else if model.isLoadingNote && model.noteContent.isEmpty {
                     ProgressView("Loading note…")
                         .frame(maxWidth: .infinity, minHeight: 220, alignment: .leading)
@@ -512,14 +507,12 @@ struct SubpageScreen: View {
                     }
 
                     if model.isEditingSubpage {
-                        TextEditor(text: $model.subpageDraftContent)
-                            .font(.system(size: 17))
-                            .foregroundStyle(BlackwoodPalette.foreground)
-                            .scrollContentBackground(.hidden)
-                            .frame(minHeight: 360)
-                            .padding(12)
-                            .background(BlackwoodPalette.muted.opacity(0.25))
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        MarkdownCellEditor(
+                            markdown: $model.subpageDraftContent,
+                            placeholder: "Start writing this subpage…",
+                            onSave: { await model.autoSaveCurrentSubpage($0) }
+                        )
+                        .id(route.id)
                     } else if model.isLoadingSubpage && model.subpageContent.isEmpty {
                         ProgressView("Loading subpage…")
                             .frame(maxWidth: .infinity, minHeight: 220, alignment: .leading)
@@ -538,18 +531,14 @@ struct SubpageScreen: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") {
-                        model.closeSubpage()
-                        dismiss()
+                    Button("Close") {
+                        closeSubpage()
                     }
                 }
 
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     if model.isEditingSubpage {
-                        Button("Cancel") {
-                            model.cancelEditingSubpage()
-                        }
-                        Button("Save") {
+                        Button("Done") {
                             Task { await model.saveCurrentSubpage() }
                         }
                     } else {
@@ -564,6 +553,17 @@ struct SubpageScreen: View {
                     model.closeSubpage()
                 }
             }
+            .interactiveDismissDisabled(model.isEditingSubpage)
+        }
+    }
+
+    private func closeSubpage() {
+        Task {
+            if model.isEditingSubpage {
+                guard await model.saveCurrentSubpage() else { return }
+            }
+            model.closeSubpage()
+            dismiss()
         }
     }
 }
@@ -675,7 +675,7 @@ struct QueueScreen: View {
 
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         QueueMetricCard(title: "Connection", value: model.connectionStatusLabel)
-                        QueueMetricCard(title: "Pending notes", value: "\(model.queueSnapshot.noteUpdateCount)")
+                        QueueMetricCard(title: "Pending notes", value: "\(model.queueSnapshot.totalNoteUpdateCount)")
                         QueueMetricCard(title: "Pending uploads", value: "\(model.queueSnapshot.uploadCount)")
                         QueueMetricCard(title: "Failed uploads", value: "\(model.queueSnapshot.failedUploadCount)")
                     }
@@ -870,8 +870,8 @@ private struct SidebarDrawer: View {
 
     private func sidebarItem(_ tab: AppModel.Tab, title: String, icon: String) -> some View {
         Button {
-            model.selectedTab = tab
             onDismiss()
+            Task { await model.selectTab(tab) }
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: icon)
@@ -1225,177 +1225,21 @@ private struct StructuredNoteView: View {
     let date: String
     let onOpenSubpage: ((String) -> Void)?
 
-    private var sections: [(title: String, body: String)] {
-        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return [("Summary", "No note content yet.")]
-        }
+    private var document: NoteDocument {
+        NoteDocument(markdown: content)
+    }
 
-        let lines = trimmed.components(separatedBy: .newlines)
-        var sections: [(String, [String])] = []
-        var currentTitle = "Summary"
-        var currentBody: [String] = []
-
-        for line in lines {
-            if line.hasPrefix("# ") {
-                sections.append((currentTitle, currentBody))
-                currentTitle = String(line.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines)
-                currentBody = []
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if document.blocks.isEmpty {
+                Text("No note content yet.")
+                    .font(.system(size: 17))
+                    .foregroundStyle(BlackwoodPalette.mutedForeground)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                currentBody.append(line)
-            }
-        }
-        sections.append((currentTitle, currentBody))
-
-        return sections
-            .map { ($0.0, $0.1.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)) }
-            .filter { !$0.0.isEmpty && !$0.1.isEmpty }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 12) {
-                        Text(section.title.uppercased())
-                            .font(.system(size: 11, weight: .semibold))
-                            .tracking(1)
-                            .foregroundStyle(BlackwoodPalette.mutedForeground)
-                        Rectangle()
-                            .fill(BlackwoodPalette.border)
-                            .frame(height: 1)
-                    }
-
-                    MarkdownBlockView(
-                        markdown: section.body,
-                        isSummary: section.title == "Summary",
-                        baseURL: baseURL,
-                        date: date,
-                        onOpenSubpage: onOpenSubpage
-                    )
+                ForEach(Array(document.blocks.enumerated()), id: \.offset) { _, block in
+                    NoteBlockView(block: block, baseURL: baseURL, date: date, depth: 0)
                 }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct MarkdownBlockView: View {
-    let markdown: String
-    let isSummary: Bool
-    let baseURL: URL?
-    let date: String
-    let onOpenSubpage: ((String) -> Void)?
-
-    private enum Block: Hashable {
-        case heading(level: Int, text: String)
-        case paragraph(String)
-        case bulletList([ListItem])
-        case numberedList([ListItem])
-        case quote(String)
-        case image(source: String, alt: String?)
-        case rule
-    }
-
-    private struct ListItem: Hashable {
-        let text: String
-        let children: [Block]
-    }
-
-    private var blocks: [Block] {
-        let lines = markdown.components(separatedBy: .newlines)
-        var result: [Block] = []
-        var paragraphLines: [String] = []
-        var index = 0
-
-        func flushParagraph() {
-            guard !paragraphLines.isEmpty else { return }
-            result.append(.paragraph(paragraphLines.joined(separator: "\n")))
-            paragraphLines.removeAll()
-        }
-
-        func flushListRegion(_ region: [String]) {
-            guard !region.isEmpty else { return }
-            if let first = region.first, let match = listMatch(for: first) {
-                let parsed = parseListItems(from: region, startingAt: 0, parentIndent: match.indent)
-                if !parsed.items.isEmpty {
-                    result.append(match.isOrdered ? .numberedList(parsed.items) : .bulletList(parsed.items))
-                }
-            }
-        }
-
-        var pendingListRegion: [String] = []
-
-        func flushPendingList() {
-            flushListRegion(pendingListRegion)
-            pendingListRegion.removeAll()
-        }
-
-        while index < lines.count {
-            let rawLine = lines[index]
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
-
-            if line.isEmpty {
-                flushParagraph()
-                flushPendingList()
-                index += 1
-                continue
-            }
-
-            if line == "---" {
-                flushParagraph()
-                flushPendingList()
-                result.append(.rule)
-                index += 1
-                continue
-            }
-
-            if let image = imageBlock(from: line) {
-                flushParagraph()
-                flushPendingList()
-                result.append(image)
-                index += 1
-                continue
-            }
-
-            if let heading = headingBlock(from: line) {
-                flushParagraph()
-                flushPendingList()
-                result.append(heading)
-                index += 1
-                continue
-            }
-
-            if listMatch(for: rawLine) != nil {
-                flushParagraph()
-                pendingListRegion.append(rawLine)
-                index += 1
-                continue
-            }
-
-            if line.hasPrefix(">") {
-                flushParagraph()
-                flushPendingList()
-                result.append(.quote(String(line.drop { $0 == ">" || $0 == " " })))
-                index += 1
-                continue
-            }
-
-            flushPendingList()
-            paragraphLines.append(line)
-            index += 1
-        }
-
-        flushParagraph()
-        flushPendingList()
-
-        return result.isEmpty ? [.paragraph(markdown)] : result
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
-                blockView(block, depth: 0)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1413,95 +1257,424 @@ private struct MarkdownBlockView: View {
             return .handled
         })
     }
+}
 
-    private func blockView(_ block: Block, depth: Int) -> AnyView {
+private struct NoteDocument {
+    let blocks: [NoteBlock]
+
+    init(markdown: String) {
+        let visibleMarkdown = MarkdownStorage.visibleMarkdown(from: markdown)
+        self.blocks = Self.parseBlocks(from: visibleMarkdown.components(separatedBy: .newlines))
+    }
+
+    private static func parseBlocks(from lines: [String]) -> [NoteBlock] {
+        var blocks: [NoteBlock] = []
+        var paragraphLines: [String] = []
+        var index = 0
+
+        func flushParagraph() {
+            let text = paragraphLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else {
+                paragraphLines.removeAll()
+                return
+            }
+
+            if let youtubeURL = Self.youtubeURL(from: text) {
+                blocks.append(.youtube(youtubeURL))
+            } else if let image = Self.standaloneImage(from: text) {
+                blocks.append(.image(source: image.source, alt: image.alt))
+            } else {
+                blocks.append(.paragraph(text))
+            }
+            paragraphLines.removeAll()
+        }
+
+        while index < lines.count {
+            let rawLine = lines[index]
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+
+            if line.isEmpty {
+                flushParagraph()
+                index += 1
+                continue
+            }
+
+            if line == "---" || line == "***" {
+                flushParagraph()
+                blocks.append(.rule)
+                index += 1
+                continue
+            }
+
+            if let fence = codeFence(from: line) {
+                flushParagraph()
+                var codeLines: [String] = []
+                index += 1
+                while index < lines.count {
+                    let closing = lines[index].trimmingCharacters(in: .whitespaces)
+                    if closing.hasPrefix(fence.marker) {
+                        index += 1
+                        break
+                    }
+                    codeLines.append(lines[index])
+                    index += 1
+                }
+                blocks.append(.codeBlock(language: fence.language, code: codeLines.joined(separator: "\n")))
+                continue
+            }
+
+            if let heading = headingBlock(from: line) {
+                flushParagraph()
+                blocks.append(heading)
+                index += 1
+                continue
+            }
+
+            if let image = standaloneImage(from: line) {
+                flushParagraph()
+                blocks.append(.image(source: image.source, alt: image.alt))
+                index += 1
+                continue
+            }
+
+            if listMatch(for: rawLine) != nil {
+                flushParagraph()
+                let regionStart = index
+                index += 1
+                while index < lines.count {
+                    let nextLine = lines[index]
+                    let trimmed = nextLine.trimmingCharacters(in: .whitespaces)
+                    if trimmed.isEmpty {
+                        break
+                    }
+                    guard listMatch(for: nextLine) != nil else {
+                        break
+                    }
+                    index += 1
+                }
+
+                let region = Array(lines[regionStart..<index])
+                if let first = region.first, let match = listMatch(for: first) {
+                    let parsed = parseListItems(from: region, startingAt: 0, parentIndent: match.indent)
+                    blocks.append(match.isOrdered ? .numberedList(parsed.items) : .bulletList(parsed.items))
+                }
+                continue
+            }
+
+            if line.hasPrefix(">") {
+                flushParagraph()
+                var quoteLines: [String] = []
+                while index < lines.count {
+                    let quoteLine = lines[index].trimmingCharacters(in: .whitespaces)
+                    guard quoteLine.hasPrefix(">") else { break }
+                    quoteLines.append(String(quoteLine.drop { $0 == ">" || $0 == " " }))
+                    index += 1
+                }
+                blocks.append(.quote(quoteLines.joined(separator: "\n")))
+                continue
+            }
+
+            paragraphLines.append(rawLine)
+            index += 1
+        }
+
+        flushParagraph()
+        return blocks
+    }
+
+    private static func headingBlock(from line: String) -> NoteBlock? {
+        let prefixes = ["### ", "## ", "# "]
+        for prefix in prefixes where line.hasPrefix(prefix) {
+            return .heading(level: prefix.filter { $0 == "#" }.count, text: String(line.dropFirst(prefix.count)))
+        }
+        return nil
+    }
+
+    private static func codeFence(from line: String) -> (marker: String, language: String?)? {
+        guard line.hasPrefix("```") || line.hasPrefix("~~~") else { return nil }
+        let marker = String(line.prefix(3))
+        let language = String(line.dropFirst(3)).trimmingCharacters(in: .whitespacesAndNewlines)
+        return (marker, language.isEmpty ? nil : language)
+    }
+
+    private static func standaloneImage(from line: String) -> (source: String, alt: String?)? {
+        let markdownPattern = #"^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)$"#
+        if let match = firstMatch(pattern: markdownPattern, in: line),
+           let alt = capture(1, in: line, match: match),
+           let source = capture(2, in: line, match: match) {
+            return (source, alt.isEmpty ? nil : alt)
+        }
+
+        let linkPattern = #"^\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)$"#
+        if let match = firstMatch(pattern: linkPattern, in: line),
+           let label = capture(1, in: line, match: match),
+           let source = capture(2, in: line, match: match),
+           isImageURL(source) {
+            return (source, label.isEmpty ? nil : label)
+        }
+
+        let htmlPattern = #"<img\b[^>]*src=["']([^"']+)["'][^>]*?(?:alt=["']([^"']*)["'])?[^>]*>"#
+        if let match = firstMatch(pattern: htmlPattern, in: line, options: [.caseInsensitive]),
+           let source = capture(1, in: line, match: match) {
+            return (source, capture(2, in: line, match: match))
+        }
+
+        return nil
+    }
+
+    private static func youtubeURL(from text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let candidate: String
+        let linkPattern = #"^\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)$"#
+        if let match = firstMatch(pattern: linkPattern, in: trimmed),
+           let href = capture(2, in: trimmed, match: match) {
+            candidate = href
+        } else {
+            candidate = trimmed
+        }
+
+        let patterns = [
+            #"^(?:https?://)?(?:www\.)?youtube\.com/watch\?v=([\w-]+)(?:&[^\s)]*)?$"#,
+            #"^(?:https?://)?youtu\.be/([\w-]+)(?:\?[^\s)]*)?$"#,
+            #"^(?:https?://)?(?:www\.)?youtube-nocookie\.com/embed/([\w-]+)(?:\?[^\s)]*)?$"#,
+        ]
+        guard patterns.contains(where: { candidate.range(of: $0, options: .regularExpression) != nil }) else {
+            return nil
+        }
+        return candidate.hasPrefix("http") ? candidate : "https://\(candidate)"
+    }
+
+    private static func listMatch(for rawLine: String) -> NoteListMatch? {
+        var leadingWhitespace = 0
+        for character in rawLine {
+            if character == " " {
+                leadingWhitespace += 1
+            } else if character == "\t" {
+                leadingWhitespace += 4
+            } else {
+                break
+            }
+        }
+
+        let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+
+        for prefix in ["- ", "* ", "+ "] where trimmed.hasPrefix(prefix) {
+            return NoteListMatch(indent: leadingWhitespace, text: String(trimmed.dropFirst(prefix.count)), isOrdered: false)
+        }
+
+        guard let dotIndex = trimmed.firstIndex(of: ".") else { return nil }
+        let prefix = trimmed[..<dotIndex]
+        guard !prefix.isEmpty, prefix.allSatisfy(\.isNumber) else { return nil }
+        let afterDot = trimmed[trimmed.index(after: dotIndex)...]
+        guard afterDot.first == " " else { return nil }
+        return NoteListMatch(indent: leadingWhitespace, text: String(afterDot.dropFirst()), isOrdered: true)
+    }
+
+    private static func parseListItems(from lines: [String], startingAt startIndex: Int, parentIndent: Int) -> NoteParsedList {
+        var items: [NoteListItem] = []
+        var index = startIndex
+
+        while index < lines.count {
+            guard let match = listMatch(for: lines[index]), match.indent >= parentIndent else {
+                break
+            }
+            if match.indent > parentIndent {
+                break
+            }
+
+            var nextIndex = index + 1
+            var children: [NoteBlock] = []
+            if nextIndex < lines.count, let nextMatch = listMatch(for: lines[nextIndex]), nextMatch.indent > match.indent {
+                let parsedChildren = parseListItems(from: lines, startingAt: nextIndex, parentIndent: nextMatch.indent)
+                if !parsedChildren.items.isEmpty {
+                    children = [nextMatch.isOrdered ? .numberedList(parsedChildren.items) : .bulletList(parsedChildren.items)]
+                }
+                nextIndex = parsedChildren.nextIndex
+            }
+
+            let task = taskState(from: match.text)
+            items.append(NoteListItem(text: task.text, taskState: task.state, children: children))
+            index = nextIndex
+        }
+
+        return NoteParsedList(items: items, nextIndex: index)
+    }
+
+    private static func taskState(from text: String) -> (text: String, state: Bool?) {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix("[ ] ") {
+            return (String(trimmed.dropFirst(4)), false)
+        }
+        if trimmed.hasPrefix("[x] ") || trimmed.hasPrefix("[X] ") {
+            return (String(trimmed.dropFirst(4)), true)
+        }
+        return (text, nil)
+    }
+
+    private static func isImageURL(_ value: String) -> Bool {
+        let withoutQuery = value.split(whereSeparator: { $0 == "?" || $0 == "#" }).first.map(String.init) ?? value
+        return [".apng", ".avif", ".bmp", ".gif", ".heic", ".heif", ".jpg", ".jpeg", ".png", ".svg", ".tif", ".tiff", ".webp"]
+            .contains { withoutQuery.lowercased().hasSuffix($0) }
+    }
+
+    private static func firstMatch(
+        pattern: String,
+        in text: String,
+        options: NSRegularExpression.Options = []
+    ) -> NSTextCheckingResult? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return nil }
+        return regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text))
+    }
+
+    private static func capture(_ index: Int, in text: String, match: NSTextCheckingResult) -> String? {
+        guard index < match.numberOfRanges, let range = Range(match.range(at: index), in: text) else {
+            return nil
+        }
+        return String(text[range])
+    }
+}
+
+private enum NoteBlock: Hashable {
+    case heading(level: Int, text: String)
+    case paragraph(String)
+    case bulletList([NoteListItem])
+    case numberedList([NoteListItem])
+    case quote(String)
+    case image(source: String, alt: String?)
+    case youtube(String)
+    case codeBlock(language: String?, code: String)
+    case rule
+}
+
+private struct NoteListItem: Hashable {
+    let text: String
+    let taskState: Bool?
+    let children: [NoteBlock]
+}
+
+private struct NoteListMatch {
+    let indent: Int
+    let text: String
+    let isOrdered: Bool
+}
+
+private struct NoteParsedList {
+    let items: [NoteListItem]
+    let nextIndex: Int
+}
+
+private struct NoteBlockView: View {
+    let block: NoteBlock
+    let baseURL: URL?
+    let date: String
+    let depth: Int
+
+    var body: some View {
         switch block {
         case .heading(let level, let text):
-            return AnyView(
-                markdownText(text, font: headingFont(level), color: BlackwoodPalette.foreground)
-                    .padding(.top, level == 1 ? 4 : 2)
-            )
+            markdownText(text, font: headingFont(level), color: BlackwoodPalette.foreground)
+                .padding(.top, headingTopPadding(level))
 
         case .paragraph(let text):
-            return AnyView(
-                paragraphView(
-                    text,
-                    font: .system(size: 17),
-                    color: isSummary ? BlackwoodPalette.mutedForeground : BlackwoodPalette.foreground,
-                    italic: isSummary
-                )
-            )
+            paragraphView(text, font: .system(size: 15), color: BlackwoodPalette.foreground)
 
         case .bulletList(let items):
-            return AnyView(
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                        listItemView(item, depth: depth, orderedIndex: nil)
-                    }
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                    NoteListItemView(item: item, baseURL: baseURL, date: date, depth: depth, orderedIndex: nil)
                 }
-                .padding(.leading, depth == 0 ? 2 : 0)
-            )
+            }
+            .padding(.leading, depth == 0 ? 2 : 0)
 
         case .numberedList(let items):
-            return AnyView(
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                        listItemView(item, depth: depth, orderedIndex: index + 1)
-                    }
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                    NoteListItemView(item: item, baseURL: baseURL, date: date, depth: depth, orderedIndex: index + 1)
                 }
-                .padding(.leading, depth == 0 ? 2 : 0)
-            )
+            }
+            .padding(.leading, depth == 0 ? 2 : 0)
 
         case .quote(let text):
-            return AnyView(
-                HStack(alignment: .top, spacing: 12) {
-                    Rectangle()
-                        .fill(BlackwoodPalette.accent)
-                        .frame(width: 2)
-                    paragraphView(text, font: .system(size: 16), color: BlackwoodPalette.mutedForeground)
-                }
-                .padding(.vertical, 6)
-            )
+            HStack(alignment: .top, spacing: 12) {
+                Rectangle()
+                    .fill(BlackwoodPalette.accent)
+                    .frame(width: 2)
+                paragraphView(text, font: .system(size: 15), color: BlackwoodPalette.mutedForeground)
+            }
+            .padding(.vertical, 4)
 
         case .image(let source, let alt):
-            return AnyView(
-                NoteImageView(
-                    imageURL: resolvedImageURL(for: source),
-                    altText: alt
-                )
-                .padding(.vertical, 6)
+            NoteImageView(
+                imageURL: resolvedURL(for: source),
+                altText: alt
             )
+            .padding(.vertical, 6)
+
+        case .youtube(let url):
+            Link(destination: URL(string: url) ?? URL(string: "https://youtube.com")!) {
+                HStack(spacing: 10) {
+                    Image(systemName: "play.rectangle.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                    Text(youtubeLabel(for: url))
+                        .font(.system(size: 15, weight: .medium))
+                        .lineLimit(2)
+                    Spacer(minLength: 0)
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundStyle(BlackwoodPalette.accent)
+                .padding(12)
+                .background(BlackwoodPalette.accentSubtle.opacity(0.55))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+
+        case .codeBlock(let language, let code):
+            VStack(alignment: .leading, spacing: 6) {
+                if let language, !language.isEmpty {
+                    Text(language.uppercased())
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(BlackwoodPalette.mutedForeground)
+                }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    Text(code.isEmpty ? " " : code)
+                        .font(.system(size: 13, design: .monospaced))
+                        .foregroundStyle(BlackwoodPalette.foreground)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .background(BlackwoodPalette.muted.opacity(0.45))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
 
         case .rule:
-            return AnyView(
-                Rectangle()
-                    .fill(BlackwoodPalette.border)
-                    .frame(width: 40, height: 1)
-                    .padding(.vertical, 4)
-            )
+            Rectangle()
+                .fill(BlackwoodPalette.border)
+                .frame(height: 1)
+                .padding(.vertical, 8)
         }
     }
 
-    private func listItemView(_ item: ListItem, depth: Int, orderedIndex: Int?) -> AnyView {
-        AnyView(
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .top, spacing: 8) {
-                    Text(listMarker(depth: depth, orderedIndex: orderedIndex))
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(BlackwoodPalette.foreground)
-                        .frame(width: orderedIndex == nil ? 12 : 24, alignment: .leading)
-                    paragraphView(item.text, font: .system(size: 17), color: BlackwoodPalette.foreground)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+    private func headingFont(_ level: Int) -> Font {
+        switch level {
+        case 1:
+            return .system(size: 24, weight: .bold)
+        case 2:
+            return .system(size: 20, weight: .semibold)
+        default:
+            return .system(size: 17, weight: .semibold)
+        }
+    }
 
-                ForEach(Array(item.children.enumerated()), id: \.offset) { _, child in
-                    blockView(child, depth: depth + 1)
-                        .padding(.leading, 18)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        )
+    private func headingTopPadding(_ level: Int) -> CGFloat {
+        switch level {
+        case 1:
+            return depth == 0 ? 10 : 4
+        case 2:
+            return 8
+        default:
+            return 5
+        }
     }
 
     private func markdownText(_ markdown: String, font: Font, color: Color) -> some View {
@@ -1522,12 +1695,12 @@ private struct MarkdownBlockView: View {
     }
 
     @ViewBuilder
-    private func paragraphView(_ text: String, font: Font, color: Color, italic: Bool = false) -> some View {
+    private func paragraphView(_ text: String, font: Font, color: Color) -> some View {
         let lines = text.components(separatedBy: .newlines)
 
         if lines.count <= 1 {
             markdownText(text, font: font, color: color)
-                .italic(italic)
+                .lineSpacing(5)
         } else {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
@@ -1536,165 +1709,14 @@ private struct MarkdownBlockView: View {
                             .frame(height: 6)
                     } else {
                         markdownText(line, font: font, color: color)
-                            .italic(italic)
+                            .lineSpacing(5)
                     }
                 }
             }
         }
     }
 
-    private func headingFont(_ level: Int) -> Font {
-        switch level {
-        case 1:
-            return .system(size: 24, weight: .semibold)
-        case 2:
-            return .system(size: 21, weight: .semibold)
-        default:
-            return .system(size: 18, weight: .semibold)
-        }
-    }
-
-    private func headingBlock(from line: String) -> Block? {
-        let prefixes = ["### ", "## ", "# "]
-        for prefix in prefixes {
-            if line.hasPrefix(prefix) {
-                return .heading(level: prefix.filter { $0 == "#" }.count, text: String(line.dropFirst(prefix.count)))
-            }
-        }
-        return nil
-    }
-
-    private func imageBlock(from line: String) -> Block? {
-        let markdownPattern = #"^!\[(.*?)\]\((.+?)\)$"#
-        if let regex = try? NSRegularExpression(pattern: markdownPattern),
-           let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
-           let altRange = Range(match.range(at: 1), in: line),
-           let sourceRange = Range(match.range(at: 2), in: line) {
-            return .image(source: String(line[sourceRange]), alt: String(line[altRange]))
-        }
-
-        let htmlPattern = #"<img\b[^>]*src=["']([^"']+)["'][^>]*?(?:alt=["']([^"']*)["'])?[^>]*>"#
-        if let regex = try? NSRegularExpression(pattern: htmlPattern, options: [.caseInsensitive]),
-           let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
-           let sourceRange = Range(match.range(at: 1), in: line) {
-            let alt: String?
-            if match.numberOfRanges > 2, let altRange = Range(match.range(at: 2), in: line) {
-                alt = String(line[altRange])
-            } else {
-                alt = nil
-            }
-            return .image(source: String(line[sourceRange]), alt: alt)
-        }
-
-        return nil
-    }
-
-    private func bulletText(from line: String) -> String? {
-        let prefixes = ["- ", "* ", "+ "]
-        for prefix in prefixes where line.hasPrefix(prefix) {
-            return String(line.dropFirst(prefix.count))
-        }
-        return nil
-    }
-
-    private func numberedText(from line: String) -> String? {
-        guard let dotIndex = line.firstIndex(of: ".") else { return nil }
-        let prefix = line[..<dotIndex]
-        guard !prefix.isEmpty, prefix.allSatisfy(\.isNumber) else { return nil }
-        let afterDot = line[line.index(after: dotIndex)...]
-        guard afterDot.first == " " else { return nil }
-        return String(afterDot.dropFirst())
-    }
-
-    private func listMatch(for rawLine: String) -> ListMatch? {
-        let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return nil }
-        let indent = rawLine.prefix { $0 == " " }.count
-        if let bullet = bulletText(from: trimmed) {
-            return ListMatch(indent: indent, text: bullet, isOrdered: false)
-        }
-        if let numbered = numberedText(from: trimmed) {
-            return ListMatch(indent: indent, text: numbered, isOrdered: true)
-        }
-        return nil
-    }
-
-    private struct ListMatch {
-        let indent: Int
-        let text: String
-        let isOrdered: Bool
-    }
-
-    private struct ParsedList {
-        let items: [ListItem]
-        let nextIndex: Int
-    }
-
-    private func parseListItems(from lines: [String], startingAt startIndex: Int, parentIndent: Int) -> ParsedList {
-        var items: [ListItem] = []
-        var index = startIndex
-
-        while index < lines.count {
-            let rawLine = lines[index]
-            let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty {
-                index += 1
-                continue
-            }
-
-            guard let match = listMatch(for: rawLine), match.indent >= parentIndent else {
-                break
-            }
-
-            if match.indent > parentIndent {
-                break
-            }
-
-            let itemIndent = match.indent
-            let itemText = match.text
-            var children: [Block] = []
-            var nextIndex = index + 1
-
-            if nextIndex < lines.count, let nextMatch = listMatch(for: lines[nextIndex]), nextMatch.indent > itemIndent {
-                let parsedChildren = parseListItems(from: lines, startingAt: nextIndex, parentIndent: nextMatch.indent)
-                if !parsedChildren.items.isEmpty {
-                    children = [nextMatch.isOrdered ? .numberedList(parsedChildren.items) : .bulletList(parsedChildren.items)]
-                }
-                nextIndex = parsedChildren.nextIndex
-            }
-
-            items.append(ListItem(text: itemText, children: children))
-            index = nextIndex
-        }
-
-        return ParsedList(items: items, nextIndex: index)
-    }
-
-    private func listMarker(depth: Int, orderedIndex: Int?) -> String {
-        if let orderedIndex {
-            if depth == 1 {
-                return "\(alphaMarker(for: orderedIndex))."
-            }
-            return "\(orderedIndex)."
-        }
-
-        switch depth {
-        case 0:
-            return "•"
-        case 1:
-            return "◦"
-        default:
-            return "▪"
-        }
-    }
-
-    private func alphaMarker(for index: Int) -> String {
-        let letters = Array("abcdefghijklmnopqrstuvwxyz")
-        let clamped = max(1, min(index, letters.count))
-        return String(letters[clamped - 1])
-    }
-
-    private func resolvedImageURL(for source: String) -> URL? {
+    private func resolvedURL(for source: String) -> URL? {
         if let absolute = URL(string: source), absolute.scheme != nil {
             return absolute
         }
@@ -1725,6 +1747,79 @@ private struct MarkdownBlockView: View {
         }
 
         return mutable as String
+    }
+
+    private func youtubeLabel(for url: String) -> String {
+        guard let components = URLComponents(string: url) else { return "YouTube" }
+        if let host = components.host, host.contains("youtu.be") {
+            return "YouTube: \(components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")))"
+        }
+        if let videoID = components.queryItems?.first(where: { $0.name == "v" })?.value {
+            return "YouTube: \(videoID)"
+        }
+        return "YouTube"
+    }
+}
+
+private struct NoteListItemView: View {
+    let item: NoteListItem
+    let baseURL: URL?
+    let date: String
+    let depth: Int
+    let orderedIndex: Int?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .top, spacing: 8) {
+                marker
+                    .frame(width: orderedIndex == nil ? 18 : 28, alignment: .leading)
+                NoteBlockView(block: .paragraph(item.text), baseURL: baseURL, date: date, depth: depth)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            ForEach(Array(item.children.enumerated()), id: \.offset) { _, child in
+                NoteBlockView(block: child, baseURL: baseURL, date: date, depth: depth + 1)
+                    .padding(.leading, 24)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var marker: some View {
+        if let taskState = item.taskState {
+            Image(systemName: taskState ? "checkmark.square.fill" : "square")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(taskState ? BlackwoodPalette.success : BlackwoodPalette.mutedForeground)
+        } else {
+            Text(listMarker)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(BlackwoodPalette.foreground)
+        }
+    }
+
+    private var listMarker: String {
+        if let orderedIndex {
+            if depth == 1 {
+                return "\(alphaMarker(for: orderedIndex))."
+            }
+            return "\(orderedIndex)."
+        }
+
+        switch depth {
+        case 0:
+            return "•"
+        case 1:
+            return "◦"
+        default:
+            return "▪"
+        }
+    }
+
+    private func alphaMarker(for index: Int) -> String {
+        let letters = Array("abcdefghijklmnopqrstuvwxyz")
+        let clamped = max(1, min(index, letters.count))
+        return String(letters[clamped - 1])
     }
 }
 
@@ -1957,6 +2052,7 @@ private struct AppContentScrollView<Content: View>: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
         }
+        .scrollDismissesKeyboard(.interactively)
     }
 }
 

@@ -19,6 +19,11 @@
 		BWBUILDFILE00000000000010 /* BlackwoodWordmark.png in Resources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000010 /* BlackwoodWordmark.png */; };
 		BWBUILDFILE00000000000011 /* BlackwoodAuthClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000011 /* BlackwoodAuthClient.swift */; };
 		BWBUILDFILE00000000000012 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000012 /* Assets.xcassets */; };
+		BWBUILDFILE00000000000013 /* MarkdownDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000013 /* MarkdownDocument.swift */; };
+		BWBUILDFILE00000000000014 /* MarkdownCellEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000014 /* MarkdownCellEditor.swift */; };
+		BWBUILDFILE00000000000015 /* MarkdownEditingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000015 /* MarkdownEditingSession.swift */; };
+		BWBUILDFILE00000000000016 /* MarkdownEditorRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000016 /* MarkdownEditorRow.swift */; };
+		BWBUILDFILE00000000000017 /* ExpandingMarkdownTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BWFILE00000000000017 /* ExpandingMarkdownTextView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -34,6 +39,11 @@
 		BWFILE00000000000010 /* BlackwoodWordmark.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = BlackwoodWordmark.png; sourceTree = "<group>"; };
 		BWFILE00000000000011 /* BlackwoodAuthClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlackwoodAuthClient.swift; sourceTree = "<group>"; };
 		BWFILE00000000000012 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		BWFILE00000000000013 /* MarkdownDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownDocument.swift; sourceTree = "<group>"; };
+		BWFILE00000000000014 /* MarkdownCellEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownCellEditor.swift; sourceTree = "<group>"; };
+		BWFILE00000000000015 /* MarkdownEditingSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownEditingSession.swift; sourceTree = "<group>"; };
+		BWFILE00000000000016 /* MarkdownEditorRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownEditorRow.swift; sourceTree = "<group>"; };
+		BWFILE00000000000017 /* ExpandingMarkdownTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpandingMarkdownTextView.swift; sourceTree = "<group>"; };
 		BWPRODUCT00000000000001 /* BlackwoodMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BlackwoodMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -87,6 +97,8 @@
 		BWGROUP00000000000003 /* Sources/BlackwoodMobileCore */ = {
 			isa = PBXGroup;
 			children = (
+				BWFILE00000000000013 /* MarkdownDocument.swift */,
+				BWFILE00000000000015 /* MarkdownEditingSession.swift */,
 				BWFILE00000000000005 /* Models.swift */,
 				BWFILE00000000000006 /* QueueStore.swift */,
 				BWFILE00000000000007 /* BlackwoodAPIClient.swift */,
@@ -108,6 +120,9 @@
 			isa = PBXGroup;
 			children = (
 				BWFILE00000000000003 /* MainViews.swift */,
+				BWFILE00000000000014 /* MarkdownCellEditor.swift */,
+				BWFILE00000000000016 /* MarkdownEditorRow.swift */,
+				BWFILE00000000000017 /* ExpandingMarkdownTextView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -187,6 +202,11 @@
 				BWBUILDFILE00000000000007 /* BlackwoodAPIClient.swift in Sources */,
 				BWBUILDFILE00000000000011 /* BlackwoodAuthClient.swift in Sources */,
 				BWBUILDFILE00000000000008 /* SyncEngine.swift in Sources */,
+				BWBUILDFILE00000000000013 /* MarkdownDocument.swift in Sources */,
+				BWBUILDFILE00000000000014 /* MarkdownCellEditor.swift in Sources */,
+				BWBUILDFILE00000000000015 /* MarkdownEditingSession.swift in Sources */,
+				BWBUILDFILE00000000000016 /* MarkdownEditorRow.swift in Sources */,
+				BWBUILDFILE00000000000017 /* ExpandingMarkdownTextView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

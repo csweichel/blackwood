@@ -3,6 +3,22 @@ import Foundation
 public struct AuthStatusResponse: Codable, Equatable, Sendable {
     public let authenticated: Bool
     public let setupRequired: Bool
+
+    public init(authenticated: Bool = false, setupRequired: Bool = false) {
+        self.authenticated = authenticated
+        self.setupRequired = setupRequired
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case authenticated
+        case setupRequired
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        authenticated = try container.decodeIfPresent(Bool.self, forKey: .authenticated) ?? false
+        setupRequired = try container.decodeIfPresent(Bool.self, forKey: .setupRequired) ?? false
+    }
 }
 
 public struct AuthSetupInfo: Codable, Equatable, Sendable {
@@ -13,6 +29,22 @@ public struct AuthSetupInfo: Codable, Equatable, Sendable {
 public struct AuthActionResponse: Codable, Equatable, Sendable {
     public let ok: Bool
     public let error: String?
+
+    public init(ok: Bool = false, error: String? = nil) {
+        self.ok = ok
+        self.error = error
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case ok
+        case error
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ok = try container.decodeIfPresent(Bool.self, forKey: .ok) ?? false
+        error = try container.decodeIfPresent(String.self, forKey: .error)
+    }
 }
 
 public enum AuthChallengeKind: Equatable, Sendable {
@@ -34,6 +66,14 @@ public struct AuthChallenge: Error, Equatable, Sendable, LocalizedError {
     }
 }
 
+public struct AuthServiceUnavailable: Error, Equatable, Sendable, LocalizedError {
+    public init() {}
+
+    public var errorDescription: String? {
+        "TOTP authentication is not enabled on this Blackwood server."
+    }
+}
+
 public struct BlackwoodAuthClient: Sendable {
     public let baseURL: URL
 
@@ -45,10 +85,14 @@ public struct BlackwoodAuthClient: Sendable {
     }
 
     public func status() async throws -> AuthStatusResponse {
-        try await rpc(
-            path: "/blackwood.v1.AuthService/Status",
-            request: [:]
-        )
+        do {
+            return try await rpc(
+                path: "/blackwood.v1.AuthService/Status",
+                request: [:]
+            )
+        } catch is AuthServiceUnavailable {
+            return AuthStatusResponse(authenticated: true, setupRequired: false)
+        }
     }
 
     public func getSetupInfo() async throws -> AuthSetupInfo {
@@ -87,9 +131,25 @@ public struct BlackwoodAuthClient: Sendable {
         urlRequest.httpBody = try JSONSerialization.data(withJSONObject: request)
         let (data, response) = try await session.data(for: urlRequest)
         try validate(response: response, data: data)
+        try validateJSONResponse(response: response, data: data)
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode(Response.self, from: data)
+    }
+
+    private func validateJSONResponse(response: URLResponse, data: Data) throws {
+        guard let http = response as? HTTPURLResponse else { return }
+        let contentType = http.value(forHTTPHeaderField: "Content-Type")?.lowercased() ?? ""
+        if contentType.contains("json") {
+            return
+        }
+
+        let prefix = String(data: data.prefix(128), encoding: .utf8)?.lowercased() ?? ""
+        if contentType.contains("text/html") || prefix.contains("<!doctype html") || prefix.contains("<html") {
+            throw AuthServiceUnavailable()
+        }
+
+        throw SyncFailure(message: "Blackwood returned an unexpected auth response.", disposition: .retryable)
     }
 
     private func validate(response: URLResponse, data: Data) throws {
